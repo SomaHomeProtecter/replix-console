@@ -77,8 +77,6 @@ export default function UserDetailPage() {
 
   const { profile } = detail
   const suspension = suspensionLabel(profile.status, profile.suspendedUntil)
-  const suspensionRows = detail.actions.filter(
-      (a) => a.action === 'SUSPEND' || a.action === 'UNSUSPEND')
   const name = profile.displayName ?? `#${profile.id}`
 
   return (
@@ -152,7 +150,9 @@ export default function UserDetailPage() {
           )}
 
           {tab !== 'reports' && (() => {
-            const rows = tab === 'actions' ? detail.actions : suspensionRows
+            // 정지 이력은 BE의 별도 축(suspensions) — actions에서 클라이언트 필터로 만들면
+            // actions 상한(50)에 밀려 거짓 "기록 없음"이 될 수 있다(리뷰 m9)
+            const rows = tab === 'actions' ? detail.actions : detail.suspensions
             return rows.length === 0
               ? <div className="empty-hint">기록이 없습니다</div>
               : (

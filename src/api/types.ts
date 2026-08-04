@@ -90,4 +90,6 @@ export interface UserDetail {
   profile: UserProfile
   reportsReceived: ReceivedReport[]
   actions: AdminActionRow[]
+  /** 정지·해제만 담는 별도 축 — actions의 상한(50)과 경합하지 않는다(리뷰 m9). */
+  suspensions: AdminActionRow[]
 }

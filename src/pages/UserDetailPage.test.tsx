@@ -36,13 +36,18 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     expect(screen.getByText('keycloak')).toBeInTheDocument()
   })
 
-  it('탭 = 받은 신고(기본) · 조치 이력 · 정지 이력(SUSPEND/UNSUSPEND만)', async () => {
+  it('탭 = 받은 신고(기본) · 조치 이력 · 정지 이력(별도 축 suspensions)', async () => {
     getUserDetail.mockResolvedValue(makeUserDetail({
       reportsReceived: [makeReceivedReport({ snapshotMessage: '욕설 스냅샷', reporterName: '신고자닉' })],
       actions: [
         makeActionRow({ id: 33, action: 'UNSUSPEND', reason: null, createdAt: '2026-08-03T11:00:00Z' }),
         makeActionRow({ id: 32, action: 'SUSPEND', reason: '도배' }),
         makeActionRow({ id: 31, action: 'RESOLVE_REPORT', reason: '기각함' }),
+      ],
+      // 정지 이력은 BE가 별도 축으로 준다(리뷰 m9) — 화면은 필터하지 않고 그대로 그린다
+      suspensions: [
+        makeActionRow({ id: 33, action: 'UNSUSPEND', reason: null, createdAt: '2026-08-03T11:00:00Z' }),
+        makeActionRow({ id: 32, action: 'SUSPEND', reason: '도배' }),
       ],
     }))
     renderPage()

@@ -151,4 +151,15 @@ describe('정지 다이얼로그(정본) — 프리셋 4단·사유 필수·안�
     expect(suspendUser).not.toHaveBeenCalled()
     expect(resolveReport).not.toHaveBeenCalled()
   })
+
+  it('Esc로도 닫히고 아무 조치도 나가지 않는다(리뷰 m10)', async () => {
+    renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}') // autoFocus로 포커스가 다이얼로그 안에 있다
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(suspendUser).not.toHaveBeenCalled()
+  })
 })
