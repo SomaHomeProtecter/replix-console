@@ -272,5 +272,16 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .evrow.head2 { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
 .empty-hint { color: var(--muted); padding: 20px 0; text-align: center; }
 
+/* 조치 이력 "유효 조치만 보기" 토글 줄(HP-268) — 표 위 얇은 컨트롤. */
+.eff-row {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+}
+.eff-row label { align-items: center; cursor: pointer; display: flex; gap: 6px; }
+.eff-row .who2 { color: var(--muted-2); }
+
 .boot-error { padding: 40px; color: var(--red); }
 .page-status { color: var(--muted); padding: 24px 0; text-align: center; }

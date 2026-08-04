@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { listReports, type ReportFilters } from '../api/admin'
 import type { ReportItem } from '../api/types'
 import FilterBar from '../components/FilterBar'
@@ -18,6 +18,8 @@ export default function ReportQueuePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadSeq = useRef(0)
+  /** 조치 뒤 재조회에서 되돌릴 스크롤 위치. null = 되돌리지 않음(필터 변경·최초 로드). */
+  const restoreScroll = useRef<number | null>(null)
 
   const load = useCallback(async (target: ReportFilters, cursor: string | null) => {
     // 경합 가드(리뷰 M1): 필터 변경과 "더 불러오기"가 겹치면 뒤늦은 응답이 새 목록을
@@ -45,6 +47,28 @@ export default function ReportQueuePage() {
   useEffect(() => {
     void load(filters, null)
   }, [filters, load])
+
+  /**
+   * 조치 뒤 목록 재조회 — 보던 위치를 지킨다(HP-268 이월 1번).
+   *
+   * <p>큐는 위에서부터 순서대로 처리하는 동선이라, 한 건 조치할 때마다 맨 위로 튀면 매번 보던
+   * 자리까지 다시 스크롤해 내려와야 한다. 큐가 길수록 손해가 커진다. 재조회 자체는 유지한다 —
+   * 조치 결과(상태·처리 종별)는 서버가 정본이고, 화면에서 낙관적으로 고쳐 쓰면 실패했을 때
+   * 화면과 서버가 갈린다.
+   */
+  const reloadKeepingPlace = useCallback(() => {
+    // 맨 위(0)면 되돌릴 것이 없다 — 불필요한 scrollTo를 만들지 않는다.
+    restoreScroll.current = window.scrollY > 0 ? window.scrollY : null
+    void load(filters, null)
+  }, [filters, load])
+
+  // 목록이 다시 그려진 직후(페인트 전)에 되돌려야 깜빡임이 안 보인다.
+  useLayoutEffect(() => {
+    const y = restoreScroll.current
+    if (y === null) return
+    restoreScroll.current = null
+    window.scrollTo(0, y)
+  }, [items])
 
   const selected = items.find((item) => item.id === selectedId) ?? null
 
@@ -88,7 +112,7 @@ export default function ReportQueuePage() {
                 onClick={() => setSelectedId(null)}>
               ✕
             </button>
-            <ReportDetailPanel report={selected} onActionDone={() => void load(filters, null)} />
+            <ReportDetailPanel report={selected} onActionDone={reloadKeepingPlace} />
           </div>
         </div>
       )}

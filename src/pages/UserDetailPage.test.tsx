@@ -26,6 +26,58 @@ beforeEach(() => {
   getUserDetail.mockResolvedValue(makeUserDetail())
 })
 
+describe('유효 조치만 보기(HP-268)', () => {
+  /** 가림 → 가림 해제로 상쇄된 쌍 + 되돌려지지 않은 정지 1건. */
+  const withReverted = () => makeUserDetail({
+    actions: [
+      makeActionRow({ id: 3, action: 'SUSPEND', targetType: 'USER', targetId: '9', reason: '도배' }),
+      makeActionRow({ id: 2, action: 'UNBLIND', targetType: 'MESSAGE', targetId: 'm1', reason: null }),
+      makeActionRow({ id: 1, action: 'BLIND', targetType: 'MESSAGE', targetId: 'm1', reason: null }),
+    ],
+  })
+
+  it('기본값은 전량 표시 — 감사 이력은 무엇이 있었는지가 정본이다', async () => {
+    getUserDetail.mockResolvedValue(withReverted())
+    renderPage()
+    await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
+
+    expect(screen.getByRole('checkbox', { name: '유효 조치만 보기' })).not.toBeChecked()
+    expect(screen.getByText('가림')).toBeInTheDocument()
+    expect(screen.getByText('가림 해제')).toBeInTheDocument()
+    expect(screen.getByText('계정 정지')).toBeInTheDocument()
+  })
+
+  it('켜면 상쇄된 쌍이 사라지고 살아 있는 조치만 남는다', async () => {
+    getUserDetail.mockResolvedValue(withReverted())
+    renderPage()
+    await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
+
+    await userEvent.click(screen.getByRole('checkbox', { name: '유효 조치만 보기' }))
+
+    expect(screen.queryByText('가림')).not.toBeInTheDocument()
+    expect(screen.queryByText('가림 해제')).not.toBeInTheDocument()
+    expect(screen.getByText('계정 정지')).toBeInTheDocument()
+  })
+
+  it('숨긴 건수를 알려준다 — 이력이 조용히 줄면 기록이 사라진 줄 안다', async () => {
+    getUserDetail.mockResolvedValue(withReverted())
+    renderPage()
+    await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '유효 조치만 보기' }))
+
+    expect(screen.getByText(/되돌려진 2건 숨김/)).toBeInTheDocument()
+  })
+
+  it('탭 라벨의 건수는 전체를 유지한다 — 기록 규모는 필터와 무관하다', async () => {
+    getUserDetail.mockResolvedValue(withReverted())
+    renderPage()
+    await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '유효 조치만 보기' }))
+
+    expect(screen.getByRole('tab', { name: '조치 이력 3' })).toBeInTheDocument()
+  })
+})
+
 describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () => {
   it('헤더(상태 칩·userId·provider)와 기본 정보 블록(읽기 전용)을 보여준다', async () => {
     renderPage()

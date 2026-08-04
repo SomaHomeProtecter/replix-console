@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { effectiveActions } from '../actionHistory'
 import { getUserDetail, suspendUser, unsuspendUser } from '../api/admin'
 import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
 import Pill from '../components/Pill'
@@ -29,6 +30,9 @@ export default function UserDetailPage() {
   const [busy, setBusy] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('reports')
+  // 기본은 끔(전량) — 조치 이력은 감사 기록이라 "무엇이 있었나"가 정본이고,
+  // 숨김은 "지금 뭐가 걸려 있나"를 볼 때의 보조 뷰다(HP-268).
+  const [effectiveOnly, setEffectiveOnly] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -147,11 +151,31 @@ export default function UserDetailPage() {
           {tab !== 'reports' && (() => {
             // 정지 이력은 BE의 별도 축(suspensions) — actions에서 클라이언트 필터로 만들면
             // actions 상한(50)에 밀려 거짓 "기록 없음"이 될 수 있다(리뷰 m9)
-            const rows = tab === 'actions' ? detail.actions : detail.suspensions
+            const all = tab === 'actions' ? detail.actions : detail.suspensions
+            const rows = effectiveOnly ? effectiveActions(all) : all
+            const hidden = all.length - rows.length
+            const toggle = (
+              <div className="eff-row">
+                <label>
+                  <input
+                      type="checkbox" aria-label="유효 조치만 보기" checked={effectiveOnly}
+                      onChange={(e) => setEffectiveOnly(e.target.checked)} />
+                  유효 조치만 보기
+                </label>
+                {/* 이력이 조용히 줄면 기록이 사라진 줄 안다 — 몇 건을 왜 감췄는지 밝힌다 */}
+                {effectiveOnly && hidden > 0 && (
+                  <span className="who2">되돌려진 {hidden}건 숨김</span>
+                )}
+              </div>
+            )
+            if (all.length === 0) {
+              return <div className="empty-hint">기록이 없습니다</div>
+            }
             return rows.length === 0
-              ? <div className="empty-hint">기록이 없습니다</div>
+              ? <>{toggle}<div className="empty-hint">지금 유효한 조치가 없습니다</div></>
               : (
                 <>
+                  {toggle}
                   <div className="evrow act head2">
                     <span>시각</span><span>조치</span><span>대상 · 사유</span><span>처리자</span>
                   </div>

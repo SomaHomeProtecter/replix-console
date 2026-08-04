@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +16,10 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  listReports.mockResolvedValue({ items: [makeReportItem()], nextCursor: null })
+  // 호출마다 새 객체를 만든다(mockResolvedValue처럼 한 객체를 재사용하지 않는다) — 실제 fetch는
+  // 매번 새로 파싱된 배열을 주는데, 같은 참조를 재사용하면 setItems가 bail-out 해 재렌더가
+  // 아예 일어나지 않는다. 그 상태로는 "재조회 후" 동작을 검증할 수 없다.
+  listReports.mockImplementation(async () => ({ items: [makeReportItem()], nextCursor: null }))
 })
 
 describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () => {
@@ -143,6 +146,37 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     expect(admin.resolveReport).toHaveBeenCalledWith(101, 'REJECTED', null, null)
     expect(listReports.mock.calls.length).toBe(callsBefore + 1)
     expect(listReports).toHaveBeenLastCalledWith({ status: 'OPEN', reason: '' }, null)
+  })
+
+  /**
+   * 큐는 위에서부터 순서대로 처리하는 동선이라, 한 건 조치할 때마다 목록이 맨 위로 튀면
+   * 매번 보던 자리까지 다시 스크롤해 내려와야 한다(HP-268 이월 1번).
+   */
+  it('조치 뒤 재조회해도 보던 목록 위치를 지킨다', async () => {
+    const scrollTo = vi.fn()
+    Object.defineProperty(window, 'scrollTo', { value: scrollTo, configurable: true })
+    Object.defineProperty(window, 'scrollY', { value: 420, configurable: true })
+    renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+
+    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
+
+    // 조치 → 재조회 → 목록 재렌더까지 가야 복원이 일어난다
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 420))
+  })
+
+  it('필터 변경은 위치를 지키지 않는다 — 다른 목록이라 맨 위가 맞다', async () => {
+    const scrollTo = vi.fn()
+    Object.defineProperty(window, 'scrollTo', { value: scrollTo, configurable: true })
+    Object.defineProperty(window, 'scrollY', { value: 420, configurable: true })
+    renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+
+    await userEvent.click(screen.getByRole('button', { name: '열림' }))
+    await screen.findByText('범인은 집사다', { exact: false })
+
+    expect(scrollTo).not.toHaveBeenCalled()
   })
 
   it('모달 바깥(백드롭) 클릭 → 목록으로 복귀, 내부 클릭은 유지', async () => {

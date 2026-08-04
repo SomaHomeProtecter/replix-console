@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SuspendDuration } from '../api/types'
 import { DURATION_LABELS } from '../format'
 
 const PRESETS: SuspendDuration[] = ['H24', 'H72', 'D7', 'PERMANENT']
+
+/** 포커스가 갈 수 있는 요소들. `:not([disabled])` — 사유가 비어 꺼진 확정 버튼은 순환에서 빠진다. */
+const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), '
+  + '[href], select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
  * 정지 확인 다이얼로그(시안 cm-dlg) — 프리셋 4단 · 사유 필수(*) · 제재 범위 안내 · 감사 고지.
@@ -17,6 +21,43 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
   const [duration, setDuration] = useState<SuspendDuration>('H24')
   const [reason, setReason] = useState('')
   const trimmed = reason.trim()
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // 여는 순간의 포커스 위치. useEffect가 아니라 첫 렌더 중에 잡는다 — effect는 커밋 이후라
+  // 그때는 사유 입력의 autoFocus가 이미 포커스를 가져가 "열기 전 자리"가 지워져 있다.
+  const [opener] = useState<Element | null>(() => document.activeElement)
+
+  // 닫힌 뒤 포커스를 그 자리로 되돌린다 — 안 되돌리면 포커스가 body로 떨어져 키보드
+  // 사용자가 자기 위치를 잃고, 다음 Tab이 페이지 처음부터 다시 시작한다.
+  useEffect(() => () => {
+    if (opener instanceof HTMLElement && document.contains(opener)) {
+      opener.focus()
+    }
+  }, [opener])
+
+  /**
+   * Tab을 다이얼로그 안에서 순환시킨다(포커스 트랩).
+   *
+   * <p>파괴적 조치를 확인하는 화면이라 포커스가 뒤 페이지로 새면 사용자가 무엇을 조작하는지
+   * 화면과 어긋난다 — 보이는 것은 이 다이얼로그인데 Enter는 뒤의 버튼을 누르는 식이다.
+   * 브라우저 기본 Tab 이동은 겹 개념이 없어 우리가 끝단에서만 가로챈다(중간 이동은 그대로 둔다).
+   */
+  const trapTab = (e: React.KeyboardEvent) => {
+    const box = dialogRef.current
+    if (!box) return
+    const focusables = Array.from(box.querySelectorAll<HTMLElement>(FOCUSABLE))
+    if (focusables.length === 0) return
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    const active = document.activeElement
+    if (e.shiftKey && (active === first || !box.contains(active))) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 
   return (
     // 바깥(백드롭) 클릭 = 취소 — 상세 모달과 같은 복귀 동선(2026-08-05 피드백).
@@ -27,9 +68,10 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
           e.stopPropagation()
           onCancel()
         }}>
-      {/* 최초 포커스는 사유 입력(autoFocus — 유일한 필수 입력), Esc = 취소(리뷰 m5).
-          완전한 포커스 트랩은 이월 — 로컬 콘솔 3인 사용 전제에서 최소 동선만 잡는다. */}
+      {/* 최초 포커스는 사유 입력(autoFocus — 유일한 필수 입력), Esc = 취소(리뷰 m5),
+          Tab은 이 겹 안에서 순환(HP-268 trapTab), 닫으면 포커스는 열기 전 자리로. */}
       <div
+          ref={dialogRef}
           className="dialog" role="dialog" aria-modal="true" aria-label="계정 정지"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
@@ -37,6 +79,8 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
               // 상세 모달의 문서 레벨 Esc 핸들러까지 번지면 겹이 한 번에 다 닫힌다 — 위 겹만 닫는다
               e.stopPropagation()
               onCancel()
+            } else if (e.key === 'Tab') {
+              trapTab(e)
             }
           }}>
         <button type="button" className="modal-close" aria-label="닫기" onClick={onCancel}>✕</button>
