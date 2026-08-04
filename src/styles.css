@@ -268,9 +268,7 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .info-strip dd { margin: 0; color: var(--body); font-weight: 600; }
 
 .user-columns { flex: 1; min-height: 0; }
-/* 기본 정보를 스트립으로 뺀 뒤 표가 화면 전체로 늘어나, 넓은 모니터에서 처리자 칸이 오른쪽
-   끝에 홀로 박히고 가운데가 텅 비어 보였다(HP-268 확인) — 읽기 좋은 폭에서 멈춘다. */
-.history-tabs { padding: 12px 16px; min-width: 0; max-width: 1040px; }
+.history-tabs { padding: 12px 16px; min-width: 0; }
 .tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
 .tab-bar button {
   border: none; background: none; padding: 6px 12px; cursor: pointer;
@@ -285,9 +283,10 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .evrow .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .evrow .who2 { color: var(--muted-2); }
 /* 조치 이력 5열 — 시각 | 조치 | 대상 | 사유 | 처리자 (HP-268: 머리글과 내용을 맞춘다).
-   처리자를 auto가 아니라 고정폭으로 둬 사유 바로 옆에 붙인다 — auto면 남는 공간을 앞의 fr
-   칸들이 다 먹고 처리자만 오른쪽 끝으로 밀려난다. */
-.evrow.act { grid-template-columns: 92px 116px minmax(130px, 1.5fr) minmax(90px, 1fr) 72px; }
+   표는 화면을 꽉 채우되 처리자 칸도 여유 지분(0.8fr)을 갖는다. 고정폭/auto로 두면 남는 공간을
+   앞의 fr 칸들이 전부 먹어 처리자만 오른쪽 끝에 홀로 박힌다 — 지분이 있으면 칸의 왼쪽 모서리가
+   당겨져 이름이 사유 옆에 붙어 읽힌다(2026-08-05 김지호 확인). */
+.evrow.act { grid-template-columns: 92px 120px minmax(170px, 2.2fr) minmax(110px, 1.2fr) minmax(72px, 0.8fr); }
 .evrow.act .tgt { min-width: 0; overflow-wrap: anywhere; }
 .evrow.act .actor { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .evrow.act .alabel { font-weight: 700; color: var(--body); white-space: nowrap; }
