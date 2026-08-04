@@ -90,4 +90,19 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     renderPage()
     expect(await screen.findByText(/관리자 권한이 없습니다/)).toBeInTheDocument()
   })
+
+  it('행 선택 → 패널 조치(기각) → 목록을 다시 묻는다', async () => {
+    renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+    expect(screen.getByText(/신고 시점 스냅샷 원문/)).toBeInTheDocument() // 패널 열림
+
+    const callsBefore = listReports.mock.calls.length
+    // '기각'은 필터 세그먼트에도 있으므로 우측 패널(aside) 안의 조치 버튼으로 한정한다
+    await userEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '기각' }))
+
+    expect(admin.resolveReport).toHaveBeenCalledWith(101, 'REJECTED', null)
+    expect(listReports.mock.calls.length).toBe(callsBefore + 1)
+    expect(listReports).toHaveBeenLastCalledWith({ status: 'OPEN', reason: '' }, null)
+  })
 })

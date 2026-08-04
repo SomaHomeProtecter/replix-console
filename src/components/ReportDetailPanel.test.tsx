@@ -1,0 +1,147 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as admin from '../api/admin'
+import { ApiHttpError } from '../api/client'
+import { makeReportItem } from '../test/fixtures'
+import ReportDetailPanel from './ReportDetailPanel'
+
+vi.mock('../api/admin')
+
+const blindMessage = vi.mocked(admin.blindMessage)
+const unblindMessage = vi.mocked(admin.unblindMessage)
+const resolveReport = vi.mocked(admin.resolveReport)
+const suspendUser = vi.mocked(admin.suspendUser)
+
+const onActionDone = vi.fn()
+
+function renderPanel(report = makeReportItem()) {
+  return render(
+      <MemoryRouter>
+        <ReportDetailPanel report={report} onActionDone={onActionDone} />
+      </MemoryRouter>)
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 카드', () => {
+  it('스냅샷 원문과 메타(신고자·실황·스포일러 점수·신고 상세)를 보여준다', () => {
+    renderPanel()
+    expect(screen.getByText('범인은 집사다')).toBeInTheDocument()
+    expect(screen.getAllByText(/스포일러꾼/).length).toBeGreaterThan(0) // 작성자 표기(+대상 카드)
+    expect(screen.getByText('신고자닉')).toBeInTheDocument()
+    expect(screen.getByText('표시 중')).toBeInTheDocument()       // currentStatus=visible 실황
+    expect(screen.getByText('8')).toBeInTheDocument()             // 스포일러 점수
+    expect(screen.getByText(/결말을 그대로 말해요/)).toBeInTheDocument() // 신고 상세 사유(사유 라벨 뒤에 붙음)
+  })
+
+  it('같은 메시지 다중 신고는 집계로 강조한다', () => {
+    renderPanel(makeReportItem({ sameMessageReportCount: 3 }))
+    expect(screen.getByText('같은 메시지 신고 3건')).toBeInTheDocument()
+  })
+
+  it('사라진 메시지(실황 null)는 그렇게 말한다', () => {
+    renderPanel(makeReportItem({ currentStatus: null, spoilerScore: null }))
+    expect(screen.getByText(/사라짐/)).toBeInTheDocument()
+  })
+
+  it('대상 사용자 카드는 사용자 상세로 이어진다', () => {
+    renderPanel()
+    const link = screen.getByRole('link', { name: /사용자 상세/ })
+    expect(link).toHaveAttribute('href', '/users/9')
+  })
+
+  it('종결된 신고는 처리 정보를 보여준다', () => {
+    renderPanel(makeReportItem({
+      status: 'RESOLVED',
+      handledBy: { id: 1, displayName: '지호', status: 'ACTIVE' },
+      handledAt: '2026-08-04T11:00:00Z',
+      resolutionNote: '가림 처리함',
+    }))
+    expect(screen.getByText(/지호/)).toBeInTheDocument()
+    expect(screen.getByText(/가림 처리함/)).toBeInTheDocument()
+  })
+})
+
+describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보조)', () => {
+  it('기각은 REJECTED 종결이고 처리 메모를 싣는다', async () => {
+    renderPanel()
+    await userEvent.type(screen.getByLabelText('처리 메모'), '중복 신고')
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+
+    expect(resolveReport).toHaveBeenCalledWith(101, 'REJECTED', '중복 신고')
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('가림은 blind 후 RESOLVED 종결까지 한 번에 간다', async () => {
+    renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: '가림' }))
+
+    expect(blindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A')
+    expect(resolveReport).toHaveBeenCalledWith(101, 'RESOLVED', null)
+    const blindOrder = blindMessage.mock.invocationCallOrder[0]
+    const resolveOrder = resolveReport.mock.invocationCallOrder[0]
+    expect(blindOrder).toBeLessThan(resolveOrder)
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('가림 실패(이미 사라진 메시지)는 종결하지 않고 오류를 표면화한다', async () => {
+    blindMessage.mockRejectedValue(new ApiHttpError(404, 'MESSAGE_NOT_FOUND', '이미 사라진 메시지입니다'))
+    renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: '가림' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('이미 사라진 메시지입니다')
+    expect(resolveReport).not.toHaveBeenCalled()
+    expect(onActionDone).not.toHaveBeenCalled()
+  })
+
+  it('실황이 가림이면 가림 해제(보조)가 열린다', async () => {
+    renderPanel(makeReportItem({ currentStatus: 'blinded' }))
+    await userEvent.click(screen.getByRole('button', { name: '가림 해제' }))
+    expect(unblindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A')
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('대상 사용자가 없으면 정지 버튼이 비활성이다', () => {
+    renderPanel(makeReportItem({ targetUser: null }))
+    expect(screen.getByRole('button', { name: /계정 정지/ })).toBeDisabled()
+  })
+})
+
+describe('정지 다이얼로그(정본) — 프리셋 4단·사유 필수·안내 문구·감사 고지', () => {
+  it('사유가 없으면 적용이 막히고, 확정 시 suspend→RESOLVED 종결에 자동 메모를 남긴다', async () => {
+    renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('채팅·반응만 차단')
+    expect(dialog).toHaveTextContent('로그인·읽기는 유지')
+    expect(dialog).toHaveTextContent('감사 로그')
+    // 프리셋 4단 + 기본 24시간
+    expect(screen.getByRole('radio', { name: '24시간' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '무기한' })).toBeInTheDocument()
+    // 사유 없이는 적용 불가
+    expect(screen.getByRole('button', { name: '정지 적용' })).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('radio', { name: '72시간' }))
+    await userEvent.type(screen.getByLabelText('정지 사유'), '반복 스포일러')
+    await userEvent.click(screen.getByRole('button', { name: '정지 적용' }))
+
+    expect(suspendUser).toHaveBeenCalledWith(9, 'H72', '반복 스포일러')
+    expect(resolveReport).toHaveBeenCalledWith(101, 'RESOLVED', '계정 정지(72시간) — 반복 스포일러')
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('취소하면 아무 조치도 나가지 않는다', async () => {
+    renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(suspendUser).not.toHaveBeenCalled()
+    expect(resolveReport).not.toHaveBeenCalled()
+  })
+})

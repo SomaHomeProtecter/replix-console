@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { listReports, type ReportFilters } from '../api/admin'
 import type { ReportItem } from '../api/types'
 import FilterBar from '../components/FilterBar'
+import ReportDetailPanel from '../components/ReportDetailPanel'
 import ReportTable from '../components/ReportTable'
 
 /**
@@ -58,11 +59,13 @@ export default function ReportQueuePage() {
         {loading && items.length === 0 && <div className="page-status">불러오는 중…</div>}
       </div>
       <aside className="queue-side">
-        <div className="detail-panel">
-          {selected
-            ? <div>선택된 신고 #{selected.id}</div>
-            : <div className="detail-empty">행을 선택하면 상세와 조치가 여기에 열립니다</div>}
-        </div>
+        {selected
+          ? <ReportDetailPanel report={selected} onActionDone={() => void load(filters, null)} />
+          : (
+            <div className="detail-panel">
+              <div className="detail-empty">행을 선택하면 상세와 조치가 여기에 열립니다</div>
+            </div>
+          )}
       </aside>
     </section>
   )
