@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { effectiveActions } from '../actionHistory'
 import { getUserDetail, suspendUser, unsuspendUser } from '../api/admin'
 import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
+import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import {
@@ -86,7 +87,7 @@ export default function UserDetailPage() {
     <section className="user-detail" aria-label="사용자 상세">
       <div className="back-row"><Link className="btn-link" to="/">← 신고 큐로</Link></div>
       <div className="user-header">
-        <span className="ua">{name.slice(0, 1)}</span>
+        <Avatar url={profile.profileImageUrl} name={name} />
         <div>
           <h1>
             {name}

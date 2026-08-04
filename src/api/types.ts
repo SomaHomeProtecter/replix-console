@@ -19,6 +19,8 @@ export interface UserSummary {
   id: number
   displayName: string | null
   status: UserStatus
+  /** 프로필 사진(HP-268) — 없으면 null이고 화면은 이름 첫 글자로 대체한다. */
+  profileImageUrl: string | null
 }
 
 export interface ReportItem {
@@ -74,6 +76,8 @@ export interface UserProfile {
   suspendReason: string | null
   createdAt: string
   updatedAt: string
+  /** 프로필 사진(HP-268) — 없으면 null이고 화면은 이름 첫 글자로 대체한다. */
+  profileImageUrl: string | null
 }
 
 export interface ReceivedReport {

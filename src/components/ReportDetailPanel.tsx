@@ -5,6 +5,7 @@ import {
 } from '../api/admin'
 import type { ReportItem, SuspendDuration } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
+import Avatar from './Avatar'
 import SuspendDialog from './SuspendDialog'
 
 /** Redis 실황 표기 — null은 이미 사라진 메시지(TTL·삭제)라는 뜻이다(계약). */
@@ -85,14 +86,12 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     })
   }
 
-  const targetInitial = (report.targetUser?.displayName ?? '?').slice(0, 1)
-
   return (
     <div className="detail-panel">
       <h5 className="side-h">신고 #{report.id} · 스냅샷 원문</h5>
       <blockquote className="snapshot">{report.snapshotMessage}</blockquote>
       <div className="meta-line" title={`msgId ${report.msgId}`}>
-        신고 {formatKstShort(report.createdAt)} · 신고자 {report.reporter?.displayName ?? '(알 수 없음)'}
+        신고 {formatKstShort(report.createdAt)}
         {' '}· 회차 ep.{report.episodeId} · 현재 상태 {liveStatusLabel(report.currentStatus)}
         {' '}· 스포일러 점수 {report.spoilerScore ?? '—'}
       </div>
@@ -102,13 +101,26 @@ export default function ReportDetailPanel({ report, onActionDone }: {
 
       {report.targetUser ? (
         <div className="target-card">
-          <span className="ua">{targetInitial}</span>
+          <Avatar
+              url={report.targetUser.profileImageUrl}
+              name={report.targetUser.displayName} />
           <span className="un">{report.targetUser.displayName ?? `#${report.targetUser.id}`}</span>
           <Link className="btn-link ul" to={`/users/${report.targetUser.id}`}>사용자 상세 →</Link>
         </div>
       ) : (
         <div className="target-card"><span className="hint">대상 사용자 정보 없음</span></div>
       )}
+
+      {/* 신고자도 작성자와 같은 카드로 읽는다(HP-268) — 종전에는 메타 줄 안에 이름만 섞여 있어
+          당사자 둘을 나란히 보기 어려웠고, 거기에 아바타를 끼우면 줄이 넘쳐 뒤가 잘렸다.
+          반복 신고자를 알아보는 데는 이름보다 얼굴이 빠르다(HP-270 남용 대응의 선행). */}
+      <div className="target-card reporter-card">
+        <Avatar
+            url={report.reporter?.profileImageUrl ?? null}
+            name={report.reporter?.displayName ?? null} />
+        <span className="un">{report.reporter?.displayName ?? '(알 수 없음)'}</span>
+        <span className="role">신고자</span>
+      </div>
 
       <h5 className="side-h">조치</h5>
       {error && <div className="error-box" role="alert">{error}</div>}

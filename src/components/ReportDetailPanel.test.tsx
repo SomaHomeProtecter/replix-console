@@ -59,7 +59,7 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
   it('종결된 신고는 무슨 조치였는지와 함께 처리 정보를 보여준다', () => {
     renderPanel(makeReportItem({
       status: 'RESOLVED', resolvedAction: 'BLIND',
-      handledBy: { id: 1, displayName: '지호', status: 'ACTIVE' },
+      handledBy: { id: 1, displayName: '지호', status: 'ACTIVE', profileImageUrl: null },
       handledAt: '2026-08-04T11:00:00Z',
       resolutionNote: '가림 처리함',
     }))
@@ -121,7 +121,7 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
   })
 
   it('탈퇴한 대상도 정지 버튼이 비활성이다(BE 409를 다이얼로그 전에 차단)', () => {
-    renderPanel(makeReportItem({ targetUser: { id: 9, displayName: '탈퇴자', status: 'WITHDRAWN' } }))
+    renderPanel(makeReportItem({ targetUser: { id: 9, displayName: '탈퇴자', status: 'WITHDRAWN', profileImageUrl: null } }))
     expect(screen.getByRole('button', { name: /계정 정지/ })).toBeDisabled()
   })
 })

@@ -184,7 +184,14 @@ table.report-table { width: 100%; border-collapse: collapse; }
   width: 24px; height: 24px; border-radius: 50%; background: #e9b06c; color: #fff;
   font-weight: 800; font-size: 11px; display: flex; align-items: center; justify-content: center; flex: none;
 }
+/* 프로필 사진 아바타(HP-268) — 글자 아바타와 같은 원형 자리를 차지하고 잘라 채운다. */
+.ua.img { object-fit: cover; }
 .target-card .un { font-weight: 700; color: var(--ink); }
+/* 신고자 카드 — 작성자와 같은 틀이되 한 톤 낮춰 "대상"과 혼동되지 않게 한다. */
+.reporter-card { margin-top: 6px; }
+.reporter-card .un { font-weight: 600; color: var(--muted); }
+.reporter-card .ua { background: #b8b2a6; }
+.target-card .role { margin-left: auto; font-size: 11px; color: var(--muted-2); }
 .target-card .ul { margin-left: auto; font-size: 11.5px; }
 .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .acts .btn { padding: 8px 0; text-align: center; }
