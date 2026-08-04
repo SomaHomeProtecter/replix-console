@@ -148,6 +148,38 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     expect(screen.getByText('계정 정지')).toBeInTheDocument()
   })
 
+  /**
+   * 정지 종결은 API를 두 번 부르므로 감사 행이 둘이다. 둘 다 정당한 기록이라 지울 수 없고,
+   * 한쪽만 숨기면 그 사실이 화면에서 사라진다 — 한 줄로 합쳐 두 사실을 함께 남긴다(HP-268).
+   */
+  it('정지로 종결한 건은 한 줄로 합쳐 보이고, 정지 사유도 함께 남는다', async () => {
+    getUserDetail.mockResolvedValue(makeUserDetail({
+      actions: [
+        makeActionRow({
+          id: 50, action: 'RESOLVE_REPORT', outcome: 'SUSPEND', reason: '정지 처리함',
+          targetType: 'REPORT', targetId: '26', targetSummary: '욕설 내용',
+          adminName: '지호', createdAt: '2026-08-05T03:48:39.891Z',
+        }),
+        makeActionRow({
+          id: 49, action: 'SUSPEND', targetType: 'USER', targetId: '9', reason: '도배',
+          adminName: '지호', createdAt: '2026-08-05T03:48:39.844Z',
+        }),
+      ],
+      suspensions: [],
+    }))
+    renderPage()
+    await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 2' }))
+
+    // 한 줄 — 라벨이 두 사실을 다 말한다
+    expect(screen.getByText('계정 정지 · 신고 종결')).toBeInTheDocument()
+    expect(screen.queryByText('계정 정지')).not.toBeInTheDocument()      // 따로 뜨지 않는다
+    expect(screen.queryByText('신고 종결 · 정지')).not.toBeInTheDocument()
+    // 합치면서 잃는 정보가 없어야 한다 — 어느 신고인지, 왜 정지했는지, 종결 메모까지
+    expect(screen.getByText(/욕설 내용/)).toBeInTheDocument()
+    expect(screen.getByText(/도배/)).toBeInTheDocument()
+    expect(screen.getByText(/정지 처리함/)).toBeInTheDocument()
+  })
+
   it('정지 중이면 만료 시각을 계산해 배지에 노출하고 해제 동선을 연다', async () => {
     getUserDetail.mockResolvedValue(makeUserDetail({
       profile: {

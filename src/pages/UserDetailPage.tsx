@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { effectiveActions } from '../actionHistory'
+import { effectiveActions, mergeSuspendResolve } from '../actionHistory'
 import { getUserDetail, suspendUser, unsuspendUser } from '../api/admin'
 import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
 import Avatar from '../components/Avatar'
@@ -188,17 +188,24 @@ export default function UserDetailPage() {
                   <div className="evrow act head2">
                     <span>시각</span><span>조치</span><span>대상 · 사유</span><span>처리자</span>
                   </div>
-                  {rows.map((a) => (
+                  {mergeSuspendResolve(rows).map(({ row: a, suspend }) => (
                     <div className="evrow act" key={a.id}>
                       <span className="t">{formatKstShort(a.createdAt)}</span>
-                      {/* 종결은 결과까지 붙인다 — "신고 종결"만으론 가림/정지/기각을 못 가린다(HP-268) */}
-                      <span className="alabel">{actionLabel(a.action, a.outcome)}</span>
+                      {/* 종결은 결과까지 붙인다 — "신고 종결"만으론 가림/정지/기각을 못 가린다(HP-268).
+                          정지로 종결한 건은 정지 행과 한 줄로 합쳐 두 사실을 함께 적는다. */}
+                      <span className="alabel">
+                        {suspend ? '계정 정지 · 신고 종결' : actionLabel(a.action, a.outcome)}
+                      </span>
                       {/* 어떤 신고에 대한 조치인지 발췌로 직관 표기(2026-08-05 E2E 피드백 2회) */}
                       <span>
                         {a.targetType === 'REPORT'
                           ? <span title={`신고 #${a.targetId}`}>“{a.targetSummary ?? `신고 #${a.targetId}`}”</span>
                           : <span className="who2">이 사용자</span>}
-                        {a.reason ? <span className="who2"> · {a.reason}</span> : null}
+                        {/* 합친 줄은 정지 사유를 먼저 — "왜 정지했나"가 종결 메모보다 구체적이다.
+                            둘이 다르면 종결 메모도 함께 남긴다(합치면서 잃는 정보가 없어야 한다). */}
+                        {suspend?.reason ? <span className="who2"> · {suspend.reason}</span> : null}
+                        {a.reason && a.reason !== suspend?.reason
+                          ? <span className="who2"> · {a.reason}</span> : null}
                       </span>
                       <span className="actor">{a.adminName ?? '—'}</span>
                     </div>

@@ -1,5 +1,53 @@
 import type { AdminActionRow, AdminActionType } from './api/types'
 
+/** 한 사건이 여러 감사 행으로 남았을 때, 화면에 한 줄로 보여줄 묶음. */
+export interface ActionEntry {
+  /** 대표 행 — 대상 발췌를 가진 쪽(신고 종결). 시각·처리자도 여기서 읽는다. */
+  row: AdminActionRow
+  /** 같은 사건으로 묶인 정지 행. null이면 단독 행이다. */
+  suspend: AdminActionRow | null
+}
+
+/** 콘솔이 정지→종결을 잇달아 호출하는 간격의 상한. 실측은 50ms 안팎이라 넉넉하다. */
+const SAME_OPERATION_MS = 2_000
+
+/**
+ * 한 번의 "정지로 종결"이 남긴 두 행을 한 줄로 합친다(HP-268).
+ *
+ * <p><b>왜 숨기지 않고 합치나:</b> 콘솔의 정지 종결은 API를 두 번 호출한다(정지 → 종결). 둘 다
+ * 정당한 감사 기록이라 로그에서 지울 수 없고, 한쪽만 숨기면 그 사실이 화면에서 사라진다.
+ * 합치면 <b>두 사실이 한 줄에 다 남는다</b> — 계정을 정지했다는 것과 그것으로 어느 신고를
+ * 닫았다는 것.
+ *
+ * <p><b>짝 판정:</b> 같은 관리자 + {@link SAME_OPERATION_MS} 이내 + 종결 결과가 SUSPEND.
+ * 시각 근접에 기대는 판정이지만 <b>틀려도 정보가 사라지지 않는다</b> — 잘못 묶여도 두 사실이
+ * 한 줄에 그대로 적히고, 안 묶이면 종전처럼 두 줄로 보일 뿐이다. 그래서 감사 화면에서도
+ * 받아들일 수 있다. (서버가 상관 ID를 실어 주면 이 판정을 정확한 것으로 바꿀 수 있다 —
+ * 표시 로직만 교체하면 되므로 그때 가서 해도 늦지 않다.)
+ *
+ * @param rows BE 순서(id DESC, 최신 먼저). 반환도 그 순서를 유지한다.
+ */
+export function mergeSuspendResolve(rows: AdminActionRow[]): ActionEntry[] {
+  const consumed = new Set<number>()
+  const entries: ActionEntry[] = []
+
+  for (const row of rows) {
+    if (consumed.has(row.id)) continue
+    if (row.action !== 'RESOLVE_REPORT' || row.outcome !== 'SUSPEND') {
+      entries.push({ row, suspend: null })
+      continue
+    }
+    const pair = rows.find((candidate) => candidate.action === 'SUSPEND'
+        && candidate.targetType === 'USER'
+        && !consumed.has(candidate.id)
+        && (candidate.adminName ?? '') === (row.adminName ?? '')
+        && Math.abs(Date.parse(candidate.createdAt) - Date.parse(row.createdAt)) <= SAME_OPERATION_MS)
+    if (pair) consumed.add(pair.id)
+    entries.push({ row, suspend: pair ?? null })
+  }
+  return entries
+}
+
 /**
  * 역조치 → 그것이 되돌리는 조치. 여기 없는 종류(SCORE_FIX)는 되돌릴 방법이 없어 항상 유효하다.
  */
