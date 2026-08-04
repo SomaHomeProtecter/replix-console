@@ -89,15 +89,30 @@ button { font: inherit; }
 }
 .btn-link:hover { text-decoration: underline; }
 
-/* ── 신고 큐 레이아웃 (cm-grid: 테이블 + 우측 300px 상세) ── */
+/* ── 신고 큐 레이아웃 — 전폭 테이블 + 상세 모달(2026-08-05 E2E 피드백) ── */
 .queue-layout {
   display: flex; flex-direction: column; flex: 1; min-height: 0;
   background: var(--panel); border: 1px solid var(--frame); border-radius: 10px;
   overflow: hidden; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.12);
 }
-.queue-body { display: flex; flex: 1; min-height: 0; }
-.queue-main { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
-.queue-side { flex: none; width: 320px; overflow: auto; }
+.queue-error { margin: 10px 16px 0; }
+
+/* 상세 모달 — 바깥 클릭·Esc·✕ = 목록 복귀. 정지 다이얼로그(.dialog-backdrop)가 이 위에 겹친다. */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(31, 39, 50, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 9; padding: 20px;
+}
+.modal-card {
+  position: relative; background: var(--panel); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(20, 30, 40, 0.25);
+  width: min(480px, 100%); max-height: 86vh; overflow: auto;
+}
+.modal-close {
+  position: absolute; top: 8px; right: 10px; z-index: 1;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 14px; padding: 4px 6px; border-radius: 6px;
+}
+.modal-close:hover { color: var(--ink); background: var(--line-2); }
 
 /* 필터 툴바 (cm-toolbar — pill 칩) */
 .filter-bar {
@@ -150,9 +165,8 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .ustatus.susp { background: var(--red-soft); color: var(--red); }
 .ustatus.gone { background: #e9eef2; color: var(--muted); }
 
-/* ── 상세 패널 (cm-side) ── */
-.detail-panel { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.detail-empty { color: var(--muted); text-align: center; padding: 48px 12px; }
+/* ── 상세 패널(모달 내용부 — 시안 cm-side 구성) ── */
+.detail-panel { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
 .side-h { margin: 0; font-size: 11px; letter-spacing: 0.07em; color: var(--muted); text-transform: uppercase; font-weight: 800; }
 .snapshot {
   margin: 0; border-left: 3px solid var(--amber); background: var(--amber-bg);

@@ -25,7 +25,11 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
       <div
           className="dialog" role="dialog" aria-modal="true" aria-label="계정 정지"
           onKeyDown={(e) => {
-            if (e.key === 'Escape') onCancel()
+            if (e.key === 'Escape') {
+              // 상세 모달의 문서 레벨 Esc 핸들러까지 번지면 겹이 한 번에 다 닫힌다 — 위 겹만 닫는다
+              e.stopPropagation()
+              onCancel()
+            }
           }}>
         <h2>{targetName} 계정 정지</h2>
         <p className="sub">채팅·답글·이모지·좋아요 전송이 차단됩니다. 로그인과 시청·읽기는 막지 않습니다.</p>

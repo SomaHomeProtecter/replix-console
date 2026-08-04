@@ -130,11 +130,12 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     expect(await screen.findByText(/관리자 권한이 없습니다/)).toBeInTheDocument()
   })
 
-  it('행 선택 → 패널 조치(기각) → 목록을 다시 묻는다', async () => {
+  it('행 선택 → 상세 모달 조치(기각) → 목록을 다시 묻는다', async () => {
     renderPage()
     await screen.findByText('범인은 집사다', { exact: false })
     await userEvent.click(screen.getAllByRole('row')[1])
-    expect(screen.getByText(/스냅샷 원문/)).toBeInTheDocument() // 패널 열림
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument() // 가운데 팝업
+    expect(screen.getByText(/스냅샷 원문/)).toBeInTheDocument()
 
     const callsBefore = listReports.mock.calls.length
     await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
@@ -142,5 +143,36 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     expect(admin.resolveReport).toHaveBeenCalledWith(101, 'REJECTED', null)
     expect(listReports.mock.calls.length).toBe(callsBefore + 1)
     expect(listReports).toHaveBeenLastCalledWith({ status: 'OPEN', reason: '' }, null)
+  })
+
+  it('모달 바깥(백드롭) 클릭 → 목록으로 복귀, 내부 클릭은 유지', async () => {
+    const { container } = renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+
+    // 카드 내부 클릭은 닫히지 않는다
+    const modal = screen.getByRole('dialog', { name: '신고 상세' })
+    await userEvent.click(within(modal).getByText('범인은 집사다')) // 모달 안 스냅샷 원문
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+
+    // 백드롭 클릭 = 원래 페이지(목록)로
+    await userEvent.click(container.querySelector('.modal-backdrop')!)
+    expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('row').length).toBeGreaterThan(1) // 목록 그대로
+  })
+
+  it('Esc는 위 겹부터 닫는다 — 정지 다이얼로그 → 상세 모달 순', async () => {
+    renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+    expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}') // 다이얼로그만 닫힌다(stopPropagation)
+    expect(screen.queryByRole('dialog', { name: '계정 정지' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}') // 이번엔 모달이 닫힌다
+    expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
   })
 })
