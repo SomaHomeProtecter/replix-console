@@ -3,28 +3,23 @@ import { Link, useParams } from 'react-router'
 import { getUserDetail, suspendUser, unsuspendUser } from '../api/admin'
 import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
 import Pill from '../components/Pill'
-import StatusBadge from '../components/StatusBadge'
 import SuspendDialog from '../components/SuspendDialog'
 import {
-  ACTION_LABELS, USER_STATUS_LABELS, formatKst, suspensionLabel,
+  ACTION_LABELS, formatKstShort, suspensionChip,
 } from '../format'
 
-const USER_BADGE_CLASSES: Record<UserStatus, string> = {
-  ACTIVE: 'badge badge-active',
-  SUSPENDED: 'badge badge-suspended',
-  WITHDRAWN: 'badge badge-withdrawn',
+const CHIP_CLASSES: Record<UserStatus, string> = {
+  ACTIVE: 'ustatus',
+  SUSPENDED: 'ustatus susp',
+  WITHDRAWN: 'ustatus gone',
 }
 
 type Tab = 'reports' | 'actions' | 'suspensions'
 
-const TAB_LABELS: Record<Tab, string> = {
-  reports: '받은 신고', actions: '조치 이력', suspensions: '정지 이력',
-}
-
 /**
- * 사용자 상세(정본 ②) — 좌 기본 정보 블록(읽기 전용) / 우 탭 3개. 진입은 신고 큐 경유만
- * (검색·목록 없음). 정지 만료는 화면이 계산해 표기한다(lazy 설계 정직성). 정지/해제 버튼은
- * 정본이 침묵한 보완 — 해제 동선이 없으면 콘솔에서 정지를 되돌릴 수 없다(PR 명기).
+ * 사용자 상세(시안 cm2) — 헤더(아바타·이름·상태 칩(정지 만료 lazy 계산)·userId/provider) +
+ * 좌 기본 정보 블록(읽기 전용) / 우 탭 3개(건수 표기). 진입은 신고 큐 경유만(검색·목록 없음).
+ * 정지/해제 버튼은 정본이 침묵한 보완 — 해제 동선이 없으면 콘솔에서 정지를 되돌릴 수 없다.
  */
 export default function UserDetailPage() {
   const { userId } = useParams()
@@ -66,8 +61,8 @@ export default function UserDetailPage() {
   if (error && !detail) {
     return (
       <section className="user-detail" aria-label="사용자 상세">
-        <div className="error-box" role="alert">{error}</div>
-        <Link className="btn-link" to="/">← 신고 큐로</Link>
+        <div className="back-row"><Link className="btn-link" to="/">← 신고 큐로</Link></div>
+        <div className="detail-panel"><div className="error-box" role="alert">{error}</div></div>
       </section>
     )
   }
@@ -76,52 +71,63 @@ export default function UserDetailPage() {
   }
 
   const { profile } = detail
-  const suspension = suspensionLabel(profile.status, profile.suspendedUntil)
   const name = profile.displayName ?? `#${profile.id}`
+  const tabLabels: Record<Tab, string> = {
+    reports: `받은 신고 ${detail.reportsReceived.length}`,
+    actions: `조치 이력 ${detail.actions.length}`,
+    suspensions: `정지 이력 ${detail.suspensions.length}`,
+  }
 
   return (
     <section className="user-detail" aria-label="사용자 상세">
-      <Link className="btn-link" to="/">← 신고 큐로</Link>
+      <div className="back-row"><Link className="btn-link" to="/">← 신고 큐로</Link></div>
       <div className="user-header">
-        <h1>{name}</h1>
-        <span className={USER_BADGE_CLASSES[profile.status]}>{USER_STATUS_LABELS[profile.status]}</span>
-        {suspension && <span className="badge badge-suspended">{suspension}</span>}
-        <div className="spacer" />
-        {profile.status === 'SUSPENDED' && (
-          <button type="button" className="btn" disabled={busy}
-              onClick={() => run(() => unsuspendUser(id))}>
-            정지 해제
-          </button>
-        )}
-        {profile.status !== 'WITHDRAWN' && (
-          <button type="button" className="btn btn-danger" disabled={busy}
-              onClick={() => setDialogOpen(true)}>
-            계정 정지…
-          </button>
-        )}
+        <span className="ua">{name.slice(0, 1)}</span>
+        <div>
+          <h1>
+            {name}
+            <span className={CHIP_CLASSES[profile.status]}>
+              {suspensionChip(profile.status, profile.suspendedUntil)}
+            </span>
+          </h1>
+          <div className="uid">userId {profile.id} · provider {profile.authProvider}</div>
+        </div>
+        <div className="top-act">
+          {profile.status === 'SUSPENDED' && (
+            <button type="button" className="btn" disabled={busy}
+                onClick={() => run(async () => { await unsuspendUser(id) })}>
+              정지 해제
+            </button>
+          )}
+          {profile.status !== 'WITHDRAWN' && (
+            <button type="button" className="btn btn-susp" disabled={busy}
+                onClick={() => setDialogOpen(true)}>
+              계정 정지…
+            </button>
+          )}
+        </div>
       </div>
 
-      {error && <div className="error-box" role="alert">{error}</div>}
+      {error && <div className="detail-panel"><div className="error-box" role="alert">{error}</div></div>}
 
       <div className="user-columns">
         <div className="profile-block">
-          <h2>기본 정보</h2>
-          <dl className="meta-grid">
-            <dt>ID</dt><dd>{profile.id}</dd>
-            <dt>이메일</dt><dd>{profile.email ?? '—'}</dd>
-            <dt>가입 경로</dt><dd>{profile.authProvider}</dd>
-            <dt>가입일</dt><dd>{formatKst(profile.createdAt)}</dd>
-            <dt>마지막 변경</dt><dd>{formatKst(profile.updatedAt)}</dd>
+          <h5 className="side-h">기본 정보</h5>
+          <dl>
+            <dt>가입일</dt><dd>{formatKstShort(profile.createdAt)}</dd>
+            <dt>상태</dt><dd>{profile.status}</dd>
             {profile.suspendReason && (<><dt>정지 사유</dt><dd>{profile.suspendReason}</dd></>)}
+            <dt>마지막 변경</dt><dd>{formatKstShort(profile.updatedAt)}</dd>
+            <dt>이메일</dt><dd>{profile.email ?? '—'}</dd>
           </dl>
         </div>
 
         <div className="history-tabs">
           <div className="tab-bar" role="tablist">
-            {(Object.keys(TAB_LABELS) as Tab[]).map((key) => (
+            {(Object.keys(tabLabels) as Tab[]).map((key) => (
               <button key={key} type="button" role="tab" aria-selected={tab === key}
                   onClick={() => setTab(key)}>
-                {TAB_LABELS[key]}
+                {tabLabels[key]}
               </button>
             ))}
           </div>
@@ -129,24 +135,13 @@ export default function UserDetailPage() {
           {tab === 'reports' && (
             detail.reportsReceived.length === 0
               ? <div className="empty-hint">받은 신고가 없습니다</div>
-              : (
-                <table className="history-table">
-                  <thead>
-                    <tr><th>시각</th><th>사유</th><th>상태</th><th>신고된 메시지</th><th>신고자</th></tr>
-                  </thead>
-                  <tbody>
-                    {detail.reportsReceived.map((r) => (
-                      <tr key={r.id}>
-                        <td className="time">{formatKst(r.createdAt)}</td>
-                        <td><Pill reason={r.reason} /></td>
-                        <td><StatusBadge status={r.status} /></td>
-                        <td>{r.snapshotMessage}</td>
-                        <td>{r.reporterName ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
+              : detail.reportsReceived.map((r) => (
+                <div className="evrow" key={r.id}>
+                  <span className="t">{formatKstShort(r.createdAt)}</span>
+                  <span><Pill reason={r.reason} /></span>
+                  <span>{r.snapshotMessage} <span className="who2">— {r.reporterName ?? '—'}</span></span>
+                </div>
+              ))
           )}
 
           {tab !== 'reports' && (() => {
@@ -155,23 +150,13 @@ export default function UserDetailPage() {
             const rows = tab === 'actions' ? detail.actions : detail.suspensions
             return rows.length === 0
               ? <div className="empty-hint">기록이 없습니다</div>
-              : (
-                <table className="history-table">
-                  <thead>
-                    <tr><th>시각</th><th>조치</th><th>사유</th><th>조치자</th></tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((a) => (
-                      <tr key={a.id}>
-                        <td className="time">{formatKst(a.createdAt)}</td>
-                        <td>{ACTION_LABELS[a.action]}</td>
-                        <td>{a.reason ?? '—'}</td>
-                        <td>{a.adminName ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
+              : rows.map((a) => (
+                <div className="evrow" key={a.id}>
+                  <span className="t">{formatKstShort(a.createdAt)}</span>
+                  <span>{ACTION_LABELS[a.action]}</span>
+                  <span>{a.reason ?? '—'} <span className="who2">— {a.adminName ?? '—'}</span></span>
+                </div>
+              ))
           })()}
         </div>
       </div>
@@ -182,7 +167,7 @@ export default function UserDetailPage() {
             busy={busy}
             onConfirm={(duration: SuspendDuration, reason: string) => {
               setDialogOpen(false)
-              run(() => suspendUser(id, duration, reason))
+              run(async () => { await suspendUser(id, duration, reason) })
             }}
             onCancel={() => setDialogOpen(false)} />
       )}

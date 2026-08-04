@@ -1,13 +1,13 @@
 import type { ReportStatus } from '../api/types'
-import { STATUS_LABELS } from '../format'
+import { ROW_STATUS_LABELS } from '../format'
 
 const CLASSES: Record<ReportStatus, string> = {
-  OPEN: 'badge badge-open',
-  RESOLVED: 'badge badge-resolved',
-  REJECTED: 'badge badge-rejected',
+  OPEN: 'st st-open',
+  RESOLVED: 'st st-done',
+  REJECTED: 'st st-rej',
 }
 
-/** 신고 상태 배지 — 잉크 톤 유지(빨강 금지: 빨강은 정지 전용). */
+/** 신고 상태 텍스트(시안 cm-st — ● OPEN / ✓ 처리 / — 기각). OPEN 빨강은 시안 확정. */
 export default function StatusBadge({ status }: { status: ReportStatus }) {
-  return <span className={CLASSES[status]}>{STATUS_LABELS[status]}</span>
+  return <span className={CLASSES[status]}>{ROW_STATUS_LABELS[status]}</span>
 }

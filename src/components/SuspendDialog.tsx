@@ -5,8 +5,8 @@ import { DURATION_LABELS } from '../format'
 const PRESETS: SuspendDuration[] = ['H24', 'H72', 'D7', 'PERMANENT']
 
 /**
- * 정지 확인 다이얼로그(정본) — 프리셋 4단 · 사유 필수 · 제재 범위 안내 · 감사 고지.
- * 파괴적 조치라 확인 한 겹을 강제하고, 빨강은 여기 확정 버튼에만 쓴다.
+ * 정지 확인 다이얼로그(시안 cm-dlg) — 프리셋 4단 · 사유 필수(*) · 제재 범위 안내 · 감사 고지.
+ * 파괴적 조치라 확인 한 겹을 강제하고, 빨강은 프리셋 선택·확정 버튼에만 쓴다.
  */
 export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }: {
   targetName: string
@@ -28,8 +28,8 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
             if (e.key === 'Escape') onCancel()
           }}>
         <h2>{targetName} 계정 정지</h2>
-        <p className="hint">채팅·반응만 차단됩니다 — 로그인·읽기는 유지됩니다. 만료는 자동 해제(lazy)입니다.</p>
-        <div className="preset-group" role="radiogroup" aria-label="정지 기간">
+        <p className="sub">채팅·답글·이모지·좋아요 전송이 차단됩니다. 로그인과 시청·읽기는 막지 않습니다.</p>
+        <div className="durs" role="radiogroup" aria-label="정지 기간">
           {PRESETS.map((preset) => (
             <label key={preset}>
               <input
@@ -40,18 +40,23 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
             </label>
           ))}
         </div>
-        <label>
-          정지 사유
-          <textarea
-              aria-label="정지 사유" rows={2} maxLength={200} value={reason} autoFocus
-              placeholder="필수 — 대상에게 차단 안내와 함께 전달됩니다"
-              onChange={(e) => setReason(e.target.value)} />
-        </label>
-        <p className="hint">이 조치는 감사 로그에 기록됩니다.</p>
+        <div className="req">
+          <label>
+            정지 사유 <span className="must">*</span>
+            <textarea
+                aria-label="정지 사유" rows={2} maxLength={200} value={reason} autoFocus
+                placeholder="필수 — 감사 로그와 차단 안내에 남습니다"
+                onChange={(e) => setReason(e.target.value)} />
+          </label>
+        </div>
+        <div className="warnline">
+          <span>⚠</span>
+          <span>정지 사실과 사유는 감사 로그에 기록되고, 사용자에게는 전송 시점에 "USER_SUSPENDED" 안내가 전달됩니다.</span>
+        </div>
         <div className="dialog-actions">
           <button type="button" className="btn" onClick={onCancel}>취소</button>
           <button
-              type="button" className="btn btn-danger"
+              type="button" className="btn btn-danger-solid"
               disabled={!trimmed || busy}
               onClick={() => onConfirm(duration, trimmed)}>
             정지 적용

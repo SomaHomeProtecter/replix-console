@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,16 +27,16 @@ beforeEach(() => {
 })
 
 describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () => {
-  it('헤더와 기본 정보 블록(읽기 전용)을 보여준다', async () => {
+  it('헤더(상태 칩·userId·provider)와 기본 정보 블록(읽기 전용)을 보여준다', async () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: /스포일러꾼/ })).toBeInTheDocument()
     expect(getUserDetail).toHaveBeenCalledWith(9)
-    expect(screen.getByText('활성')).toBeInTheDocument()
+    expect(screen.getAllByText('ACTIVE').length).toBeGreaterThan(0) // 헤더 칩 + 기본 정보 dl
     expect(screen.getByText('target@example.com')).toBeInTheDocument()
-    expect(screen.getByText('keycloak')).toBeInTheDocument()
+    expect(screen.getByText(/userId 9 · provider keycloak/)).toBeInTheDocument()
   })
 
-  it('탭 = 받은 신고(기본) · 조치 이력 · 정지 이력(별도 축 suspensions)', async () => {
+  it('탭 = 받은 신고(기본) · 조치 이력 · 정지 이력(별도 축 suspensions) — 건수 표기', async () => {
     getUserDetail.mockResolvedValue(makeUserDetail({
       reportsReceived: [makeReceivedReport({ snapshotMessage: '욕설 스냅샷', reporterName: '신고자닉' })],
       actions: [
@@ -53,18 +53,16 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     renderPage()
     // 기본 탭 = 받은 신고
     expect(await screen.findByText(/욕설 스냅샷/)).toBeInTheDocument()
-    expect(screen.getByText('신고자닉')).toBeInTheDocument()
+    expect(screen.getByText(/신고자닉/)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: /조치 이력/ }))
-    const actionsTable = screen.getByRole('table')
-    expect(within(actionsTable).getAllByRole('row')).toHaveLength(4) // 헤더 + 3행
-    expect(within(actionsTable).getByText('정지 해제')).toBeInTheDocument()
-    expect(within(actionsTable).getByText('신고 종결')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: '조치 이력 3' })) // 건수 = 시안 탭 라벨
+    expect(screen.getByText('정지 해제')).toBeInTheDocument()
+    expect(screen.getByText('신고 종결')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: /정지 이력/ }))
-    const suspensionTable = screen.getByRole('table')
-    expect(within(suspensionTable).getAllByRole('row')).toHaveLength(3) // 헤더 + SUSPEND·UNSUSPEND
-    expect(within(suspensionTable).queryByText('신고 종결')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: '정지 이력 2' }))
+    expect(screen.queryByText('신고 종결')).not.toBeInTheDocument()
+    expect(screen.getByText('정지 해제')).toBeInTheDocument()
+    expect(screen.getByText('계정 정지')).toBeInTheDocument()
   })
 
   it('정지 중이면 만료 시각을 계산해 배지에 노출하고 해제 동선을 연다', async () => {
@@ -75,7 +73,7 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
       },
     }))
     renderPage()
-    expect(await screen.findByText(/까지 정지/)).toBeInTheDocument()
+    expect(await screen.findByText(/SUSPENDED · ~/)).toBeInTheDocument() // 만료 시각 lazy 계산 칩
 
     await userEvent.click(screen.getByRole('button', { name: '정지 해제' }))
     expect(unsuspendUser).toHaveBeenCalledWith(9)
@@ -90,7 +88,7 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
       },
     }))
     renderPage()
-    expect(await screen.findByText(/정지 만료됨/)).toBeInTheDocument()
+    expect(await screen.findByText(/만료됨\(자동 해제 대기\)/)).toBeInTheDocument()
   })
 
   it('여기서도 계정 정지가 가능하다(다이얼로그 재사용)', async () => {

@@ -4,9 +4,8 @@ import {
   blindMessage, resolveReport, suspendUser, unblindMessage,
 } from '../api/admin'
 import type { ReportItem, SuspendDuration } from '../api/types'
-import { DURATION_LABELS, REASON_LABELS, USER_STATUS_LABELS, formatKst } from '../format'
+import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
 import SuspendDialog from './SuspendDialog'
-import StatusBadge from './StatusBadge'
 
 /** Redis 실황 표기 — null은 이미 사라진 메시지(TTL·삭제)라는 뜻이다(계약). */
 function liveStatusLabel(currentStatus: string | null): string {
@@ -17,10 +16,11 @@ function liveStatusLabel(currentStatus: string | null): string {
 }
 
 /**
- * 우측 상세 패널(정본) — 스냅샷 원문 + 메타 + 대상 사용자 카드 + 조치 버튼 + 처리 메모.
+ * 우측 상세 패널(시안 cm-side) — 스냅샷 원문(호박색 인용) + 메타 한 줄 + 대상 카드 +
+ * 조치 2열 그리드([가림][계정 정지…] / [기각 (조치 없음)]) + 처리 메모 + 집계·처리 이력.
  * 조치는 신고 종결까지 한 번에 간다: 가림 = blind→RESOLVED, 정지 = suspend→RESOLVED,
  * 기각 = REJECTED. 재종결은 BE가 멱등(마지막 판정 갱신)이라 종결분에도 버튼을 남겨 둔다.
- * [가림 해제]는 정본 3버튼 밖의 보조 기능 — 오조치 복구 동선이 없으면 콘솔이 반쪽이다.
+ * [가림 해제]는 시안 3버튼 밖의 보조 기능 — 오조치 복구 동선이 없으면 콘솔이 반쪽이다.
  */
 export default function ReportDetailPanel({ report, onActionDone }: {
   report: ReportItem
@@ -82,71 +82,61 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     })
   }
 
+  const targetInitial = (report.targetUser?.displayName ?? '?').slice(0, 1)
+
   return (
     <div className="detail-panel">
-      <div className="action-row">
-        <StatusBadge status={report.status} />
-        {report.sameMessageReportCount > 1 && (
-          <span className="multi-report">같은 메시지 신고 {report.sameMessageReportCount}건</span>
-        )}
+      <h5 className="side-h">신고 #{report.id} · 스냅샷 원문</h5>
+      <blockquote className="snapshot">{report.snapshotMessage}</blockquote>
+      <div className="meta-line" title={`msgId ${report.msgId}`}>
+        신고 {formatKstShort(report.createdAt)} · 신고자 {report.reporter?.displayName ?? '(알 수 없음)'}
+        {' '}· 회차 ep.{report.episodeId} · 현재 상태 {liveStatusLabel(report.currentStatus)}
+        {' '}· 스포일러 점수 {report.spoilerScore ?? '—'}
       </div>
-
-      <blockquote className="snapshot">
-        {report.snapshotMessage}
-        <footer>— {report.snapshotDisplayName} · 신고 시점 스냅샷 원문</footer>
-      </blockquote>
-
-      <dl className="meta-grid">
-        <dt>신고 시각</dt><dd>{formatKst(report.createdAt)}</dd>
-        <dt>신고 사유</dt><dd>{REASON_LABELS[report.reason]}{report.detail ? ` — ${report.detail}` : ''}</dd>
-        <dt>신고자</dt><dd>{report.reporter?.displayName ?? '(알 수 없음)'}</dd>
-        <dt>회차 · 메시지</dt><dd>회차 {report.episodeId} · {report.msgId}</dd>
-        <dt>현재 상태(실황)</dt><dd>{liveStatusLabel(report.currentStatus)}</dd>
-        <dt>스포일러 점수</dt><dd>{report.spoilerScore ?? '—'}</dd>
-      </dl>
+      {report.detail && (
+        <div className="meta-line">신고 사유({REASON_LABELS[report.reason]}) — {report.detail}</div>
+      )}
 
       {report.targetUser ? (
         <div className="target-card">
-          <span>
-            대상: <strong>{report.targetUser.displayName ?? `#${report.targetUser.id}`}</strong>
-            {' '}({USER_STATUS_LABELS[report.targetUser.status]})
-          </span>
-          <Link className="btn-link" to={`/users/${report.targetUser.id}`}>사용자 상세 →</Link>
+          <span className="ua">{targetInitial}</span>
+          <span className="un">{report.targetUser.displayName ?? `#${report.targetUser.id}`}</span>
+          <Link className="btn-link ul" to={`/users/${report.targetUser.id}`}>사용자 상세 →</Link>
         </div>
       ) : (
         <div className="target-card"><span className="hint">대상 사용자 정보 없음</span></div>
       )}
 
-      {report.handledBy && (
-        <div className="resolution-box">
-          처리: {report.handledBy.displayName} · {formatKst(report.handledAt)}
-          {report.resolutionNote ? ` · ${report.resolutionNote}` : ''}
-        </div>
-      )}
-
+      <h5 className="side-h">조치</h5>
       {error && <div className="error-box" role="alert">{error}</div>}
-
-      <label className="panel-note">
-        처리 메모
-        <textarea
-            aria-label="처리 메모" rows={2} maxLength={500} value={note}
-            placeholder="선택 — 종결 사유로 감사 로그에 남습니다"
-            onChange={(e) => setNote(e.target.value)} />
-      </label>
-
-      <div className="action-row">
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={blind}>가림</button>
+      <div className="acts">
+        <button type="button" className="btn btn-blind" disabled={busy} onClick={blind}>가림</button>
         <button
-            type="button" className="btn btn-danger"
+            type="button" className="btn btn-susp"
             // WITHDRAWN은 BE가 409로 거부한다 — 다이얼로그까지 갔다 실패하지 않게 미리 막는다(리뷰 m6)
             disabled={busy || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
             title={report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
             onClick={() => setDialogOpen(true)}>
           계정 정지…
         </button>
-        <button type="button" className="btn" disabled={busy} onClick={reject}>기각</button>
+        <button type="button" className="btn span2" disabled={busy} onClick={reject}>기각 (조치 없음)</button>
+      </div>
+
+      <label className="note-in">
+        <textarea
+            aria-label="처리 메모" rows={2} maxLength={500} value={note}
+            placeholder="처리 메모 (감사 로그에 남습니다)"
+            onChange={(e) => setNote(e.target.value)} />
+      </label>
+
+      <div className="hist">
+        <span>같은 메시지 신고 <b>{report.sameMessageReportCount}건</b></span>
         {report.currentStatus === 'blinded' && (
-          <button type="button" className="btn-link" disabled={busy} onClick={unblind}>가림 해제</button>
+          <> · <button type="button" className="btn-link" disabled={busy} onClick={unblind}>가림 해제</button></>
+        )}
+        {report.handledBy && (
+          <><br />처리: <b>{report.handledBy.displayName}</b> · {formatKstShort(report.handledAt)}
+            {report.resolutionNote ? ` · ${report.resolutionNote}` : ''}</>
         )}
       </div>
 

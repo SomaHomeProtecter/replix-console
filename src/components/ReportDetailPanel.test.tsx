@@ -28,19 +28,20 @@ beforeEach(() => {
 })
 
 describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 카드', () => {
-  it('스냅샷 원문과 메타(신고자·실황·스포일러 점수·신고 상세)를 보여준다', () => {
+  it('스냅샷 원문과 메타 한 줄(신고자·실황·스포일러 점수)·신고 상세를 보여준다', () => {
     renderPanel()
+    expect(screen.getByText(/신고 #101 · 스냅샷 원문/)).toBeInTheDocument()
     expect(screen.getByText('범인은 집사다')).toBeInTheDocument()
-    expect(screen.getAllByText(/스포일러꾼/).length).toBeGreaterThan(0) // 작성자 표기(+대상 카드)
-    expect(screen.getByText('신고자닉')).toBeInTheDocument()
-    expect(screen.getByText('표시 중')).toBeInTheDocument()       // currentStatus=visible 실황
-    expect(screen.getByText('8')).toBeInTheDocument()             // 스포일러 점수
-    expect(screen.getByText(/결말을 그대로 말해요/)).toBeInTheDocument() // 신고 상세 사유(사유 라벨 뒤에 붙음)
+    expect(screen.getAllByText(/스포일러꾼/).length).toBeGreaterThan(0) // 대상 카드
+    expect(screen.getByText(/신고자닉/)).toBeInTheDocument()
+    expect(screen.getByText(/현재 상태 표시 중/)).toBeInTheDocument()   // currentStatus=visible 실황
+    expect(screen.getByText(/스포일러 점수 8/)).toBeInTheDocument()
+    expect(screen.getByText(/결말을 그대로 말해요/)).toBeInTheDocument() // 신고 상세 사유
   })
 
   it('같은 메시지 다중 신고는 집계로 강조한다', () => {
     renderPanel(makeReportItem({ sameMessageReportCount: 3 }))
-    expect(screen.getByText('같은 메시지 신고 3건')).toBeInTheDocument()
+    expect(screen.getByText(/같은 메시지 신고/)).toHaveTextContent('같은 메시지 신고 3건')
   })
 
   it('사라진 메시지(실황 null)는 그렇게 말한다', () => {
@@ -70,7 +71,7 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
   it('기각은 REJECTED 종결이고 처리 메모를 싣는다', async () => {
     renderPanel()
     await userEvent.type(screen.getByLabelText('처리 메모'), '중복 신고')
-    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
 
     expect(resolveReport).toHaveBeenCalledWith(101, 'REJECTED', '중복 신고')
     expect(onActionDone).toHaveBeenCalled()
@@ -124,8 +125,8 @@ describe('정지 다이얼로그(정본) — 프리셋 4단·사유 필수·안�
     await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveTextContent('채팅·반응만 차단')
-    expect(dialog).toHaveTextContent('로그인·읽기는 유지')
+    expect(dialog).toHaveTextContent('전송이 차단됩니다')
+    expect(dialog).toHaveTextContent('로그인과 시청·읽기는 막지 않습니다')
     expect(dialog).toHaveTextContent('감사 로그')
     // 프리셋 4단 + 기본 24시간
     expect(screen.getByRole('radio', { name: '24시간' })).toBeChecked()

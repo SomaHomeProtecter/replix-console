@@ -1,9 +1,9 @@
 import type { ReportItem } from '../api/types'
-import { formatKst } from '../format'
+import { formatKst, formatKstTime } from '../format'
 import Pill from './Pill'
 import StatusBadge from './StatusBadge'
 
-/** 신고 큐 테이블 — 행 = 시각 · 사유 pill · 스냅샷 발췌(작성자 포함) · 상태(정본 확정). */
+/** 신고 큐 테이블(시안 cm-tr) — 시각(HH:mm) · 사유 pill · 스냅샷 발췌(작성자 포함) · 상태. */
 export default function ReportTable({ items, selectedId, onSelect }: {
   items: ReportItem[]
   selectedId: number | null
@@ -19,7 +19,7 @@ export default function ReportTable({ items, selectedId, onSelect }: {
           <tr>
             <th>시각</th>
             <th>사유</th>
-            <th>신고된 메시지</th>
+            <th>신고된 채팅 (스냅샷)</th>
             <th>상태</th>
           </tr>
         </thead>
@@ -38,9 +38,9 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                     onSelect(item.id)
                   }
                 }}>
-              <td className="time">{formatKst(item.createdAt)}</td>
+              <td className="time" title={formatKst(item.createdAt)}>{formatKstTime(item.createdAt)}</td>
               <td><Pill reason={item.reason} /></td>
-              <td className="excerpt">{item.snapshotDisplayName}: {item.snapshotMessage}</td>
+              <td className="excerpt"><span className="who">{item.snapshotDisplayName}</span>{item.snapshotMessage}</td>
               <td><StatusBadge status={item.status} /></td>
             </tr>
           ))}

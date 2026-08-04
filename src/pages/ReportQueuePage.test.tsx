@@ -26,7 +26,7 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     expect(listReports).toHaveBeenCalledWith({ status: 'OPEN', reason: '' }, null)
   })
 
-  it('행 = 시각·사유 pill·발췌(작성자 포함)·상태 배지', async () => {
+  it('행 = 시각·사유 pill·발췌(작성자 포함)·상태 텍스트(시안)', async () => {
     listReports.mockResolvedValue({
       items: [makeReportItem(), makeReportItem({
         id: 102, reason: 'ABUSE', status: 'RESOLVED',
@@ -39,21 +39,22 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     const rows = await screen.findAllByRole('row')
     const first = rows[1] // rows[0] = 헤더
     expect(within(first).getByText('스포일러')).toBeInTheDocument()
-    expect(within(first).getByText(/스포일러꾼.*범인은 집사다/)).toBeInTheDocument()
-    expect(within(first).getByText('접수')).toBeInTheDocument()
+    expect(within(first).getByText('스포일러꾼')).toBeInTheDocument()      // 작성자(.who)
+    expect(within(first).getByText('범인은 집사다')).toBeInTheDocument()
+    expect(within(first).getByText('● OPEN')).toBeInTheDocument()
     const second = rows[2]
     expect(within(second).getByText('욕설·혐오')).toBeInTheDocument()
-    expect(within(second).getByText('처리')).toBeInTheDocument()
+    expect(within(second).getByText('✓ 처리')).toBeInTheDocument()
   })
 
-  it('상태 세그먼트·사유 select 변경은 목록을 리셋해 다시 묻는다', async () => {
+  it('상태·사유 칩 토글은 목록을 리셋해 다시 묻는다(켜진 칩 재클릭 = 해제)', async () => {
     renderPage()
     await screen.findByText('범인은 집사다', { exact: false })
 
-    await userEvent.click(screen.getByRole('button', { name: '전체' }))
+    await userEvent.click(screen.getByRole('button', { name: '열림' })) // 초기 OPEN 해제 → 전체
     expect(listReports).toHaveBeenLastCalledWith({ status: '', reason: '' }, null)
 
-    await userEvent.selectOptions(screen.getByLabelText('사유 필터'), 'SPOILER')
+    await userEvent.click(screen.getByRole('button', { name: '스포일러' }))
     expect(listReports).toHaveBeenLastCalledWith({ status: '', reason: 'SPOILER' }, null)
   })
 
@@ -110,7 +111,7 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     await screen.findByText('범인은 집사다', { exact: false })
 
     await userEvent.click(screen.getByRole('button', { name: '더 불러오기' })) // in-flight로 남김
-    await userEvent.click(screen.getByRole('button', { name: '전체' }))        // 새 필터가 먼저 완료
+    await userEvent.click(screen.getByRole('button', { name: '열림' }))        // 필터 해제 — 새 요청 먼저 완료
     await screen.findByText('새 필터 결과', { exact: false })
 
     await act(async () => {
@@ -133,11 +134,10 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     renderPage()
     await screen.findByText('범인은 집사다', { exact: false })
     await userEvent.click(screen.getAllByRole('row')[1])
-    expect(screen.getByText(/신고 시점 스냅샷 원문/)).toBeInTheDocument() // 패널 열림
+    expect(screen.getByText(/스냅샷 원문/)).toBeInTheDocument() // 패널 열림
 
     const callsBefore = listReports.mock.calls.length
-    // '기각'은 필터 세그먼트에도 있으므로 우측 패널(aside) 안의 조치 버튼으로 한정한다
-    await userEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '기각' }))
+    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
 
     expect(admin.resolveReport).toHaveBeenCalledWith(101, 'REJECTED', null)
     expect(listReports.mock.calls.length).toBe(callsBefore + 1)
