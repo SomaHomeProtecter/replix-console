@@ -8,6 +8,7 @@ export function makeReportItem(overrides: Partial<ReportItem> = {}): ReportItem 
     reason: 'SPOILER',
     detail: '결말을 그대로 말해요',
     status: 'OPEN',
+    resolvedAction: null,
     episodeId: 42,
     msgId: '01FIXTUREMSG0000000000000A',
     snapshotMessage: '범인은 집사다',
@@ -45,6 +46,7 @@ export function makeActionRow(overrides: Partial<AdminActionRow> = {}): AdminAct
     adminName: '지호',
     targetType: 'USER',
     targetId: '9',
+    targetSummary: null,
     ...overrides,
   }
 }

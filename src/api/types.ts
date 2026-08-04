@@ -12,6 +12,9 @@ export type AdminActionType =
 
 export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT'
 
+/** 처리(RESOLVED)에 동반된 조치 — "처리됨"을 가림/정지로 구분한다. null = 단순 처리. */
+export type ResolutionAction = 'BLIND' | 'SUSPEND'
+
 export interface UserSummary {
   id: number
   displayName: string | null
@@ -24,6 +27,7 @@ export interface ReportItem {
   reason: ReportReason
   detail: string | null
   status: ReportStatus
+  resolvedAction: ResolutionAction | null
   episodeId: number
   msgId: string
   snapshotMessage: string
@@ -47,6 +51,7 @@ export interface ReportPage {
 export interface ResolveResult {
   id: number
   status: ReportStatus
+  resolvedAction: ResolutionAction | null
   resolutionNote: string | null
   handledBy: UserSummary | null
   handledAt: string | null
@@ -86,9 +91,11 @@ export interface AdminActionRow {
   action: AdminActionType
   reason: string | null
   adminName: string | null
-  /** 어떤 대상(신고 등)에 대한 조치인지 — 화면이 "신고 #id"로 표기한다. */
+  /** 어떤 대상(신고 등)에 대한 조치인지 — 화면이 발췌·번호로 표기한다. */
   targetType: AdminTargetType
   targetId: string
+  /** REPORT 대상이면 그 신고의 스냅샷 발췌(≤30자), 그 외 null(대상 = 이 사용자 자신). */
+  targetSummary: string | null
 }
 
 export interface UserDetail {

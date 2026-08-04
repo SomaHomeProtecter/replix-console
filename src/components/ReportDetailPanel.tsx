@@ -59,11 +59,11 @@ export default function ReportDetailPanel({ report, onActionDone }: {
 
   const blind = () => run(async () => {
     await blindMessage(report.episodeId, report.msgId)
-    await resolveReport(report.id, 'RESOLVED', noteOrNull())
+    await resolveReport(report.id, 'RESOLVED', noteOrNull(), 'BLIND')
   })
 
   const reject = () => run(async () => {
-    await resolveReport(report.id, 'REJECTED', noteOrNull())
+    await resolveReport(report.id, 'REJECTED', noteOrNull(), null)
   })
 
   const unblind = () => run(async () => {
@@ -81,7 +81,7 @@ export default function ReportDetailPanel({ report, onActionDone }: {
       await suspendUser(target.id, duration, reason)
       // 처리 메모가 비어 있으면 감사 추적이 이어지도록 정지 내용을 자동 메모로 남긴다
       await resolveReport(report.id, 'RESOLVED',
-          noteOrNull() ?? `계정 정지(${DURATION_LABELS[duration]}) — ${reason}`)
+          noteOrNull() ?? `계정 정지(${DURATION_LABELS[duration]}) — ${reason}`, 'SUSPEND')
     })
   }
 
@@ -138,7 +138,10 @@ export default function ReportDetailPanel({ report, onActionDone }: {
           <> · <button type="button" className="btn-link" disabled={busy} onClick={unblind}>가림 해제</button></>
         )}
         {report.handledBy && (
-          <><br />처리: <b>{report.handledBy.displayName}</b> · {formatKstShort(report.handledAt)}
+          <><br />{report.status === 'REJECTED' ? '기각'
+            : report.resolvedAction === 'BLIND' ? '가림 처리'
+            : report.resolvedAction === 'SUSPEND' ? '정지 처리' : '처리'}
+          : <b>{report.handledBy.displayName}</b> · {formatKstShort(report.handledAt)}
             {report.resolutionNote ? ` · ${report.resolutionNote}` : ''}</>
         )}
       </div>

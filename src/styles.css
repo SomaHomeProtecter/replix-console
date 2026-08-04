@@ -265,6 +265,11 @@ table.report-table { width: 100%; border-collapse: collapse; }
 }
 .evrow .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .evrow .who2 { color: var(--muted-2); }
+/* 조치 이력 4열 — 시각 | 조치 | 대상(발췌)·사유 | 처리자 (2026-08-05 E2E 피드백) */
+.evrow.act { grid-template-columns: 96px 92px 1fr auto; }
+.evrow.act .alabel { font-weight: 700; color: var(--body); white-space: nowrap; }
+.evrow.act .actor { color: var(--ink); font-weight: 700; white-space: nowrap; }
+.evrow.head2 { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
 .empty-hint { color: var(--muted); padding: 20px 0; text-align: center; }
 
 .boot-error { padding: 40px; color: var(--red); }

@@ -29,7 +29,7 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
   it('행 = 시각·사유 pill·발췌(작성자 포함)·상태 텍스트(시안)', async () => {
     listReports.mockResolvedValue({
       items: [makeReportItem(), makeReportItem({
-        id: 102, reason: 'ABUSE', status: 'RESOLVED',
+        id: 102, reason: 'ABUSE', status: 'RESOLVED', resolvedAction: 'BLIND',
         snapshotMessage: '심한 욕설', snapshotDisplayName: '악성유저',
       })],
       nextCursor: null,
@@ -44,7 +44,7 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     expect(within(first).getByText('● OPEN')).toBeInTheDocument()
     const second = rows[2]
     expect(within(second).getByText('욕설·혐오')).toBeInTheDocument()
-    expect(within(second).getByText('✓ 처리')).toBeInTheDocument()
+    expect(within(second).getByText('✓ 가림')).toBeInTheDocument() // 처리됨을 조치로 구분(E2E 피드백)
   })
 
   it('상태·사유 칩 토글은 목록을 리셋해 다시 묻는다(켜진 칩 재클릭 = 해제)', async () => {
@@ -140,7 +140,7 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     const callsBefore = listReports.mock.calls.length
     await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
 
-    expect(admin.resolveReport).toHaveBeenCalledWith(101, 'REJECTED', null)
+    expect(admin.resolveReport).toHaveBeenCalledWith(101, 'REJECTED', null, null)
     expect(listReports.mock.calls.length).toBe(callsBefore + 1)
     expect(listReports).toHaveBeenLastCalledWith({ status: 'OPEN', reason: '' }, null)
   })

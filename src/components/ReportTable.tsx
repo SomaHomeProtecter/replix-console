@@ -41,7 +41,7 @@ export default function ReportTable({ items, selectedId, onSelect }: {
               <td className="time" title={formatKst(item.createdAt)}>{formatKstTime(item.createdAt)}</td>
               <td><Pill reason={item.reason} /></td>
               <td className="excerpt"><span className="who">{item.snapshotDisplayName}</span>{item.snapshotMessage}</td>
-              <td><StatusBadge status={item.status} /></td>
+              <td><StatusBadge status={item.status} resolvedAction={item.resolvedAction} /></td>
             </tr>
           ))}
         </tbody>

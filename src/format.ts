@@ -1,4 +1,6 @@
-import type { AdminActionType, ReportReason, ReportStatus, SuspendDuration, UserStatus } from './api/types'
+import type {
+  AdminActionType, ReportReason, ReportStatus, ResolutionAction, SuspendDuration, UserStatus,
+} from './api/types'
 
 const KST_FULL = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
@@ -43,9 +45,15 @@ export const STATUS_LABELS: Record<ReportStatus, string> = {
   OPEN: '열림', RESOLVED: '처리됨', REJECTED: '기각',
 }
 
-/** 큐 행 상태 표기(시안 — ● OPEN / ✓ 처리 / — 기각). */
-export const ROW_STATUS_LABELS: Record<ReportStatus, string> = {
-  OPEN: '● OPEN', RESOLVED: '✓ 처리', REJECTED: '— 기각',
+/** 큐 행 상태 표기 — "처리됨"을 무슨 조치였는지로 구분한다(2026-08-05 E2E 피드백). */
+export function rowStatusLabel(
+  status: ReportStatus, resolvedAction: ResolutionAction | null,
+): string {
+  if (status === 'OPEN') return '● OPEN'
+  if (status === 'REJECTED') return '— 기각'
+  if (resolvedAction === 'BLIND') return '✓ 가림'
+  if (resolvedAction === 'SUSPEND') return '✓ 정지'
+  return '✓ 처리'
 }
 
 export const DURATION_LABELS: Record<SuspendDuration, string> = {

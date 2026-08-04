@@ -42,7 +42,10 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
       actions: [
         makeActionRow({ id: 33, action: 'UNSUSPEND', reason: null, createdAt: '2026-08-03T11:00:00Z' }),
         makeActionRow({ id: 32, action: 'SUSPEND', reason: '도배' }),
-        makeActionRow({ id: 31, action: 'RESOLVE_REPORT', reason: '기각함', targetType: 'REPORT', targetId: '77' }),
+        makeActionRow({
+          id: 31, action: 'RESOLVE_REPORT', reason: '기각함',
+          targetType: 'REPORT', targetId: '77', targetSummary: '3화 결말 스포: 범인은…',
+        }),
       ],
       // 정지 이력은 BE가 별도 축으로 준다(리뷰 m9) — 화면은 필터하지 않고 그대로 그린다
       suspensions: [
@@ -57,8 +60,11 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
 
     await userEvent.click(screen.getByRole('tab', { name: '조치 이력 3' })) // 건수 = 시안 탭 라벨
     expect(screen.getByText('정지 해제')).toBeInTheDocument()
-    // REPORT 축 조치는 어떤 신고인지 함께 표기한다(E2E 피드백)
-    expect(screen.getByText('신고 종결 · 신고 #77')).toBeInTheDocument()
+    // REPORT 축 조치는 어떤 신고인지 스냅샷 발췌로 직관 표기 + 처리자 컬럼(E2E 피드백 2회)
+    expect(screen.getByText('신고 종결')).toBeInTheDocument()
+    expect(screen.getByText(/3화 결말 스포: 범인은…/)).toBeInTheDocument()
+    expect(screen.getAllByText('지호').length).toBeGreaterThan(0) // 처리자
+    expect(screen.getAllByText('이 사용자').length).toBeGreaterThan(0) // USER 축 대상 표기
 
     await userEvent.click(screen.getByRole('tab', { name: '정지 이력 2' }))
     expect(screen.queryByText('신고 종결')).not.toBeInTheDocument()

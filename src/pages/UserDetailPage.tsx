@@ -150,14 +150,27 @@ export default function UserDetailPage() {
             const rows = tab === 'actions' ? detail.actions : detail.suspensions
             return rows.length === 0
               ? <div className="empty-hint">기록이 없습니다</div>
-              : rows.map((a) => (
-                <div className="evrow" key={a.id}>
-                  <span className="t">{formatKstShort(a.createdAt)}</span>
-                  {/* 어떤 신고에 대한 조치인지 표기(2026-08-05 E2E 피드백) — USER 축은 이 사용자 자신 */}
-                  <span>{ACTION_LABELS[a.action]}{a.targetType === 'REPORT' ? ` · 신고 #${a.targetId}` : ''}</span>
-                  <span>{a.reason ?? '—'} <span className="who2">— {a.adminName ?? '—'}</span></span>
-                </div>
-              ))
+              : (
+                <>
+                  <div className="evrow act head2">
+                    <span>시각</span><span>조치</span><span>대상 · 사유</span><span>처리자</span>
+                  </div>
+                  {rows.map((a) => (
+                    <div className="evrow act" key={a.id}>
+                      <span className="t">{formatKstShort(a.createdAt)}</span>
+                      <span className="alabel">{ACTION_LABELS[a.action]}</span>
+                      {/* 어떤 신고에 대한 조치인지 발췌로 직관 표기(2026-08-05 E2E 피드백 2회) */}
+                      <span>
+                        {a.targetType === 'REPORT'
+                          ? <span title={`신고 #${a.targetId}`}>“{a.targetSummary ?? `신고 #${a.targetId}`}”</span>
+                          : <span className="who2">이 사용자</span>}
+                        {a.reason ? <span className="who2"> · {a.reason}</span> : null}
+                      </span>
+                      <span className="actor">{a.adminName ?? '—'}</span>
+                    </div>
+                  ))}
+                </>
+              )
           })()}
         </div>
       </div>

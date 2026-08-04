@@ -56,13 +56,14 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
     expect(link).toHaveAttribute('href', '/users/9')
   })
 
-  it('종결된 신고는 처리 정보를 보여준다', () => {
+  it('종결된 신고는 무슨 조치였는지와 함께 처리 정보를 보여준다', () => {
     renderPanel(makeReportItem({
-      status: 'RESOLVED',
+      status: 'RESOLVED', resolvedAction: 'BLIND',
       handledBy: { id: 1, displayName: '지호', status: 'ACTIVE' },
       handledAt: '2026-08-04T11:00:00Z',
       resolutionNote: '가림 처리함',
     }))
+    expect(screen.getByText(/가림 처리/)).toBeInTheDocument() // 처리 종별 구분(E2E 피드백)
     expect(screen.getByText(/지호/)).toBeInTheDocument()
     expect(screen.getByText(/가림 처리함/)).toBeInTheDocument()
   })
@@ -74,7 +75,7 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
     await userEvent.type(screen.getByLabelText('처리 메모'), '중복 신고')
     await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
 
-    expect(resolveReport).toHaveBeenCalledWith(101, 'REJECTED', '중복 신고')
+    expect(resolveReport).toHaveBeenCalledWith(101, 'REJECTED', '중복 신고', null)
     expect(onActionDone).toHaveBeenCalled()
   })
 
@@ -83,7 +84,7 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
     await userEvent.click(screen.getByRole('button', { name: '가림' }))
 
     expect(blindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A')
-    expect(resolveReport).toHaveBeenCalledWith(101, 'RESOLVED', null)
+    expect(resolveReport).toHaveBeenCalledWith(101, 'RESOLVED', null, 'BLIND') // 조치 구분 저장
     const blindOrder = blindMessage.mock.invocationCallOrder[0]
     const resolveOrder = resolveReport.mock.invocationCallOrder[0]
     expect(blindOrder).toBeLessThan(resolveOrder)
@@ -145,7 +146,8 @@ describe('정지 다이얼로그(정본) — 프리셋 4단·사유 필수·안�
     await userEvent.click(screen.getByRole('button', { name: '정지 적용' }))
 
     expect(suspendUser).toHaveBeenCalledWith(9, 'H72', '반복 스포일러')
-    expect(resolveReport).toHaveBeenCalledWith(101, 'RESOLVED', '계정 정지(72시간) — 반복 스포일러')
+    expect(resolveReport).toHaveBeenCalledWith(
+        101, 'RESOLVED', '계정 정지(72시간) — 반복 스포일러', 'SUSPEND')
     expect(onActionDone).toHaveBeenCalled()
   })
 

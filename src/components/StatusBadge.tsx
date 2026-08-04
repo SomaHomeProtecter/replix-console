@@ -1,5 +1,5 @@
-import type { ReportStatus } from '../api/types'
-import { ROW_STATUS_LABELS } from '../format'
+import type { ReportStatus, ResolutionAction } from '../api/types'
+import { rowStatusLabel } from '../format'
 
 const CLASSES: Record<ReportStatus, string> = {
   OPEN: 'st st-open',
@@ -7,7 +7,10 @@ const CLASSES: Record<ReportStatus, string> = {
   REJECTED: 'st st-rej',
 }
 
-/** 신고 상태 텍스트(시안 cm-st — ● OPEN / ✓ 처리 / — 기각). OPEN 빨강은 시안 확정. */
-export default function StatusBadge({ status }: { status: ReportStatus }) {
-  return <span className={CLASSES[status]}>{ROW_STATUS_LABELS[status]}</span>
+/** 신고 상태 텍스트(시안 cm-st) — 처리됨은 동반 조치로 세분(✓ 가림/✓ 정지/✓ 처리). */
+export default function StatusBadge({ status, resolvedAction = null }: {
+  status: ReportStatus
+  resolvedAction?: ResolutionAction | null
+}) {
+  return <span className={CLASSES[status]}>{rowStatusLabel(status, resolvedAction)}</span>
 }

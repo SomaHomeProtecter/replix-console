@@ -1,6 +1,6 @@
 import { apiFetch, qs } from './client'
 import type {
-  ReportPage, ReportReason, ReportStatus, ResolveResult, SuspendDuration,
+  ReportPage, ReportReason, ReportStatus, ResolutionAction, ResolveResult, SuspendDuration,
   SuspensionResult, UserDetail,
 } from './types'
 
@@ -21,9 +21,10 @@ export function listReports(
 
 export function resolveReport(
   reportId: number, outcome: 'RESOLVED' | 'REJECTED', note: string | null,
+  action: ResolutionAction | null = null,
 ): Promise<ResolveResult> {
   return apiFetch(`/api/v1/admin/reports/${reportId}/resolve`, {
-    method: 'POST', body: JSON.stringify({ outcome, note }),
+    method: 'POST', body: JSON.stringify({ outcome, note, action }),
   })
 }
 
