@@ -268,7 +268,9 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .info-strip dd { margin: 0; color: var(--body); font-weight: 600; }
 
 .user-columns { flex: 1; min-height: 0; }
-.history-tabs { padding: 12px 16px; min-width: 0; }
+/* 기본 정보를 스트립으로 뺀 뒤 표가 화면 전체로 늘어나, 넓은 모니터에서 처리자 칸이 오른쪽
+   끝에 홀로 박히고 가운데가 텅 비어 보였다(HP-268 확인) — 읽기 좋은 폭에서 멈춘다. */
+.history-tabs { padding: 12px 16px; min-width: 0; max-width: 1040px; }
 .tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
 .tab-bar button {
   border: none; background: none; padding: 6px 12px; cursor: pointer;
@@ -282,9 +284,12 @@ table.report-table { width: 100%; border-collapse: collapse; }
 }
 .evrow .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .evrow .who2 { color: var(--muted-2); }
-/* 조치 이력 5열 — 시각 | 조치 | 대상 | 사유 | 처리자 (HP-268: 머리글과 내용을 맞춘다) */
-.evrow.act { grid-template-columns: 96px 116px minmax(110px, 1.3fr) minmax(80px, 1fr) auto; }
+/* 조치 이력 5열 — 시각 | 조치 | 대상 | 사유 | 처리자 (HP-268: 머리글과 내용을 맞춘다).
+   처리자를 auto가 아니라 고정폭으로 둬 사유 바로 옆에 붙인다 — auto면 남는 공간을 앞의 fr
+   칸들이 다 먹고 처리자만 오른쪽 끝으로 밀려난다. */
+.evrow.act { grid-template-columns: 92px 116px minmax(130px, 1.5fr) minmax(90px, 1fr) 72px; }
 .evrow.act .tgt { min-width: 0; overflow-wrap: anywhere; }
+.evrow.act .actor { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .evrow.act .alabel { font-weight: 700; color: var(--body); white-space: nowrap; }
 .evrow.act .actor { color: var(--ink); font-weight: 700; white-space: nowrap; }
 .evrow.head2 { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
