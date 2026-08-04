@@ -21,7 +21,10 @@ function liveStatusLabel(currentStatus: string | null): string {
  * 조치 2열 그리드([가림][계정 정지…] / [기각 (조치 없음)]) + 처리 메모 + 집계·처리 이력.
  * 조치는 신고 종결까지 한 번에 간다: 가림 = blind→RESOLVED, 정지 = suspend→RESOLVED,
  * 기각 = REJECTED. 재종결은 BE가 멱등(마지막 판정 갱신)이라 종결분에도 버튼을 남겨 둔다.
- * [가림 해제]는 시안 3버튼 밖의 보조 기능 — 오조치 복구 동선이 없으면 콘솔이 반쪽이다.
+ * [가림 해제]·[신고 재오픈]은 시안 3버튼 밖의 보조 기능 — 오조치 복구 동선이 없으면 콘솔이
+ * 반쪽이다. 둘은 <b>서로 독립</b>이다(HP-268): 가림 해제는 메시지만 풀고, 신고를 큐로 되돌리는
+ * 것은 재오픈 버튼이 한다. 종전에는 가림 해제가 재오픈까지 자동으로 해 "판정"과 "제재 상태"가
+ * 엉켰다 — 자세한 근거는 {@code unblind} 주석.
  */
 export default function ReportDetailPanel({ report, onActionDone }: {
   report: ReportItem
@@ -67,10 +70,26 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     await resolveReport(report.id, 'REJECTED', noteOrNull(), null)
   })
 
+  /**
+   * 가림 해제 — 메시지만 푼다. <b>신고 상태는 건드리지 않는다.</b>
+   *
+   * <p>2026-08-05 김지호 결정으로 자동 재오픈을 뗐다. 종전에는 가림을 풀면 신고가 큐로 돌아갔는데,
+   * 그 결과 <b>가림 해제만 신고 상태를 건드리고 정지 해제·기각 번복은 안 건드리는</b> 비대칭이 생겨
+   * "종결"이 판정인지 제재 스위치인지 모호해졌다.
+   *
+   * <p>기준은 {@code AdminAction.outcome}을 시점 값으로 박은 것과 같다 — <b>판정은 시점 사실,
+   * 조치 상태는 현재 사실이고 둘을 섞지 않는다.</b> 큐는 "아직 안 본 신고"를 담는 곳인데, 가림을
+   * 풀었다고 그 신고를 안 본 것이 되지는 않는다. 실제 가림 여부는 큐 행의 "현재 상태"가 따로 보여준다.
+   *
+   * <p>재오픈이 필요하면 아래 "신고 재오픈" 버튼으로 명시적으로 한다 — 되돌리는 행위와 다시 심사하는
+   * 판단은 별개다.
+   */
   const unblind = () => run(async () => {
     await unblindMessage(report.episodeId, report.msgId)
-    // 가림을 되돌렸다는 건 판정 번복 — 신고도 다시 열어 큐에서 재심사되게 한다
-    // (2026-08-05 E2E 피드백: 해제했는데 '처리'로 남으면 신고가 조용히 묻힌다)
+  })
+
+  /** 판정을 되돌려 큐로 보낸다 — 운영자가 명시적으로 누를 때만(자동 아님). */
+  const reopen = () => run(async () => {
     await reopenReport(report.id)
   })
 
@@ -148,6 +167,11 @@ export default function ReportDetailPanel({ report, onActionDone }: {
         <span>같은 메시지 신고 <b>{report.sameMessageReportCount}건</b></span>
         {report.currentStatus === 'blinded' && (
           <> · <button type="button" className="btn-link" disabled={busy} onClick={unblind}>가림 해제</button></>
+        )}
+        {/* 재오픈은 종결된 신고에만, 그리고 명시적으로만(HP-268) — 가림 해제가 자동으로 하던 일을
+            운영자 판단으로 옮겼다. 되돌리는 행위와 다시 심사하는 판단은 별개다. */}
+        {report.status !== 'OPEN' && (
+          <> · <button type="button" className="btn-link" disabled={busy} onClick={reopen}>신고 재오픈</button></>
         )}
         {report.handledBy && (
           <><br />{report.status === 'REJECTED' ? '기각'

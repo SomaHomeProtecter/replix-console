@@ -103,16 +103,32 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
     expect(onActionDone).toHaveBeenCalled()
   })
 
-  it('가림 해제는 실황 복구 + 신고 재오픈까지 한 번에 간다(판정 번복)', async () => {
+  /**
+   * 2026-08-05 김지호 결정으로 자동 재오픈을 뗐다(HP-268). 가림 해제만 신고 상태를 건드리고
+   * 정지 해제·기각 번복은 안 건드리는 비대칭이 "종결"의 의미를 흐렸다 — 판정은 시점 사실,
+   * 조치 상태는 현재 사실이라 섞지 않는다.
+   */
+  it('가림 해제는 메시지만 푼다 — 신고 상태는 건드리지 않는다', async () => {
     renderPanel(makeReportItem({ currentStatus: 'blinded', status: 'RESOLVED' }))
     await userEvent.click(screen.getByRole('button', { name: '가림 해제' }))
 
     expect(unblindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A')
-    expect(reopenReport).toHaveBeenCalledWith(101) // 해제 = 판정 번복 → 큐로 복귀
-    const unblindOrder = unblindMessage.mock.invocationCallOrder[0]
-    const reopenOrder = reopenReport.mock.invocationCallOrder[0]
-    expect(unblindOrder).toBeLessThan(reopenOrder)
+    expect(reopenReport).not.toHaveBeenCalled()
     expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('재오픈은 운영자가 명시적으로 누를 때만 일어난다', async () => {
+    renderPanel(makeReportItem({ currentStatus: 'blinded', status: 'RESOLVED' }))
+    await userEvent.click(screen.getByRole('button', { name: '신고 재오픈' }))
+
+    expect(reopenReport).toHaveBeenCalledWith(101)
+    expect(unblindMessage).not.toHaveBeenCalled() // 되돌리는 행위와 재심사 판단은 별개
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('열린 신고에는 재오픈 버튼이 없다 — 이미 큐에 있다', () => {
+    renderPanel(makeReportItem({ status: 'OPEN' }))
+    expect(screen.queryByRole('button', { name: '신고 재오픈' })).not.toBeInTheDocument()
   })
 
   it('대상 사용자가 없으면 정지 버튼이 비활성이다', () => {
