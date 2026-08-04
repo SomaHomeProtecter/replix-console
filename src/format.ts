@@ -54,7 +54,8 @@ export const DURATION_LABELS: Record<SuspendDuration, string> = {
 
 export const ACTION_LABELS: Record<AdminActionType, string> = {
   BLIND: '가림', UNBLIND: '가림 해제', SCORE_FIX: '점수 정정',
-  SUSPEND: '계정 정지', UNSUSPEND: '정지 해제', RESOLVE_REPORT: '신고 종결',
+  SUSPEND: '계정 정지', UNSUSPEND: '정지 해제',
+  RESOLVE_REPORT: '신고 종결', REOPEN_REPORT: '신고 재오픈',
 }
 
 /**

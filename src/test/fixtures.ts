@@ -43,6 +43,8 @@ export function makeActionRow(overrides: Partial<AdminActionRow> = {}): AdminAct
     action: 'SUSPEND',
     reason: '도배',
     adminName: '지호',
+    targetType: 'USER',
+    targetId: '9',
     ...overrides,
   }
 }

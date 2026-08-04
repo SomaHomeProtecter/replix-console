@@ -27,6 +27,11 @@ export function resolveReport(
   })
 }
 
+/** 종결 번복 — 신고를 큐로 되돌린다(이미 OPEN이면 멱등). */
+export function reopenReport(reportId: number): Promise<ResolveResult> {
+  return apiFetch(`/api/v1/admin/reports/${reportId}/reopen`, { method: 'POST' })
+}
+
 export function blindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {
   return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST' })
 }

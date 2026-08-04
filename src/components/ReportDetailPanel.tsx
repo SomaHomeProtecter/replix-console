@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import {
-  blindMessage, resolveReport, suspendUser, unblindMessage,
+  blindMessage, reopenReport, resolveReport, suspendUser, unblindMessage,
 } from '../api/admin'
 import type { ReportItem, SuspendDuration } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
@@ -68,6 +68,9 @@ export default function ReportDetailPanel({ report, onActionDone }: {
 
   const unblind = () => run(async () => {
     await unblindMessage(report.episodeId, report.msgId)
+    // 가림을 되돌렸다는 건 판정 번복 — 신고도 다시 열어 큐에서 재심사되게 한다
+    // (2026-08-05 E2E 피드백: 해제했는데 '처리'로 남으면 신고가 조용히 묻힌다)
+    await reopenReport(report.id)
   })
 
   const suspend = (duration: SuspendDuration, reason: string) => {

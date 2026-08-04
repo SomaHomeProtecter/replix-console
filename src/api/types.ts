@@ -8,7 +8,9 @@ export type ReportStatus = 'OPEN' | 'RESOLVED' | 'REJECTED'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'WITHDRAWN'
 export type SuspendDuration = 'H24' | 'H72' | 'D7' | 'PERMANENT'
 export type AdminActionType =
-  | 'BLIND' | 'UNBLIND' | 'SCORE_FIX' | 'SUSPEND' | 'UNSUSPEND' | 'RESOLVE_REPORT'
+  | 'BLIND' | 'UNBLIND' | 'SCORE_FIX' | 'SUSPEND' | 'UNSUSPEND' | 'RESOLVE_REPORT' | 'REOPEN_REPORT'
+
+export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT'
 
 export interface UserSummary {
   id: number
@@ -84,6 +86,9 @@ export interface AdminActionRow {
   action: AdminActionType
   reason: string | null
   adminName: string | null
+  /** 어떤 대상(신고 등)에 대한 조치인지 — 화면이 "신고 #id"로 표기한다. */
+  targetType: AdminTargetType
+  targetId: string
 }
 
 export interface UserDetail {

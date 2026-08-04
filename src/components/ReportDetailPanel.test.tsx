@@ -12,6 +12,7 @@ vi.mock('../api/admin')
 const blindMessage = vi.mocked(admin.blindMessage)
 const unblindMessage = vi.mocked(admin.unblindMessage)
 const resolveReport = vi.mocked(admin.resolveReport)
+const reopenReport = vi.mocked(admin.reopenReport)
 const suspendUser = vi.mocked(admin.suspendUser)
 
 const onActionDone = vi.fn()
@@ -101,10 +102,15 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
     expect(onActionDone).toHaveBeenCalled()
   })
 
-  it('실황이 가림이면 가림 해제(보조)가 열린다', async () => {
-    renderPanel(makeReportItem({ currentStatus: 'blinded' }))
+  it('가림 해제는 실황 복구 + 신고 재오픈까지 한 번에 간다(판정 번복)', async () => {
+    renderPanel(makeReportItem({ currentStatus: 'blinded', status: 'RESOLVED' }))
     await userEvent.click(screen.getByRole('button', { name: '가림 해제' }))
+
     expect(unblindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A')
+    expect(reopenReport).toHaveBeenCalledWith(101) // 해제 = 판정 번복 → 큐로 복귀
+    const unblindOrder = unblindMessage.mock.invocationCallOrder[0]
+    const reopenOrder = reopenReport.mock.invocationCallOrder[0]
+    expect(unblindOrder).toBeLessThan(reopenOrder)
     expect(onActionDone).toHaveBeenCalled()
   })
 

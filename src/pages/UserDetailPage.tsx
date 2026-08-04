@@ -153,7 +153,8 @@ export default function UserDetailPage() {
               : rows.map((a) => (
                 <div className="evrow" key={a.id}>
                   <span className="t">{formatKstShort(a.createdAt)}</span>
-                  <span>{ACTION_LABELS[a.action]}</span>
+                  {/* 어떤 신고에 대한 조치인지 표기(2026-08-05 E2E 피드백) — USER 축은 이 사용자 자신 */}
+                  <span>{ACTION_LABELS[a.action]}{a.targetType === 'REPORT' ? ` · 신고 #${a.targetId}` : ''}</span>
                   <span>{a.reason ?? '—'} <span className="who2">— {a.adminName ?? '—'}</span></span>
                 </div>
               ))
