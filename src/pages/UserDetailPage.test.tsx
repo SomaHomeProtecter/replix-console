@@ -34,12 +34,12 @@ describe('지금 적용 중인 조치만 보기(HP-268)', () => {
   const withReverted = () => makeUserDetail({
     actions: [
       makeActionRow({
-        id: 3, action: 'RESOLVE_REPORT', outcome: 'SUSPEND', reason: '정지 처리함',
+        id: 3, action: 'RESOLVE_REPORT', outcome: 'BLIND', reason: '가림 처리함',
         targetType: 'REPORT', targetId: '77', targetSummary: '심한 욕설',
       }),
       makeActionRow({ id: 2, action: 'REOPEN_REPORT', targetType: 'REPORT', targetId: '55', reason: null }),
       makeActionRow({
-        id: 1, action: 'RESOLVE_REPORT', outcome: 'BLIND', reason: '가림 처리함',
+        id: 1, action: 'RESOLVE_REPORT', outcome: 'NONE', reason: '경미',
         targetType: 'REPORT', targetId: '55', targetSummary: '스포일러',
       }),
     ],
@@ -51,9 +51,9 @@ describe('지금 적용 중인 조치만 보기(HP-268)', () => {
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
 
     expect(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' })).not.toBeChecked()
-    expect(screen.getByText('신고 종결 · 가림')).toBeInTheDocument()
+    expect(screen.getByText('가림 · 신고 종결')).toBeInTheDocument()
     expect(screen.getByText('신고 재오픈')).toBeInTheDocument()
-    expect(screen.getByText('신고 종결 · 정지')).toBeInTheDocument()
+    expect(screen.getByText('조치 없음 · 신고 종결')).toBeInTheDocument()
   })
 
   it('켜면 상쇄된 쌍이 사라지고 살아 있는 조치만 남는다', async () => {
@@ -63,9 +63,9 @@ describe('지금 적용 중인 조치만 보기(HP-268)', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' }))
 
-    expect(screen.queryByText('신고 종결 · 가림')).not.toBeInTheDocument()
+    expect(screen.queryByText('조치 없음 · 신고 종결')).not.toBeInTheDocument()
     expect(screen.queryByText('신고 재오픈')).not.toBeInTheDocument()
-    expect(screen.getByText('신고 종결 · 정지')).toBeInTheDocument()
+    expect(screen.getByText('가림 · 신고 종결')).toBeInTheDocument()
   })
 
   it('숨긴 건수를 알려준다 — 이력이 조용히 줄면 기록이 사라진 줄 안다', async () => {
@@ -134,18 +134,18 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     await userEvent.click(screen.getByRole('tab', { name: '조치 이력 3' })) // 건수 = 시안 탭 라벨
     // REPORT 축 조치는 어떤 신고인지 스냅샷 발췌로 직관 표기 + 처리자 컬럼(E2E 피드백 2회)
     // + 종결이 무엇으로 끝났는지 결과까지(HP-268)
-    expect(screen.getByText('신고 종결 · 가림')).toBeInTheDocument()
+    expect(screen.getByText('가림 · 신고 종결')).toBeInTheDocument()
     expect(screen.getByText(/3화 결말 스포: 범인은…/)).toBeInTheDocument()
     expect(screen.getAllByText('지호').length).toBeGreaterThan(0) // 처리자
     // 정지·해제도 함께 보인다 — 한때 뺐다가 되돌렸다(중복이 아닌 행까지 사라졌다)
     expect(screen.getByText('정지 해제')).toBeInTheDocument()
-    expect(screen.getByText('계정 정지')).toBeInTheDocument()
+    expect(screen.getByText('정지')).toBeInTheDocument()
     expect(screen.getAllByText('이 사용자').length).toBeGreaterThan(0) // USER 축 대상 표기
 
     await userEvent.click(screen.getByRole('tab', { name: '정지 이력 2' }))
     expect(screen.queryByText(/신고 종결/)).not.toBeInTheDocument()
     expect(screen.getByText('정지 해제')).toBeInTheDocument()
-    expect(screen.getByText('계정 정지')).toBeInTheDocument()
+    expect(screen.getByText('정지')).toBeInTheDocument()
   })
 
   /**
@@ -170,10 +170,9 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     renderPage()
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 2' }))
 
-    // 한 줄 — 라벨이 두 사실을 다 말한다
-    expect(screen.getByText('계정 정지 · 신고 종결')).toBeInTheDocument()
-    expect(screen.queryByText('계정 정지')).not.toBeInTheDocument()      // 따로 뜨지 않는다
-    expect(screen.queryByText('신고 종결 · 정지')).not.toBeInTheDocument()
+    // 한 줄 — 라벨이 두 사실을 다 말하고, 정지 행이 따로 뜨지 않는다
+    expect(screen.getByText('정지 · 신고 종결')).toBeInTheDocument()
+    expect(document.querySelectorAll('.evrow.act:not(.head2)')).toHaveLength(1)
     // 합치면서 잃는 정보가 없어야 한다 — 어느 신고인지, 왜 정지했는지, 종결 메모까지
     expect(screen.getByText(/욕설 내용/)).toBeInTheDocument()
     expect(screen.getByText(/도배/)).toBeInTheDocument()

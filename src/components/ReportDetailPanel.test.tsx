@@ -73,7 +73,7 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
   it('기각은 REJECTED 종결이고 처리 메모를 싣는다', async () => {
     renderPanel()
     await userEvent.type(screen.getByLabelText('처리 메모'), '중복 신고')
-    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
 
     expect(resolveReport).toHaveBeenCalledWith(101, 'REJECTED', '중복 신고', null)
     expect(onActionDone).toHaveBeenCalled()
@@ -108,6 +108,20 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
    * 정지 해제·기각 번복은 안 건드리는 비대칭이 "종결"의 의미를 흐렸다 — 판정은 시점 사실,
    * 조치 상태는 현재 사실이라 섞지 않는다.
    */
+  /**
+   * 이 버튼이 없던 동안에는 타당하지만 가벼운 신고도 기각으로 닫을 수밖에 없었다. HP-270이
+   * 신고자별 기각률을 남용 판별에 쓸 예정이라, 그렇게 쌓인 기록은 나중에 되돌릴 수 없다.
+   */
+  it('조치 없이 종결은 RESOLVED로 닫되 조치를 남기지 않는다 — 기각과 구분된다', async () => {
+    renderPanel(makeReportItem())
+    await userEvent.type(screen.getByLabelText('처리 메모'), '경미 — 제재 없음')
+
+    await userEvent.click(screen.getByRole('button', { name: '조치 없이 종결' }))
+
+    expect(resolveReport).toHaveBeenCalledWith(101, 'RESOLVED', '경미 — 제재 없음', null)
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
   it('가림 해제는 메시지만 푼다 — 신고 상태는 건드리지 않는다', async () => {
     renderPanel(makeReportItem({ currentStatus: 'blinded', status: 'RESOLVED' }))
     await userEvent.click(screen.getByRole('button', { name: '가림 해제' }))

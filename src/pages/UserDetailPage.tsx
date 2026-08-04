@@ -7,7 +7,7 @@ import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import {
-  actionLabel, formatKstShort, suspensionChip,
+  actionLabel, formatKstShort, isSuspensionActive, suspensionChip,
 } from '../format'
 
 const CHIP_CLASSES: Record<UserStatus, string> = {
@@ -115,18 +115,20 @@ export default function UserDetailPage() {
 
       {error && <div className="detail-panel"><div className="error-box" role="alert">{error}</div></div>}
 
-      <div className="user-columns">
-        <div className="profile-block">
-          <h5 className="side-h">기본 정보</h5>
-          <dl>
-            <dt>가입일</dt><dd>{formatKstShort(profile.createdAt)}</dd>
-            <dt>상태</dt><dd>{profile.status}</dd>
-            {profile.suspendReason && (<><dt>정지 사유</dt><dd>{profile.suspendReason}</dd></>)}
-            <dt>마지막 변경</dt><dd>{formatKstShort(profile.updatedAt)}</dd>
-            <dt>이메일</dt><dd>{profile.email ?? '—'}</dd>
-          </dl>
-        </div>
+      {/* 기본 정보는 헤더 아래 가로 스트립(HP-268) — 좌측 240px 칸에선 이메일이 두 줄로 접혔고,
+          칸을 넓히면 그만큼 조치 이력이 좁아져 돌려막기가 됐다. 항목이 다섯뿐이라 한 줄로 펴면
+          이메일이 한 줄에 들어가고 탭이 화면 전체 폭을 쓴다(조치 이력 5칼럼의 전제). */}
+      <dl className="info-strip">
+        <div><dt>가입일</dt><dd>{formatKstShort(profile.createdAt)}</dd></div>
+        <div><dt>상태</dt><dd>{profile.status}</dd></div>
+        {profile.suspendReason && (
+          <div><dt>정지 사유</dt><dd>{profile.suspendReason}</dd></div>
+        )}
+        <div><dt>마지막 변경</dt><dd>{formatKstShort(profile.updatedAt)}</dd></div>
+        <div><dt>이메일</dt><dd>{profile.email ?? '—'}</dd></div>
+      </dl>
 
+      <div className="user-columns">
         <div className="history-tabs">
           <div className="tab-bar" role="tablist">
             {(Object.keys(tabLabels) as Tab[]).map((key) => (
@@ -153,7 +155,11 @@ export default function UserDetailPage() {
             // 정지 이력은 BE의 별도 축(suspensions) — actions에서 클라이언트 필터로 만들면
             // actions 상한(50)에 밀려 거짓 "기록 없음"이 될 수 있다(리뷰 m9)
             const all = tab === 'actions' ? detail.actions : detail.suspensions
-            const rows = effectiveOnly ? effectiveActions(all) : all
+            // 정지의 "적용 중" 판정은 감사 상쇄가 아니라 계정의 현재 상태로 한다 — 기간 만료는
+            // 해제 행을 남기지 않아 상쇄로는 영영 안 걸러진다(HP-268).
+            const rows = effectiveOnly
+              ? effectiveActions(all, isSuspensionActive(profile.status, profile.suspendedUntil))
+              : all
             const hidden = all.length - rows.length
             // "유효 조치"는 그것만 봐서는 무슨 뜻인지 알 수 없다(2026-08-05 김지호 피드백) —
             // 이름을 동작 그대로 바꾸고, 무엇을 숨기는지 한 줄로 밝힌다.
@@ -185,27 +191,30 @@ export default function UserDetailPage() {
               : (
                 <>
                   {toggle}
+                  {/* 대상과 사유를 나눈다(HP-268) — 머리글은 "대상 · 사유"인데 한 칸에 발췌와
+                      사유가 섞여 머리글과 내용이 어긋났다. 나누면 행마다 같은 자리에 같은 종류가
+                      와서 세로로 훑을 수 있다. */}
                   <div className="evrow act head2">
-                    <span>시각</span><span>조치</span><span>대상 · 사유</span><span>처리자</span>
+                    <span>시각</span><span>조치</span><span>대상</span><span>사유</span><span>처리자</span>
                   </div>
                   {mergeSuspendResolve(rows).map(({ row: a, suspend }) => (
                     <div className="evrow act" key={a.id}>
                       <span className="t">{formatKstShort(a.createdAt)}</span>
-                      {/* 종결은 결과까지 붙인다 — "신고 종결"만으론 가림/정지/기각을 못 가린다(HP-268).
-                          정지로 종결한 건은 정지 행과 한 줄로 합쳐 두 사실을 함께 적는다. */}
-                      <span className="alabel">
-                        {suspend ? '계정 정지 · 신고 종결' : actionLabel(a.action, a.outcome)}
-                      </span>
+                      {/* 종결은 결과까지 붙여 `<조치> · 신고 종결` 한 규칙으로 읽힌다(HP-268).
+                          정지로 종결한 건은 정지 행과 한 줄로 합쳐도 라벨은 같다 — 합침은 줄 수의
+                          문제이지 이름의 문제가 아니다. */}
+                      <span className="alabel">{actionLabel(a.action, a.outcome)}</span>
                       {/* 어떤 신고에 대한 조치인지 발췌로 직관 표기(2026-08-05 E2E 피드백 2회) */}
-                      <span>
+                      <span className="tgt">
                         {a.targetType === 'REPORT'
                           ? <span title={`신고 #${a.targetId}`}>“{a.targetSummary ?? `신고 #${a.targetId}`}”</span>
                           : <span className="who2">이 사용자</span>}
-                        {/* 합친 줄은 정지 사유를 먼저 — "왜 정지했나"가 종결 메모보다 구체적이다.
-                            둘이 다르면 종결 메모도 함께 남긴다(합치면서 잃는 정보가 없어야 한다). */}
-                        {suspend?.reason ? <span className="who2"> · {suspend.reason}</span> : null}
-                        {a.reason && a.reason !== suspend?.reason
-                          ? <span className="who2"> · {a.reason}</span> : null}
+                      </span>
+                      {/* 합친 줄은 정지 사유를 먼저 — "왜 정지했나"가 종결 메모보다 구체적이다.
+                          둘이 다르면 종결 메모도 함께 남긴다(합치면서 잃는 정보가 없어야 한다). */}
+                      <span className="who2">
+                        {[suspend?.reason, a.reason !== suspend?.reason ? a.reason : null]
+                            .filter(Boolean).join(' · ') || '—'}
                       </span>
                       <span className="actor">{a.adminName ?? '—'}</span>
                     </div>

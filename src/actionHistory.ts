@@ -77,8 +77,32 @@ function pairKey(row: AdminActionRow, forward: AdminActionType): string {
  *
  * @param rows BE가 준 순서(id DESC, 최신 먼저). 반환도 그 순서를 유지한다.
  */
-export function effectiveActions(rows: AdminActionRow[]): AdminActionRow[] {
+/** 정지의 지금 효력을 말하는 행들 — 감사 상쇄가 아니라 계정의 현재 상태로 판정한다. */
+function isSuspensionRow(row: AdminActionRow): boolean {
+  if (row.targetType === 'USER' && (row.action === 'SUSPEND' || row.action === 'UNSUSPEND')) {
+    return true
+  }
+  return row.action === 'RESOLVE_REPORT' && row.outcome === 'SUSPEND'
+}
+
+export function effectiveActions(
+  rows: AdminActionRow[], suspensionActive: boolean,
+): AdminActionRow[] {
   const cancelled = new Set<number>()
+
+  // 정지 계열은 별도 규칙이다(HP-268). 정지는 만료 배치가 없는 lazy 설계라 기간이 지나 자동으로
+  // 풀려도 해제 행이 생기지 않는다 — 상쇄만 보면 만료된 정지가 영영 "적용 중"으로 남는다.
+  // 그래서 계정이 지금 정지 중인지로 판정한다: 아니면 정지 계열을 전부 빼고, 맞으면 현재 걸린
+  // 정지(가장 최근 SUSPEND) 이후만 남긴다 — 그 이전 정지·해제는 이미 지난 일이다.
+  const suspensionRows = rows.filter(isSuspensionRow)
+  if (!suspensionActive) {
+    suspensionRows.forEach((row) => cancelled.add(row.id))
+  } else {
+    const activeFrom = Math.max(
+        ...rows.filter((r) => r.action === 'SUSPEND' && r.targetType === 'USER').map((r) => r.id),
+        -Infinity)
+    suspensionRows.filter((row) => row.id < activeFrom).forEach((row) => cancelled.add(row.id))
+  }
   /** 아직 되돌려지지 않은 정조치들의 id — 대상+계열별 스택(가장 최근 것부터 짝지운다). */
   const open = new Map<string, number[]>()
 

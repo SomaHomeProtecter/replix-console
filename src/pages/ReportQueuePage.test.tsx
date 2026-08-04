@@ -144,7 +144,8 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     expect(screen.getByText(/스냅샷 원문/)).toBeInTheDocument()
 
     const callsBefore = listReports.mock.calls.length
-    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
+    await userEvent.click(within(screen.getByRole('dialog', { name: '신고 상세' }))
+        .getByRole('button', { name: '기각' }))
 
     expect(admin.resolveReport).toHaveBeenCalledWith(101, 'REJECTED', null, null)
     expect(listReports.mock.calls.length).toBe(callsBefore + 1)
@@ -163,7 +164,8 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     await screen.findByText('범인은 집사다', { exact: false })
     await userEvent.click(screen.getAllByRole('row')[1])
 
-    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
+    await userEvent.click(within(screen.getByRole('dialog', { name: '신고 상세' }))
+        .getByRole('button', { name: '기각' }))
 
     // 조치 → 재조회 → 목록 재렌더까지 가야 복원이 일어난다
     await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 420))
@@ -194,7 +196,8 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
         })
     const before = listReports.mock.calls.length
     await userEvent.click(screen.getAllByRole('row')[1])
-    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
+    await userEvent.click(within(screen.getByRole('dialog', { name: '신고 상세' }))
+        .getByRole('button', { name: '기각' }))
 
     await waitFor(() => expect(listReports.mock.calls.length).toBe(before + 2))
     expect(listReports.mock.calls[before]).toEqual([{ status: 'OPEN', reason: '' }, null])

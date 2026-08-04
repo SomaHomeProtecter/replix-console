@@ -18,7 +18,7 @@ function liveStatusLabel(currentStatus: string | null): string {
 
 /**
  * 우측 상세 패널(시안 cm-side) — 스냅샷 원문(호박색 인용) + 메타 한 줄 + 대상 카드 +
- * 조치 2열 그리드([가림][계정 정지…] / [기각 (조치 없음)]) + 처리 메모 + 집계·처리 이력.
+ * 조치 2×2 그리드([가림][계정 정지…] / [조치 없이 종결][기각]) + 처리 메모 + 집계·처리 이력.
  * 조치는 신고 종결까지 한 번에 간다: 가림 = blind→RESOLVED, 정지 = suspend→RESOLVED,
  * 기각 = REJECTED. 재종결은 BE가 멱등(마지막 판정 갱신)이라 종결분에도 버튼을 남겨 둔다.
  * [가림 해제]·[신고 재오픈]은 시안 3버튼 밖의 보조 기능 — 오조치 복구 동선이 없으면 콘솔이
@@ -68,6 +68,21 @@ export default function ReportDetailPanel({ report, onActionDone }: {
 
   const reject = () => run(async () => {
     await resolveReport(report.id, 'REJECTED', noteOrNull(), null)
+  })
+
+  /**
+   * 조치 없이 종결(HP-268) — 신고는 타당하나 가림·정지까지는 하지 않고 닫는다.
+   *
+   * <p>이 버튼이 없던 동안에는 그런 신고도 <b>기각</b>으로 닫을 수밖에 없었다. 그런데
+   * HP-270이 <b>신고자별 기각률</b>을 남용 판별 지표로 쓸 예정이라, 타당한 신고가 기각으로
+   * 쌓이면 그 신고자의 기각률이 부당하게 올라간다 — 그리고 <b>나중에 버튼을 추가해도 이미
+   * 쌓인 기록은 되돌릴 수 없다.</b> 지표를 만들기 전에 어휘를 정확히 해두는 것이 순서다.
+   *
+   * <p>"경고"라 부르지 않는 이유: 사용자에게 아무것도 전달되지 않는다. 경고라 적으면 화면이
+   * 거짓말을 한다.
+   */
+  const resolveWithoutAction = () => run(async () => {
+    await resolveReport(report.id, 'RESOLVED', noteOrNull(), null)
   })
 
   /**
@@ -153,7 +168,11 @@ export default function ReportDetailPanel({ report, onActionDone }: {
             onClick={() => setDialogOpen(true)}>
           계정 정지…
         </button>
-        <button type="button" className="btn span2" disabled={busy} onClick={reject}>기각 (조치 없음)</button>
+        {/* "조치 없음"은 별개 상태 이름이라 기각 버튼에 괄호로 붙어 있으면 둘이 뒤섞여 읽힌다 */}
+        <button type="button" className="btn" disabled={busy} onClick={resolveWithoutAction}>
+          조치 없이 종결
+        </button>
+        <button type="button" className="btn" disabled={busy} onClick={reject}>기각</button>
       </div>
 
       <label className="note-in">
@@ -173,10 +192,12 @@ export default function ReportDetailPanel({ report, onActionDone }: {
         {report.status !== 'OPEN' && (
           <> · <button type="button" className="btn-link" disabled={busy} onClick={reopen}>신고 재오픈</button></>
         )}
+        {/* 아래 처리 정보는 조치 이력 라벨과 같은 어휘를 쓴다(HP-268) —
+            같은 사실을 두 화면이 다르게 부르지 않는다 */}
         {report.handledBy && (
           <><br />{report.status === 'REJECTED' ? '기각'
-            : report.resolvedAction === 'BLIND' ? '가림 처리'
-            : report.resolvedAction === 'SUSPEND' ? '정지 처리' : '처리'}
+            : report.resolvedAction === 'BLIND' ? '가림'
+            : report.resolvedAction === 'SUSPEND' ? '정지' : '조치 없음'}
           : <b>{report.handledBy.displayName}</b> · {formatKstShort(report.handledAt)}
             {report.resolutionNote ? ` · ${report.resolutionNote}` : ''}</>
         )}

@@ -41,13 +41,13 @@ describe('suspensionChip — lazy 만료를 화면이 계산해 정직하게 표
 
 describe('actionLabel — 신고 종결의 결과까지 드러낸다(HP-268)', () => {
   it('종결은 결과를 함께 붙인다 — "신고 종결"만으론 무엇을 했는지 알 수 없다', () => {
-    expect(actionLabel('RESOLVE_REPORT', 'BLIND')).toBe('신고 종결 · 가림')
-    expect(actionLabel('RESOLVE_REPORT', 'SUSPEND')).toBe('신고 종결 · 정지')
-    expect(actionLabel('RESOLVE_REPORT', 'NONE')).toBe('신고 종결 · 조치 없음')
+    expect(actionLabel('RESOLVE_REPORT', 'BLIND')).toBe('가림 · 신고 종결')
+    expect(actionLabel('RESOLVE_REPORT', 'SUSPEND')).toBe('정지 · 신고 종결')
+    expect(actionLabel('RESOLVE_REPORT', 'NONE')).toBe('조치 없음 · 신고 종결')
   })
 
-  it('기각은 "종결"이라는 말을 빼고 그 자체로 읽히게 한다', () => {
-    expect(actionLabel('RESOLVE_REPORT', 'REJECTED')).toBe('신고 기각')
+  it('기각도 예외 없이 붙인다 — 네 결과가 같은 모양이라야 세로로 훑힌다', () => {
+    expect(actionLabel('RESOLVE_REPORT', 'REJECTED')).toBe('기각 · 신고 종결')
   })
 
   it('결과가 없는 옛 기록은 지어내지 않고 종결로만 둔다', () => {
@@ -57,6 +57,7 @@ describe('actionLabel — 신고 종결의 결과까지 드러낸다(HP-268)', (
 
   it('종별이 곧 결과인 조치는 종전 라벨 그대로다', () => {
     expect(actionLabel('BLIND', null)).toBe('가림')
+    expect(actionLabel('SUSPEND', null)).toBe('정지') // 이력 안에선 대상이 이미 그 사용자
     expect(actionLabel('UNSUSPEND', null)).toBe('정지 해제')
     expect(actionLabel('REOPEN_REPORT', null)).toBe('신고 재오픈')
   })
