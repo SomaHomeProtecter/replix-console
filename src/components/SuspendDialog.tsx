@@ -19,11 +19,19 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
   const trimmed = reason.trim()
 
   return (
-    <div className="dialog-backdrop">
+    // 바깥(백드롭) 클릭 = 취소 — 상세 모달과 같은 복귀 동선(2026-08-05 피드백).
+    // stopPropagation: 이 클릭이 상세 모달 카드까지 번져도 모달은 닫히지 않지만, 겹 경계를 명시한다.
+    <div
+        className="dialog-backdrop"
+        onClick={(e) => {
+          e.stopPropagation()
+          onCancel()
+        }}>
       {/* 최초 포커스는 사유 입력(autoFocus — 유일한 필수 입력), Esc = 취소(리뷰 m5).
           완전한 포커스 트랩은 이월 — 로컬 콘솔 3인 사용 전제에서 최소 동선만 잡는다. */}
       <div
           className="dialog" role="dialog" aria-modal="true" aria-label="계정 정지"
+          onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               // 상세 모달의 문서 레벨 Esc 핸들러까지 번지면 겹이 한 번에 다 닫힌다 — 위 겹만 닫는다
@@ -31,6 +39,7 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
               onCancel()
             }
           }}>
+        <button type="button" className="modal-close" aria-label="닫기" onClick={onCancel}>✕</button>
         <h2>{targetName} 계정 정지</h2>
         <p className="sub">채팅·답글·이모지·좋아요 전송이 차단됩니다. 로그인과 시청·읽기는 막지 않습니다.</p>
         <div className="durs" role="radiogroup" aria-label="정지 기간">

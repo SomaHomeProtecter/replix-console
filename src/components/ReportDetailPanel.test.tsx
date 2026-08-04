@@ -163,4 +163,20 @@ describe('정지 다이얼로그(정본) — 프리셋 4단·사유 필수·안�
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(suspendUser).not.toHaveBeenCalled()
   })
+
+  it('바깥(백드롭)·✕로도 닫히고, 다이얼로그 안 클릭은 닫히지 않는다', async () => {
+    const { container } = renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+
+    await userEvent.click(screen.getByLabelText('정지 사유')) // 안쪽 클릭 — 유지
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    await userEvent.click(container.querySelector('.dialog-backdrop')!) // 바깥 — 닫힘
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }))   // ✕ — 닫힘
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(suspendUser).not.toHaveBeenCalled()
+  })
 })
