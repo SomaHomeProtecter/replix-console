@@ -11,5 +11,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // env.ts가 부트스트랩에서 누락을 throw 하므로(모듈 평가 시점) 테스트 전역에 채워 둔다.
+    env: {
+      VITE_API_BASE_URL: 'http://api.test',
+      VITE_KC_URL: 'http://kc.test',
+      VITE_KC_REALM: 'replix',
+      VITE_KC_CLIENT_ID: 'replix-web',
+    },
   },
 })
