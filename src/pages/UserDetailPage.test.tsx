@@ -73,7 +73,9 @@ describe('지금 적용 중인 조치만 보기(HP-268)', () => {
     renderPage()
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
 
-    expect(screen.getByText('되돌려진 조치를 짝지어 숨깁니다')).toBeInTheDocument()
+    // 역쌍까지 화면에 적혀 있어야 한다 — 툴팁으로 숨기면 아무도 안 본다
+    expect(screen.getByText(/되돌려진 조치를 짝지어 숨깁니다/)).toBeInTheDocument()
+    expect(screen.getByText(/가림↔해제 · 정지↔해제 · 종결↔재오픈/)).toBeInTheDocument()
   })
 
   it('탭 라벨의 건수는 전체를 유지한다 — 기록 규모는 필터와 무관하다', async () => {

@@ -272,16 +272,24 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .evrow.head2 { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
 .empty-hint { color: var(--muted); padding: 20px 0; text-align: center; }
 
-/* 조치 이력 "유효 조치만 보기" 토글 줄(HP-268) — 표 위 얇은 컨트롤. */
+/* 조치 이력 필터 토글 줄(HP-268) — 컨트롤 한 줄 + 그 아래 설명 한 줄.
+   설명을 라벨 옆에 나란히 두면 같은 줄에 굵기·색만 다른 글이 붙어 어색하게 읽힌다
+   (2026-08-05 김지호 피드백) — 아래로 내리고 라벨 글자와 왼쪽을 맞춘다. */
 .eff-row {
-  align-items: center;
   color: var(--muted);
   display: flex;
-  gap: 10px;
-  padding: 6px 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
 }
+.eff-main { align-items: center; display: flex; gap: 10px; }
 .eff-row label { align-items: center; cursor: pointer; display: flex; gap: 6px; white-space: nowrap; }
-.eff-row .who2 { color: var(--muted-2); }
+.eff-hint {
+  color: var(--muted-2);
+  font-size: 12px;
+  margin: 0;
+  padding-left: 22px; /* 체크박스 + gap 만큼 들여써 라벨 글자와 왼쪽을 맞춘다 */
+}
 /* 숨긴 건수는 설명보다 강하게 — 목록이 줄어든 이유를 눈이 먼저 잡아야 한다. */
 .eff-row .hidden-count { color: var(--amber); margin-left: auto; white-space: nowrap; }
 

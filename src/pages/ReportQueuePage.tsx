@@ -20,6 +20,8 @@ export default function ReportQueuePage() {
   const loadSeq = useRef(0)
   /** 조치 뒤 재조회에서 되돌릴 스크롤 위치. null = 되돌리지 않음(필터 변경·최초 로드). */
   const restoreScroll = useRef<number | null>(null)
+  /** 지금까지 펼친 페이지 수("더 불러오기" 횟수 + 1) — 조치 뒤 같은 만큼 다시 읽는다. */
+  const pagesLoaded = useRef(1)
 
   const load = useCallback(async (target: ReportFilters, cursor: string | null) => {
     // 경합 가드(리뷰 M1): 필터 변경과 "더 불러오기"가 겹치면 뒤늦은 응답이 새 목록을
@@ -33,6 +35,7 @@ export default function ReportQueuePage() {
       // 커서 없음 = 첫 페이지(리셋), 있음 = 이어붙임
       setItems((prev) => (cursor ? [...prev, ...page.items] : page.items))
       setNextCursor(page.nextCursor)
+      pagesLoaded.current = cursor ? pagesLoaded.current + 1 : 1
     } catch (e) {
       if (seq === loadSeq.current) {
         setError(e instanceof Error ? e.message : String(e))
@@ -55,12 +58,42 @@ export default function ReportQueuePage() {
    * 자리까지 다시 스크롤해 내려와야 한다. 큐가 길수록 손해가 커진다. 재조회 자체는 유지한다 —
    * 조치 결과(상태·처리 종별)는 서버가 정본이고, 화면에서 낙관적으로 고쳐 쓰면 실패했을 때
    * 화면과 서버가 갈린다.
+   *
+   * <p><b>펼친 페이지 수만큼 다시 읽는다.</b> 첫 페이지만 읽으면 "더 불러오기"로 펼친 아래쪽이
+   * 통째로 사라져, 스크롤 위치를 지켜도 <i>그 자리에 아무것도 없다</i>. 조치는 목록 아래쪽에서
+   * 일어나는 일이 많아(위에서부터 처리하니 남는 건 아래다) 이 경우가 오히려 흔하다.
+   * 커서 페이징이라 페이지는 순차로 이어 읽고, 다 모은 뒤 한 번에 커밋한다(중간 깜빡임 방지).
    */
-  const reloadKeepingPlace = useCallback(() => {
+  const reloadKeepingPlace = useCallback(async () => {
     // 맨 위(0)면 되돌릴 것이 없다 — 불필요한 scrollTo를 만들지 않는다.
     restoreScroll.current = window.scrollY > 0 ? window.scrollY : null
-    void load(filters, null)
-  }, [filters, load])
+    const seq = ++loadSeq.current
+    setLoading(true)
+    setError(null)
+    try {
+      const merged: ReportItem[] = []
+      let cursor: string | null = null
+      let next: string | null = null
+      for (let page = 0; page < pagesLoaded.current; page++) {
+        const res = await listReports(filters, cursor)
+        if (seq !== loadSeq.current) return
+        merged.push(...res.items)
+        next = res.nextCursor
+        if (next === null) break // 마지막 페이지 — 더 읽을 것이 없다
+        cursor = next
+      }
+      setItems(merged)
+      setNextCursor(next)
+    } catch (e) {
+      if (seq === loadSeq.current) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    } finally {
+      if (seq === loadSeq.current) {
+        setLoading(false)
+      }
+    }
+  }, [filters])
 
   // 목록이 다시 그려진 직후(페인트 전)에 되돌려야 깜빡임이 안 보인다.
   useLayoutEffect(() => {
@@ -112,7 +145,7 @@ export default function ReportQueuePage() {
                 onClick={() => setSelectedId(null)}>
               ✕
             </button>
-            <ReportDetailPanel report={selected} onActionDone={reloadKeepingPlace} />
+            <ReportDetailPanel report={selected} onActionDone={() => void reloadKeepingPlace()} />
           </div>
         </div>
       )}

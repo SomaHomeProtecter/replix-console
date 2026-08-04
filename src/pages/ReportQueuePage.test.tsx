@@ -166,6 +166,40 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 420))
   })
 
+  /**
+   * 위에서부터 처리하면 남는 건 아래쪽이라, 조치는 "더 불러오기"로 펼친 구간에서 일어나기 쉽다.
+   * 첫 페이지만 다시 읽으면 그 아래가 통째로 사라져 위치를 지켜도 그 자리에 아무것도 없다.
+   */
+  it('조치 뒤에는 펼쳐 둔 페이지 수만큼 다시 읽는다', async () => {
+    listReports
+        .mockResolvedValueOnce({ items: [makeReportItem()], nextCursor: '101' })      // 1페이지
+        .mockResolvedValueOnce({                                                       // 더 불러오기
+          items: [makeReportItem({ id: 90, snapshotMessage: '두번째 페이지 메시지' })],
+          nextCursor: null,
+        })
+    renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getByRole('button', { name: '더 불러오기' }))
+    await screen.findByText('두번째 페이지 메시지', { exact: false })
+
+    // 재조회분 — 1페이지와 2페이지를 다시 이어 읽는다
+    listReports
+        .mockResolvedValueOnce({ items: [makeReportItem()], nextCursor: '101' })
+        .mockResolvedValueOnce({
+          items: [makeReportItem({ id: 90, snapshotMessage: '두번째 페이지 메시지' })],
+          nextCursor: null,
+        })
+    const before = listReports.mock.calls.length
+    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(screen.getByRole('button', { name: '기각 (조치 없음)' }))
+
+    await waitFor(() => expect(listReports.mock.calls.length).toBe(before + 2))
+    expect(listReports.mock.calls[before]).toEqual([{ status: 'OPEN', reason: '' }, null])
+    expect(listReports.mock.calls[before + 1]).toEqual([{ status: 'OPEN', reason: '' }, '101'])
+    // 2페이지 내용이 화면에 남아 있다
+    expect(await screen.findByText('두번째 페이지 메시지', { exact: false })).toBeInTheDocument()
+  })
+
   it('필터 변경은 위치를 지키지 않는다 — 다른 목록이라 맨 위가 맞다', async () => {
     const scrollTo = vi.fn()
     Object.defineProperty(window, 'scrollTo', { value: scrollTo, configurable: true })

@@ -158,19 +158,22 @@ export default function UserDetailPage() {
             // 이름을 동작 그대로 바꾸고, 무엇을 숨기는지 한 줄로 밝힌다.
             const toggle = (
               <div className="eff-row">
-                <label>
-                  <input
-                      type="checkbox" aria-label="지금 적용 중인 조치만 보기" checked={effectiveOnly}
-                      onChange={(e) => setEffectiveOnly(e.target.checked)} />
-                  지금 적용 중인 조치만 보기
-                </label>
-                <span className="who2" title="가림 ↔ 가림 해제, 계정 정지 ↔ 정지 해제, 신고 종결 ↔ 신고 재오픈">
-                  되돌려진 조치를 짝지어 숨깁니다
-                </span>
-                {/* 이력이 조용히 줄면 기록이 사라진 줄 안다 — 몇 건을 왜 감췄는지 밝힌다 */}
-                {effectiveOnly && hidden > 0 && (
-                  <span className="hidden-count">되돌려진 {hidden}건 숨김</span>
-                )}
+                <div className="eff-main">
+                  <label>
+                    <input
+                        type="checkbox" aria-label="지금 적용 중인 조치만 보기" checked={effectiveOnly}
+                        onChange={(e) => setEffectiveOnly(e.target.checked)} />
+                    지금 적용 중인 조치만 보기
+                  </label>
+                  {/* 이력이 조용히 줄면 기록이 사라진 줄 안다 — 몇 건을 왜 감췄는지 밝힌다 */}
+                  {effectiveOnly && hidden > 0 && (
+                    <span className="hidden-count">되돌려진 {hidden}건 숨김</span>
+                  )}
+                </div>
+                {/* 역쌍을 툴팁이 아니라 화면에 적는다 — 아무도 안 올리는 툴팁은 설명이 아니다 */}
+                <p className="eff-hint">
+                  되돌려진 조치를 짝지어 숨깁니다 (가림↔해제 · 정지↔해제 · 종결↔재오픈)
+                </p>
               </div>
             )
             if (all.length === 0) {
