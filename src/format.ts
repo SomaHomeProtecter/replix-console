@@ -1,5 +1,6 @@
 import type {
-  AdminActionType, ReportReason, ReportStatus, ResolutionAction, SuspendDuration, UserStatus,
+  AdminActionType, ReportReason, ReportStatus, ResolutionAction, ResolveOutcome,
+  SuspendDuration, UserStatus,
 } from './api/types'
 
 const KST_FULL = new Intl.DateTimeFormat('ko-KR', {
@@ -64,6 +65,25 @@ export const ACTION_LABELS: Record<AdminActionType, string> = {
   BLIND: '가림', UNBLIND: '가림 해제', SCORE_FIX: '점수 정정',
   SUSPEND: '계정 정지', UNSUSPEND: '정지 해제',
   RESOLVE_REPORT: '신고 종결', REOPEN_REPORT: '신고 재오픈',
+}
+
+/**
+ * 조치 이력 한 줄의 조치 이름(HP-268). "신고 종결"만으로는 <b>가림인지 정지인지 기각인지</b>
+ * 알 수 없어, 이력을 읽는 사람이 신고를 하나씩 열어 봐야 했다 — 결과를 라벨에 붙인다.
+ *
+ * <p>결과가 없는 종결(계측 이전 기록)은 그냥 "신고 종결"이다. 모르는 것을 그럴듯하게 지어내는
+ * 대신 모른다고 두는 편이, 이력을 근거로 판단하는 사람에게 안전하다.
+ */
+export function actionLabel(action: AdminActionType, outcome: ResolveOutcome | null): string {
+  if (action !== 'RESOLVE_REPORT' || outcome === null) {
+    return ACTION_LABELS[action]
+  }
+  switch (outcome) {
+    case 'REJECTED': return '신고 기각'
+    case 'BLIND': return '신고 종결 · 가림'
+    case 'SUSPEND': return '신고 종결 · 정지'
+    case 'NONE': return '신고 종결 · 조치 없음'
+  }
 }
 
 /**

@@ -26,7 +26,7 @@ beforeEach(() => {
   getUserDetail.mockResolvedValue(makeUserDetail())
 })
 
-describe('유효 조치만 보기(HP-268)', () => {
+describe('지금 적용 중인 조치만 보기(HP-268)', () => {
   /** 가림 → 가림 해제로 상쇄된 쌍 + 되돌려지지 않은 정지 1건. */
   const withReverted = () => makeUserDetail({
     actions: [
@@ -41,7 +41,7 @@ describe('유효 조치만 보기(HP-268)', () => {
     renderPage()
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
 
-    expect(screen.getByRole('checkbox', { name: '유효 조치만 보기' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' })).not.toBeChecked()
     expect(screen.getByText('가림')).toBeInTheDocument()
     expect(screen.getByText('가림 해제')).toBeInTheDocument()
     expect(screen.getByText('계정 정지')).toBeInTheDocument()
@@ -52,7 +52,7 @@ describe('유효 조치만 보기(HP-268)', () => {
     renderPage()
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
 
-    await userEvent.click(screen.getByRole('checkbox', { name: '유효 조치만 보기' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' }))
 
     expect(screen.queryByText('가림')).not.toBeInTheDocument()
     expect(screen.queryByText('가림 해제')).not.toBeInTheDocument()
@@ -63,16 +63,24 @@ describe('유효 조치만 보기(HP-268)', () => {
     getUserDetail.mockResolvedValue(withReverted())
     renderPage()
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: '유효 조치만 보기' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' }))
 
     expect(screen.getByText(/되돌려진 2건 숨김/)).toBeInTheDocument()
+  })
+
+  it('무엇을 숨기는지 화면에 적는다 — "유효 조치"는 그 말만으론 뜻을 알 수 없다', async () => {
+    getUserDetail.mockResolvedValue(withReverted())
+    renderPage()
+    await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
+
+    expect(screen.getByText('되돌려진 조치를 짝지어 숨깁니다')).toBeInTheDocument()
   })
 
   it('탭 라벨의 건수는 전체를 유지한다 — 기록 규모는 필터와 무관하다', async () => {
     getUserDetail.mockResolvedValue(withReverted())
     renderPage()
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: '유효 조치만 보기' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' }))
 
     expect(screen.getByRole('tab', { name: '조치 이력 3' })).toBeInTheDocument()
   })
@@ -95,7 +103,7 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
         makeActionRow({ id: 33, action: 'UNSUSPEND', reason: null, createdAt: '2026-08-03T11:00:00Z' }),
         makeActionRow({ id: 32, action: 'SUSPEND', reason: '도배' }),
         makeActionRow({
-          id: 31, action: 'RESOLVE_REPORT', reason: '기각함',
+          id: 31, action: 'RESOLVE_REPORT', reason: '가림 처리함', outcome: 'BLIND',
           targetType: 'REPORT', targetId: '77', targetSummary: '3화 결말 스포: 범인은…',
         }),
       ],
@@ -113,7 +121,8 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     await userEvent.click(screen.getByRole('tab', { name: '조치 이력 3' })) // 건수 = 시안 탭 라벨
     expect(screen.getByText('정지 해제')).toBeInTheDocument()
     // REPORT 축 조치는 어떤 신고인지 스냅샷 발췌로 직관 표기 + 처리자 컬럼(E2E 피드백 2회)
-    expect(screen.getByText('신고 종결')).toBeInTheDocument()
+    // + 종결이 무엇으로 끝났는지 결과까지(HP-268)
+    expect(screen.getByText('신고 종결 · 가림')).toBeInTheDocument()
     expect(screen.getByText(/3화 결말 스포: 범인은…/)).toBeInTheDocument()
     expect(screen.getAllByText('지호').length).toBeGreaterThan(0) // 처리자
     expect(screen.getAllByText('이 사용자').length).toBeGreaterThan(0) // USER 축 대상 표기

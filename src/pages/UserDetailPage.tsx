@@ -6,7 +6,7 @@ import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import {
-  ACTION_LABELS, formatKstShort, suspensionChip,
+  actionLabel, formatKstShort, suspensionChip,
 } from '../format'
 
 const CHIP_CLASSES: Record<UserStatus, string> = {
@@ -154,17 +154,22 @@ export default function UserDetailPage() {
             const all = tab === 'actions' ? detail.actions : detail.suspensions
             const rows = effectiveOnly ? effectiveActions(all) : all
             const hidden = all.length - rows.length
+            // "유효 조치"는 그것만 봐서는 무슨 뜻인지 알 수 없다(2026-08-05 김지호 피드백) —
+            // 이름을 동작 그대로 바꾸고, 무엇을 숨기는지 한 줄로 밝힌다.
             const toggle = (
               <div className="eff-row">
                 <label>
                   <input
-                      type="checkbox" aria-label="유효 조치만 보기" checked={effectiveOnly}
+                      type="checkbox" aria-label="지금 적용 중인 조치만 보기" checked={effectiveOnly}
                       onChange={(e) => setEffectiveOnly(e.target.checked)} />
-                  유효 조치만 보기
+                  지금 적용 중인 조치만 보기
                 </label>
+                <span className="who2" title="가림 ↔ 가림 해제, 계정 정지 ↔ 정지 해제, 신고 종결 ↔ 신고 재오픈">
+                  되돌려진 조치를 짝지어 숨깁니다
+                </span>
                 {/* 이력이 조용히 줄면 기록이 사라진 줄 안다 — 몇 건을 왜 감췄는지 밝힌다 */}
                 {effectiveOnly && hidden > 0 && (
-                  <span className="who2">되돌려진 {hidden}건 숨김</span>
+                  <span className="hidden-count">되돌려진 {hidden}건 숨김</span>
                 )}
               </div>
             )
@@ -172,7 +177,7 @@ export default function UserDetailPage() {
               return <div className="empty-hint">기록이 없습니다</div>
             }
             return rows.length === 0
-              ? <>{toggle}<div className="empty-hint">지금 유효한 조치가 없습니다</div></>
+              ? <>{toggle}<div className="empty-hint">지금 적용 중인 조치가 없습니다</div></>
               : (
                 <>
                   {toggle}
@@ -182,7 +187,8 @@ export default function UserDetailPage() {
                   {rows.map((a) => (
                     <div className="evrow act" key={a.id}>
                       <span className="t">{formatKstShort(a.createdAt)}</span>
-                      <span className="alabel">{ACTION_LABELS[a.action]}</span>
+                      {/* 종결은 결과까지 붙인다 — "신고 종결"만으론 가림/정지/기각을 못 가린다(HP-268) */}
+                      <span className="alabel">{actionLabel(a.action, a.outcome)}</span>
                       {/* 어떤 신고에 대한 조치인지 발췌로 직관 표기(2026-08-05 E2E 피드백 2회) */}
                       <span>
                         {a.targetType === 'REPORT'

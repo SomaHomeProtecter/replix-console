@@ -280,8 +280,10 @@ table.report-table { width: 100%; border-collapse: collapse; }
   gap: 10px;
   padding: 6px 0;
 }
-.eff-row label { align-items: center; cursor: pointer; display: flex; gap: 6px; }
+.eff-row label { align-items: center; cursor: pointer; display: flex; gap: 6px; white-space: nowrap; }
 .eff-row .who2 { color: var(--muted-2); }
+/* 숨긴 건수는 설명보다 강하게 — 목록이 줄어든 이유를 눈이 먼저 잡아야 한다. */
+.eff-row .hidden-count { color: var(--amber); margin-left: auto; white-space: nowrap; }
 
 .boot-error { padding: 40px; color: var(--red); }
 .page-status { color: var(--muted); padding: 24px 0; text-align: center; }

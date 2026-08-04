@@ -85,6 +85,12 @@ export interface ReceivedReport {
   reporterName: string | null
 }
 
+/**
+ * 신고 종결이 무엇으로 끝났는지(HP-268). `NONE` = 처리했지만 가림·정지는 하지 않음.
+ * 종결 외 조치는 종별이 곧 결과라 붙지 않는다.
+ */
+export type ResolveOutcome = 'BLIND' | 'SUSPEND' | 'NONE' | 'REJECTED'
+
 export interface AdminActionRow {
   id: number
   createdAt: string
@@ -96,6 +102,11 @@ export interface AdminActionRow {
   targetId: string
   /** REPORT 대상이면 그 신고의 스냅샷 발췌(≤30자), 그 외 null(대상 = 이 사용자 자신). */
   targetSummary: string | null
+  /**
+   * 신고 종결의 결과(HP-268). 다른 조치는 null이고, 이 칸이 생기기 전에 쌓인 종결 기록도
+   * null이다 — 화면은 그때 결과를 지어내지 않고 "신고 종결"로만 표기한다.
+   */
+  outcome: ResolveOutcome | null
 }
 
 export interface UserDetail {

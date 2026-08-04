@@ -47,6 +47,7 @@ export function makeActionRow(overrides: Partial<AdminActionRow> = {}): AdminAct
     targetType: 'USER',
     targetId: '9',
     targetSummary: null,
+    outcome: null,
     ...overrides,
   }
 }
