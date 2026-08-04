@@ -27,12 +27,21 @@ beforeEach(() => {
 })
 
 describe('지금 적용 중인 조치만 보기(HP-268)', () => {
-  /** 가림 → 가림 해제로 상쇄된 쌍 + 되돌려지지 않은 정지 1건. */
+  /**
+   * 종결 → 재오픈으로 상쇄된 쌍(신고 55) + 되돌려지지 않은 종결 1건(신고 77).
+   * 조치 이력은 이제 REPORT 축만 싣는다(HP-268) — 정지·해제는 정지 이력 탭 몫.
+   */
   const withReverted = () => makeUserDetail({
     actions: [
-      makeActionRow({ id: 3, action: 'SUSPEND', targetType: 'USER', targetId: '9', reason: '도배' }),
-      makeActionRow({ id: 2, action: 'UNBLIND', targetType: 'MESSAGE', targetId: 'm1', reason: null }),
-      makeActionRow({ id: 1, action: 'BLIND', targetType: 'MESSAGE', targetId: 'm1', reason: null }),
+      makeActionRow({
+        id: 3, action: 'RESOLVE_REPORT', outcome: 'SUSPEND', reason: '정지 처리함',
+        targetType: 'REPORT', targetId: '77', targetSummary: '심한 욕설',
+      }),
+      makeActionRow({ id: 2, action: 'REOPEN_REPORT', targetType: 'REPORT', targetId: '55', reason: null }),
+      makeActionRow({
+        id: 1, action: 'RESOLVE_REPORT', outcome: 'BLIND', reason: '가림 처리함',
+        targetType: 'REPORT', targetId: '55', targetSummary: '스포일러',
+      }),
     ],
   })
 
@@ -42,9 +51,9 @@ describe('지금 적용 중인 조치만 보기(HP-268)', () => {
     await userEvent.click(await screen.findByRole('tab', { name: '조치 이력 3' }))
 
     expect(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' })).not.toBeChecked()
-    expect(screen.getByText('가림')).toBeInTheDocument()
-    expect(screen.getByText('가림 해제')).toBeInTheDocument()
-    expect(screen.getByText('계정 정지')).toBeInTheDocument()
+    expect(screen.getByText('신고 종결 · 가림')).toBeInTheDocument()
+    expect(screen.getByText('신고 재오픈')).toBeInTheDocument()
+    expect(screen.getByText('신고 종결 · 정지')).toBeInTheDocument()
   })
 
   it('켜면 상쇄된 쌍이 사라지고 살아 있는 조치만 남는다', async () => {
@@ -54,9 +63,9 @@ describe('지금 적용 중인 조치만 보기(HP-268)', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: '지금 적용 중인 조치만 보기' }))
 
-    expect(screen.queryByText('가림')).not.toBeInTheDocument()
-    expect(screen.queryByText('가림 해제')).not.toBeInTheDocument()
-    expect(screen.getByText('계정 정지')).toBeInTheDocument()
+    expect(screen.queryByText('신고 종결 · 가림')).not.toBeInTheDocument()
+    expect(screen.queryByText('신고 재오픈')).not.toBeInTheDocument()
+    expect(screen.getByText('신고 종결 · 정지')).toBeInTheDocument()
   })
 
   it('숨긴 건수를 알려준다 — 이력이 조용히 줄면 기록이 사라진 줄 안다', async () => {
@@ -101,9 +110,8 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
   it('탭 = 받은 신고(기본) · 조치 이력 · 정지 이력(별도 축 suspensions) — 건수 표기', async () => {
     getUserDetail.mockResolvedValue(makeUserDetail({
       reportsReceived: [makeReceivedReport({ snapshotMessage: '욕설 스냅샷', reporterName: '신고자닉' })],
+      // 조치 이력 = 신고 처리(REPORT 축)만 — 정지·해제는 아래 별도 축(HP-268)
       actions: [
-        makeActionRow({ id: 33, action: 'UNSUSPEND', reason: null, createdAt: '2026-08-03T11:00:00Z' }),
-        makeActionRow({ id: 32, action: 'SUSPEND', reason: '도배' }),
         makeActionRow({
           id: 31, action: 'RESOLVE_REPORT', reason: '가림 처리함', outcome: 'BLIND',
           targetType: 'REPORT', targetId: '77', targetSummary: '3화 결말 스포: 범인은…',
@@ -120,17 +128,18 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     expect(await screen.findByText(/욕설 스냅샷/)).toBeInTheDocument()
     expect(screen.getByText(/신고자닉/)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('tab', { name: '조치 이력 3' })) // 건수 = 시안 탭 라벨
-    expect(screen.getByText('정지 해제')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: '조치 이력 1' })) // 건수 = 시안 탭 라벨
     // REPORT 축 조치는 어떤 신고인지 스냅샷 발췌로 직관 표기 + 처리자 컬럼(E2E 피드백 2회)
     // + 종결이 무엇으로 끝났는지 결과까지(HP-268)
     expect(screen.getByText('신고 종결 · 가림')).toBeInTheDocument()
     expect(screen.getByText(/3화 결말 스포: 범인은…/)).toBeInTheDocument()
     expect(screen.getAllByText('지호').length).toBeGreaterThan(0) // 처리자
-    expect(screen.getAllByText('이 사용자').length).toBeGreaterThan(0) // USER 축 대상 표기
+    // 정지·해제는 여기 섞이지 않는다 — 한 번의 정지 종결이 두 줄로 보이던 문제(HP-268)
+    expect(screen.queryByText('정지 해제')).not.toBeInTheDocument()
+    expect(screen.queryByText('계정 정지')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('tab', { name: '정지 이력 2' }))
-    expect(screen.queryByText('신고 종결')).not.toBeInTheDocument()
+    expect(screen.queryByText(/신고 종결/)).not.toBeInTheDocument()
     expect(screen.getByText('정지 해제')).toBeInTheDocument()
     expect(screen.getByText('계정 정지')).toBeInTheDocument()
   })

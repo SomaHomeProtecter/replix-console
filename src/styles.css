@@ -143,7 +143,9 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .report-table tbody tr[aria-current="true"] { background: var(--blue-soft); box-shadow: inset 3px 0 0 var(--blue); }
 .report-table tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .report-table .excerpt { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--body); }
-.report-table .excerpt .who { color: var(--muted); font-size: 11.5px; margin-right: 6px; }
+/* 작성자·신고자 칸(HP-268) — 이름은 줄바꿈 없이, 신고자는 한 톤 낮춰 본문 경쟁을 피한다. */
+.report-table .party { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-table .party.reporter { color: var(--muted); }
 .report-table .time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); width: 60px; }
 .load-more { align-self: center; margin: 10px; }
 

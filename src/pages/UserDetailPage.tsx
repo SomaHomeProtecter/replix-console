@@ -177,7 +177,15 @@ export default function UserDetailPage() {
               </div>
             )
             if (all.length === 0) {
-              return <div className="empty-hint">기록이 없습니다</div>
+              // 정지·해제는 이제 정지 이력 탭 몫이라(HP-268), 조치 이력이 비었다고 "제재가 없었다"로
+              // 읽히면 안 된다 — 다른 탭에 기록이 있으면 그리로 안내한다.
+              const elsewhere = tab === 'actions' && detail.suspensions.length > 0
+              return (
+                <div className="empty-hint">
+                  기록이 없습니다
+                  {elsewhere && <div className="who2">정지·해제 기록은 “정지 이력” 탭에 있습니다</div>}
+                </div>
+              )
             }
             return rows.length === 0
               ? <>{toggle}<div className="empty-hint">지금 적용 중인 조치가 없습니다</div></>

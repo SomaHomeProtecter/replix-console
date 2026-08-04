@@ -42,7 +42,10 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     const rows = await screen.findAllByRole('row')
     const first = rows[1] // rows[0] = 헤더
     expect(within(first).getByText('스포일러')).toBeInTheDocument()
-    expect(within(first).getByText('스포일러꾼')).toBeInTheDocument()      // 작성자(.who)
+    // 작성자·신고자를 독립 칸으로(HP-268) — 종전엔 작성자가 발췌 앞 회색 글씨라 눈에 안 들어왔고
+    // 신고자는 아예 없어 "같은 사람이 반복 신고 중인지"를 목록에서 볼 수 없었다
+    expect(within(first).getByText('스포일러꾼')).toBeInTheDocument()      // 작성자
+    expect(within(first).getByText('신고자닉')).toBeInTheDocument()        // 신고자
     expect(within(first).getByText('범인은 집사다')).toBeInTheDocument()
     expect(within(first).getByText('● OPEN')).toBeInTheDocument()
     const second = rows[2]
