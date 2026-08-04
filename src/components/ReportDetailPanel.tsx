@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import {
   blindMessage, resolveReport, suspendUser, unblindMessage,
 } from '../api/admin'

@@ -1,4 +1,4 @@
-import { Link, Route, Routes } from 'react-router-dom'
+import { Link, Route, Routes } from 'react-router'
 import { logout, userName } from './auth'
 import ReportQueuePage from './pages/ReportQueuePage'
 import UserDetailPage from './pages/UserDetailPage'

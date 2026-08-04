@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router'
 import { getUserDetail, suspendUser, unsuspendUser } from '../api/admin'
 import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
 import Pill from '../components/Pill'
