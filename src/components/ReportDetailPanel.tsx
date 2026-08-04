@@ -48,7 +48,12 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     setError(null)
     work()
         .then(() => onActionDone())
-        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+        .catch((e: unknown) => {
+          setError(e instanceof Error ? e.message : String(e))
+          // 부분 실패(예: 가림 성공·종결 실패)면 화면이 실상과 어긋난 채 남는다 —
+          // 실패해도 다시 읽어 실제 상태를 반영한다(리뷰 m3).
+          onActionDone()
+        })
         .finally(() => setBusy(false))
   }
 
@@ -133,7 +138,9 @@ export default function ReportDetailPanel({ report, onActionDone }: {
         <button type="button" className="btn btn-primary" disabled={busy} onClick={blind}>가림</button>
         <button
             type="button" className="btn btn-danger"
-            disabled={busy || !report.targetUser}
+            // WITHDRAWN은 BE가 409로 거부한다 — 다이얼로그까지 갔다 실패하지 않게 미리 막는다(리뷰 m6)
+            disabled={busy || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
+            title={report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
             onClick={() => setDialogOpen(true)}>
           계정 정지…
         </button>

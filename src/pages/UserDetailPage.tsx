@@ -54,7 +54,12 @@ export default function UserDetailPage() {
     Promise.resolve()
         .then(work)
         .then(() => load())
-        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+        .catch(async (e: unknown) => {
+          // 실패해도 다시 읽어 실상을 반영한다(리뷰 m3) — load가 error를 비우므로
+          // 조치 실패 메시지는 재조회 뒤에 덮어쓴다.
+          await load()
+          setError(e instanceof Error ? e.message : String(e))
+        })
         .finally(() => setBusy(false))
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { listReports, type ReportFilters } from '../api/admin'
 import type { ReportItem } from '../api/types'
 import FilterBar from '../components/FilterBar'
@@ -16,19 +16,28 @@ export default function ReportQueuePage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const loadSeq = useRef(0)
 
   const load = useCallback(async (target: ReportFilters, cursor: string | null) => {
+    // 경합 가드(리뷰 M1): 필터 변경과 "더 불러오기"가 겹치면 뒤늦은 응답이 새 목록을
+    // 오염시키고 커서를 되덮는다 — 최신 요청의 응답만 커밋한다.
+    const seq = ++loadSeq.current
     setLoading(true)
     setError(null)
     try {
       const page = await listReports(target, cursor)
+      if (seq !== loadSeq.current) return
       // 커서 없음 = 첫 페이지(리셋), 있음 = 이어붙임
       setItems((prev) => (cursor ? [...prev, ...page.items] : page.items))
       setNextCursor(page.nextCursor)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (seq === loadSeq.current) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) {
+        setLoading(false)
+      }
     }
   }, [])
 

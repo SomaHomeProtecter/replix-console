@@ -20,7 +20,13 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
 
   return (
     <div className="dialog-backdrop">
-      <div className="dialog" role="dialog" aria-modal="true" aria-label="계정 정지">
+      {/* 최초 포커스는 사유 입력(autoFocus — 유일한 필수 입력), Esc = 취소(리뷰 m5).
+          완전한 포커스 트랩은 이월 — 로컬 콘솔 3인 사용 전제에서 최소 동선만 잡는다. */}
+      <div
+          className="dialog" role="dialog" aria-modal="true" aria-label="계정 정지"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onCancel()
+          }}>
         <h2>{targetName} 계정 정지</h2>
         <p className="hint">채팅·반응만 차단됩니다 — 로그인·읽기는 유지됩니다. 만료는 자동 해제(lazy)입니다.</p>
         <div className="preset-group" role="radiogroup" aria-label="정지 기간">
@@ -37,7 +43,7 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
         <label>
           정지 사유
           <textarea
-              aria-label="정지 사유" rows={2} maxLength={200} value={reason}
+              aria-label="정지 사유" rows={2} maxLength={200} value={reason} autoFocus
               placeholder="필수 — 대상에게 차단 안내와 함께 전달됩니다"
               onChange={(e) => setReason(e.target.value)} />
         </label>

@@ -25,7 +25,19 @@ export default function ReportTable({ items, selectedId, onSelect }: {
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.id} aria-selected={selectedId === item.id} onClick={() => onSelect(item.id)}>
+            // aria-selected는 grid 전용이라 일반 table에선 유효하지 않다(리뷰 m4) —
+            // aria-current + tabIndex/키보드 선택으로 콘솔 유일 진입 동선을 키보드에도 연다.
+            <tr
+                key={item.id}
+                tabIndex={0}
+                aria-current={selectedId === item.id ? 'true' : undefined}
+                onClick={() => onSelect(item.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelect(item.id)
+                  }
+                }}>
               <td className="time">{formatKst(item.createdAt)}</td>
               <td><Pill reason={item.reason} /></td>
               <td className="excerpt">{item.snapshotDisplayName}: {item.snapshotMessage}</td>

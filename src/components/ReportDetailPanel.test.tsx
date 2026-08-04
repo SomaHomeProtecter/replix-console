@@ -88,14 +88,16 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
     expect(onActionDone).toHaveBeenCalled()
   })
 
-  it('가림 실패(이미 사라진 메시지)는 종결하지 않고 오류를 표면화한다', async () => {
+  it('가림 실패(이미 사라진 메시지)는 종결하지 않되, 실상 반영을 위해 재조회는 한다', async () => {
     blindMessage.mockRejectedValue(new ApiHttpError(404, 'MESSAGE_NOT_FOUND', '이미 사라진 메시지입니다'))
     renderPanel()
     await userEvent.click(screen.getByRole('button', { name: '가림' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('이미 사라진 메시지입니다')
     expect(resolveReport).not.toHaveBeenCalled()
-    expect(onActionDone).not.toHaveBeenCalled()
+    // 부분 실패(예: 가림 성공·종결 실패)가 화면을 실상과 어긋나게 두지 않도록,
+    // 실패 경로에서도 목록을 다시 읽는다(리뷰 m3)
+    expect(onActionDone).toHaveBeenCalled()
   })
 
   it('실황이 가림이면 가림 해제(보조)가 열린다', async () => {
@@ -107,6 +109,11 @@ describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보
 
   it('대상 사용자가 없으면 정지 버튼이 비활성이다', () => {
     renderPanel(makeReportItem({ targetUser: null }))
+    expect(screen.getByRole('button', { name: /계정 정지/ })).toBeDisabled()
+  })
+
+  it('탈퇴한 대상도 정지 버튼이 비활성이다(BE 409를 다이얼로그 전에 차단)', () => {
+    renderPanel(makeReportItem({ targetUser: { id: 9, displayName: '탈퇴자', status: 'WITHDRAWN' } }))
     expect(screen.getByRole('button', { name: /계정 정지/ })).toBeDisabled()
   })
 })
