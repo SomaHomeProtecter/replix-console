@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import {
-  blindMessage, reopenReport, resolveReport, suspendUser, unblindMessage,
+  blindMessage, fixSpoilerScore, reopenReport, resolveReport, suspendUser, unblindMessage,
 } from '../api/admin'
 import type { ReportItem, SuspendDuration } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
+import { isTypingTarget } from '../queueKeys'
 import Avatar from './Avatar'
 import SuspendDialog from './SuspendDialog'
+
+/** 채점 스키마(HP-109)와 같은 범위 — BE가 `@Min(0) @Max(10)`으로 되돌려 보내므로 화면이 먼저 막는다. */
+const SCORE_CHOICES = Array.from({ length: 11 }, (_, i) => i)
 
 /** Redis 실황 표기 — null은 이미 사라진 메시지(TTL·삭제)라는 뜻이다(계약). */
 function liveStatusLabel(currentStatus: string | null): string {
@@ -26,20 +30,32 @@ function liveStatusLabel(currentStatus: string | null): string {
  * 것은 재오픈 버튼이 한다. 종전에는 가림 해제가 재오픈까지 자동으로 해 "판정"과 "제재 상태"가
  * 엉켰다 — 자세한 근거는 {@code unblind} 주석.
  */
-export default function ReportDetailPanel({ report, onActionDone }: {
+export default function ReportDetailPanel({ report, onActionDone, onNavigate }: {
   report: ReportItem
-  onActionDone: () => void
+  /**
+   * 조치가 끝났다 — {@code closed}는 <b>이 조치로 신고가 실제로 닫혔는지</b>다. 페이지가 그걸
+   * 보고 다음 건으로 넘길지 정한다(HP-295). 점수 정정·가림 해제처럼 신고를 닫지 않는 조치는
+   * false여서, 고쳐 놓고 화면이 제멋대로 다음 건으로 넘어가지 않는다.
+   */
+  onActionDone: (closed: boolean) => void
+  /** 모달을 연 채 앞뒤 건으로 이동(J/K). 페이지가 목록을 알고 있으므로 위임한다. */
+  onNavigate?: (delta: number) => void
 }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [score, setScore] = useState<number | null>(report.spoilerScore)
 
   useEffect(() => {
     // 다른 행을 선택하면 입력·오류는 이전 신고의 것이므로 비운다
     setNote('')
     setError(null)
     setDialogOpen(false)
+    setScore(report.spoilerScore)
+    // report.spoilerScore는 의도적으로 의존성에서 뺀다 — 재조회로 같은 신고가 새 객체로 와도
+    // 운영자가 고르던 점수를 되돌리지 않는다(선택은 화면의 상태지 서버의 상태가 아니다).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report.id])
 
   const noteOrNull = () => {
@@ -47,16 +63,17 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     return trimmed ? trimmed : null
   }
 
-  const run = (work: () => Promise<void>) => {
+  const run = (work: () => Promise<void>, closes = false) => {
     setBusy(true)
     setError(null)
     work()
-        .then(() => onActionDone())
+        .then(() => onActionDone(closes))
         .catch((e: unknown) => {
           setError(e instanceof Error ? e.message : String(e))
           // 부분 실패(예: 가림 성공·종결 실패)면 화면이 실상과 어긋난 채 남는다 —
-          // 실패해도 다시 읽어 실제 상태를 반영한다(리뷰 m3).
-          onActionDone()
+          // 실패해도 다시 읽어 실제 상태를 반영한다(리뷰 m3). 다만 <b>넘어가지는 않는다</b>:
+          // 실패한 건을 화면에서 치우면 운영자가 못 봤다는 사실째로 사라진다.
+          onActionDone(false)
         })
         .finally(() => setBusy(false))
   }
@@ -64,11 +81,11 @@ export default function ReportDetailPanel({ report, onActionDone }: {
   const blind = () => run(async () => {
     await blindMessage(report.episodeId, report.msgId)
     await resolveReport(report.id, 'RESOLVED', noteOrNull(), 'BLIND')
-  })
+  }, true)
 
   const reject = () => run(async () => {
     await resolveReport(report.id, 'REJECTED', noteOrNull(), null)
-  })
+  }, true)
 
   /**
    * 조치 없이 종결(HP-268) — 신고는 타당하나 가림·정지까지는 하지 않고 닫는다.
@@ -83,7 +100,7 @@ export default function ReportDetailPanel({ report, onActionDone }: {
    */
   const resolveWithoutAction = () => run(async () => {
     await resolveReport(report.id, 'RESOLVED', noteOrNull(), null)
-  })
+  }, true)
 
   /**
    * 가림 해제 — 메시지만 푼다. <b>신고 상태는 건드리지 않는다.</b>
@@ -108,6 +125,20 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     await reopenReport(report.id)
   })
 
+  /**
+   * 점수 정정(HP-294) — 메시지는 괜찮은데 <b>점수만 틀린</b> 건을 고친다.
+   *
+   * <p>이 손이 없던 동안 스포일러 신고의 선택지는 가림 아니면 기각뿐이었다. 점수는 Bedrock
+   * 비동기 채점이라 오탐이 나고, 높은 점수는 확장에서 블러 처리되므로 <b>오탐이 멀쩡한 대화를
+   * 가린다</b>. 신고를 종결하지는 않는다 — 점수를 고친 것과 신고를 어떻게 닫을지는 별개 판단이다.
+   */
+  const fixScore = () => {
+    if (score === null) return
+    run(async () => {
+      await fixSpoilerScore(report.episodeId, report.msgId, score)
+    })
+  }
+
   const suspend = (duration: SuspendDuration, reason: string) => {
     const target = report.targetUser
     if (!target) return
@@ -117,8 +148,39 @@ export default function ReportDetailPanel({ report, onActionDone }: {
       // 처리 메모가 비어 있으면 감사 추적이 이어지도록 정지 내용을 자동 메모로 남긴다
       await resolveReport(report.id, 'RESOLVED',
           noteOrNull() ?? `계정 정지(${DURATION_LABELS[duration]}) — ${reason}`, 'SUSPEND')
-    })
+    }, true)
   }
+
+  const canSuspend = !!report.targetUser && report.targetUser.status !== 'WITHDRAWN'
+
+  /**
+   * 큐 단축키(HP-295) — 조치가 끝나면 손이 마우스로 돌아가지 않게 한다.
+   *
+   * <p>의존성 배열을 두지 않아 렌더마다 다시 건다: 아래 조치 함수들은 렌더마다 새로 만들어지므로
+   * 배열로 묶으면 낡은 클로저가 옛 신고에 조치를 날린다.
+   *
+   * <p><b>S는 다이얼로그를 여는 데까지만</b> 한다 — 파괴적 조치는 확인 한 겹을 남긴다.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // 함정 ②: 확인 겹이 떠 있는 동안 뒤의 큐가 움직이면 확인의 의미가 사라진다
+      if (dialogOpen || busy) return
+      // 함정 ③: 메모에 "b"를 치는 순간 메시지가 가려지면 안 된다
+      if (isTypingTarget(e.target)) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      switch (e.key.toLowerCase()) {
+        case 'b': e.preventDefault(); blind(); break
+        case 'n': e.preventDefault(); resolveWithoutAction(); break
+        case 'x': e.preventDefault(); reject(); break
+        case 's': if (canSuspend) { e.preventDefault(); setDialogOpen(true) } break
+        case 'j': e.preventDefault(); onNavigate?.(1); break
+        case 'k': e.preventDefault(); onNavigate?.(-1); break
+        default: break
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
 
   return (
     <div className="detail-panel">
@@ -154,6 +216,34 @@ export default function ReportDetailPanel({ report, onActionDone }: {
             name={report.reporter?.displayName ?? null} />
         <span className="un">{report.reporter?.displayName ?? '(알 수 없음)'}</span>
         <span className="role">신고자</span>
+      </div>
+
+      {/* 판단 재료(점수)와 조치를 같은 눈높이에 둔다 — 점수 줄이 조치 그리드 바로 위다(HP-294). */}
+      <h5 className="side-h">스포일러 점수</h5>
+      <div className="score-row">
+        <span className="score-now">{report.spoilerScore ?? '—'}</span>
+        <span className="score-arrow" aria-hidden="true">→</span>
+        <div className="score-picker" role="radiogroup" aria-label="정정할 스포일러 점수">
+          {SCORE_CHOICES.map((n) => (
+            <label key={n} className={`score-chip${score === n ? ' on' : ''}`}>
+              <input
+                  type="radio" name={`spoiler-score-${report.id}`} value={n}
+                  checked={score === n}
+                  // 사라진 메시지는 BE가 404로 되돌려 보낸다 — 눌러 보고 실패하지 않게 미리 막는다
+                  disabled={busy || report.currentStatus === null}
+                  onChange={() => setScore(n)} />
+              <span>{n}</span>
+            </label>
+          ))}
+        </div>
+        <button
+            type="button" className="btn btn-score"
+            // 같은 값으로 정정하면 감사에 `score=8→8` 한 줄만 쌓인다 — 기록을 흐린다
+            disabled={busy || report.currentStatus === null || score === null
+              || score === report.spoilerScore}
+            onClick={fixScore}>
+          점수 정정
+        </button>
       </div>
 
       <h5 className="side-h">조치</h5>

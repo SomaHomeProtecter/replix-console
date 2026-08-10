@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { actionLabel, formatKst, formatKstShort, formatKstTime, suspensionChip } from './format'
+import {
+  actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, suspensionChip,
+} from './format'
 
 describe('formatKst 계열', () => {
   it('null은 대시로', () => {
@@ -60,5 +62,37 @@ describe('actionLabel — 신고 종결의 결과까지 드러낸다(HP-268)', (
     expect(actionLabel('SUSPEND', null)).toBe('정지') // 이력 안에선 대상이 이미 그 사용자
     expect(actionLabel('UNSUSPEND', null)).toBe('정지 해제')
     expect(actionLabel('REOPEN_REPORT', null)).toBe('신고 재오픈')
+  })
+})
+
+/**
+ * 큐 행의 시각이 HH:mm뿐이라 3일 묵은 건과 방금 건이 같아 보인다(HP-296). 경과를 뱃지로 세워
+ * 목록만 보고 급한 것을 고르게 한다. 톤 경계는 24시간·48시간이다.
+ */
+describe('elapsedSince — 큐 행의 대기 시간 뱃지(HP-296)', () => {
+  const now = new Date('2026-08-11T12:00:00Z')
+
+  it('1시간 미만은 방금으로 뭉갠다 — 분 단위는 큐 판단에 쓰이지 않는다', () => {
+    expect(elapsedSince('2026-08-11T11:30:00Z', now)).toEqual({ label: '방금', tone: 'fresh' })
+  })
+
+  it('하루 안쪽은 시간 단위', () => {
+    expect(elapsedSince('2026-08-11T09:00:00Z', now)).toEqual({ label: '3시간', tone: 'fresh' })
+  })
+
+  it('23:59는 아직 fresh — 경계 바로 앞', () => {
+    expect(elapsedSince('2026-08-10T12:01:00Z', now)).toEqual({ label: '23시간', tone: 'fresh' })
+  })
+
+  it('24:00부터 warm — 하루를 넘긴 신고는 눈에 걸려야 한다', () => {
+    expect(elapsedSince('2026-08-10T12:00:00Z', now)).toEqual({ label: '1일', tone: 'warm' })
+  })
+
+  it('48:00부터 hot', () => {
+    expect(elapsedSince('2026-08-09T12:00:00Z', now)).toEqual({ label: '2일', tone: 'hot' })
+  })
+
+  it('미래 시각(시계 어긋남)도 음수로 새지 않는다 — 방금으로 둔다', () => {
+    expect(elapsedSince('2026-08-11T12:30:00Z', now)).toEqual({ label: '방금', tone: 'fresh' })
   })
 })

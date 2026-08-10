@@ -14,6 +14,7 @@ const unblindMessage = vi.mocked(admin.unblindMessage)
 const resolveReport = vi.mocked(admin.resolveReport)
 const reopenReport = vi.mocked(admin.reopenReport)
 const suspendUser = vi.mocked(admin.suspendUser)
+const fixSpoilerScore = vi.mocked(admin.fixSpoilerScore)
 
 const onActionDone = vi.fn()
 
@@ -216,5 +217,50 @@ describe('정지 다이얼로그(정본) — 프리셋 4단·사유 필수·안�
     await userEvent.click(screen.getByRole('button', { name: '닫기' }))   // ✕ — 닫힘
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(suspendUser).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 스포일러 점수는 Bedrock 비동기 채점이라 오탐이 난다. 그런데 신고 4대 사유에 스포일러가 있는데도
+ * 콘솔의 선택지는 가림 아니면 기각뿐이었다 — <b>메시지는 괜찮은데 점수만 틀린 건</b>을 고칠 손이
+ * 없었다(HP-294). 높은 점수는 확장에서 블러 처리되므로 오탐은 멀쩡한 대화를 가린다.
+ */
+describe('스포일러 점수 정정(HP-294) — 판단 재료와 조치를 같은 눈높이에', () => {
+  it('현재 점수가 선택된 채로 0..10을 고르게 한다', () => {
+    renderPanel(makeReportItem({ spoilerScore: 8 }))
+    expect(screen.getByRole('radio', { name: '8' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '0' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '10' })).toBeInTheDocument()
+    // 11이 있으면 BE가 400으로 되돌려 보낸다(@Max(10)) — 화면이 먼저 막는다
+    expect(screen.queryByRole('radio', { name: '11' })).not.toBeInTheDocument()
+  })
+
+  it('점수를 바꿔 정정하면 그 값으로 저장하고 다시 읽는다', async () => {
+    renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+    await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
+
+    expect(fixSpoilerScore).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A', 3)
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('고른 점수가 지금 점수와 같으면 정정을 막는다 — 감사에 score=8→8만 남는다', async () => {
+    renderPanel(makeReportItem({ spoilerScore: 8 }))
+    expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
+  })
+
+  it('사라진 메시지(실황 null)에는 정정 자체를 막는다 — BE가 404로 되돌려 보낸다', () => {
+    renderPanel(makeReportItem({ currentStatus: null, spoilerScore: null }))
+    expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
+  })
+
+  it('정정 실패는 메시지를 표면화한다', async () => {
+    fixSpoilerScore.mockRejectedValue(
+        new ApiHttpError(404, 'MESSAGE_NOT_FOUND', '이미 사라진 메시지입니다'))
+    renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+    await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('이미 사라진 메시지입니다')
   })
 })

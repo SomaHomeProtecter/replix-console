@@ -4,6 +4,7 @@ import type { ReportItem } from '../api/types'
 import FilterBar from '../components/FilterBar'
 import ReportDetailPanel from '../components/ReportDetailPanel'
 import ReportTable from '../components/ReportTable'
+import { isTypingTarget, nextOpenId } from '../queueKeys'
 
 /**
  * 신고 큐(정본 ①) — 테이블 + 상세 <b>모달</b>. 행 선택 시 상세·조치가 가운데 팝업으로 열리고,
@@ -105,6 +106,54 @@ export default function ReportQueuePage() {
 
   const selected = items.find((item) => item.id === selectedId) ?? null
 
+  /**
+   * 조치가 끝났다(HP-295). 신고를 <b>닫은</b> 조치였다면 모달을 유지한 채 다음 열림 건으로 넘긴다.
+   *
+   * <p><b>함정 ①</b>: 다음 대상을 <i>재조회 전에</i> 잡는다. 필터가 OPEN인 한 재조회는 방금 처리한
+   * 건을 목록에서 빼므로, 읽고 난 뒤에는 "다음이 무엇이었는지"를 알 방법이 없다. 뒤에 열림 건이
+   * 없으면 null이 되어 모달이 닫힌다 — 이어갈 곳이 없다는 뜻이다.
+   */
+  const handleActionDone = (closed: boolean) => {
+    if (closed && selectedId !== null) {
+      setSelectedId(nextOpenId(items, selectedId))
+    }
+    void reloadKeepingPlace()
+  }
+
+  /** 모달을 연 채 앞뒤 건으로(J/K). 목록 밖으로는 나가지 않는다. */
+  const navigate = (delta: number) => {
+    const at = items.findIndex((item) => item.id === selectedId)
+    const to = at + delta
+    if (at < 0 || to < 0 || to >= items.length) return
+    setSelectedId(items[to].id)
+  }
+
+  /**
+   * 모달이 닫혀 있을 때 J/K는 <b>행 포커스</b>를 옮긴다(HP-295) — 여는 것은 기존 Enter가 한다.
+   *
+   * <p>선택 상태를 따로 두지 않고 DOM 포커스를 쓰는 이유: 행은 이미 {@code tabIndex}로 포커스를
+   * 받고 Enter로 열린다. 같은 일을 하는 상태를 하나 더 만들면 둘이 어긋날 자리가 생긴다.
+   * 모달이 열려 있는 동안은 상세 패널이 J/K를 가져간다(그쪽은 건 자체를 옮긴다).
+   */
+  useEffect(() => {
+    if (selectedId !== null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
+      const key = e.key.toLowerCase()
+      if (key !== 'j' && key !== 'k') return
+      e.preventDefault()
+      const rows = Array.from(
+          document.querySelectorAll<HTMLElement>('.report-table tbody tr'))
+      if (rows.length === 0) return
+      const at = rows.indexOf(document.activeElement as HTMLElement)
+      // 아직 아무 행에도 포커스가 없으면 첫 행부터 — 어디서 시작할지 묻지 않는다
+      const to = at < 0 ? 0 : Math.min(rows.length - 1, Math.max(0, at + (key === 'j' ? 1 : -1)))
+      rows[to].focus()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [selectedId])
+
   // 모달 열림 동안 Esc = 닫기. 정지 다이얼로그가 위에 떠 있으면 그쪽 핸들러가
   // stopPropagation으로 먼저 소비해 다이얼로그만 닫힌다(겹 순서 보존).
   useEffect(() => {
@@ -135,6 +184,17 @@ export default function ReportQueuePage() {
       )}
       {loading && items.length === 0 && <div className="page-status">불러오는 중…</div>}
 
+      {/* 단축키는 발견되지 않으면 없는 것과 같다(HP-180과 같은 이유) — 큐 아래 한 줄로 둔다. */}
+      <div className="kbar" aria-label="단축키 안내">
+        <span><kbd>J</kbd><kbd>K</kbd> 이동</span>
+        <span><kbd>↵</kbd> 열기</span>
+        <span><kbd>B</kbd> 가림</span>
+        <span><kbd>N</kbd> 조치 없이 종결</span>
+        <span><kbd>X</kbd> 기각</span>
+        <span><kbd>S</kbd> 정지 창만 열기</span>
+        <span><kbd>Esc</kbd> 닫기</span>
+      </div>
+
       {selected && (
         <div className="modal-backdrop" onClick={() => setSelectedId(null)}>
           <div
@@ -145,7 +205,8 @@ export default function ReportQueuePage() {
                 onClick={() => setSelectedId(null)}>
               ✕
             </button>
-            <ReportDetailPanel report={selected} onActionDone={() => void reloadKeepingPlace()} />
+            <ReportDetailPanel
+                report={selected} onActionDone={handleActionDone} onNavigate={navigate} />
           </div>
         </div>
       )}

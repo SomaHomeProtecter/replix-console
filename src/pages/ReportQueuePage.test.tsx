@@ -9,6 +9,9 @@ import ReportQueuePage from './ReportQueuePage'
 vi.mock('../api/admin')
 
 const listReports = vi.mocked(admin.listReports)
+const blindMessage = vi.mocked(admin.blindMessage)
+const resolveReport = vi.mocked(admin.resolveReport)
+const suspendUser = vi.mocked(admin.suspendUser)
 
 function renderPage() {
   return render(<MemoryRouter><ReportQueuePage /></MemoryRouter>)
@@ -51,6 +54,51 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     const second = rows[2]
     expect(within(second).getByText('욕설·혐오')).toBeInTheDocument()
     expect(within(second).getByText('✓ 가림')).toBeInTheDocument() // 처리됨을 조치로 구분(E2E 피드백)
+  })
+
+  /**
+   * 시각이 HH:mm뿐이라 3일 묵은 건과 방금 건이 같아 보였다(HP-296) — 목록만 보고 급한 것을
+   * 고를 수 있어야 한다. 고정 시각 대신 "지금으로부터 N시간 전"으로 픽스처를 만들어
+   * 실제 시간이 흘러도 테스트가 썩지 않게 한다.
+   */
+  it('큐 행에 대기 시간 뱃지가 붙는다 — 하루 넘긴 건은 톤이 다르다', async () => {
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3600 * 1000).toISOString()
+    listReports.mockResolvedValue({
+      items: [
+        makeReportItem({ id: 1, createdAt: hoursAgo(0.5), snapshotMessage: '방금 온 신고' }),
+        makeReportItem({ id: 2, createdAt: hoursAgo(25), snapshotMessage: '하루 넘긴 신고' }),
+      ],
+      nextCursor: null,
+    })
+    renderPage()
+    await screen.findByText('방금 온 신고')
+
+    const rows = await screen.findAllByRole('row')
+    expect(within(rows[1]).getByText('방금')).toBeInTheDocument()
+    expect(within(rows[2]).getByText('1일')).toBeInTheDocument()
+    // 톤이 실제로 갈려야 목록에서 눈에 걸린다 — 라벨만 다르면 의미가 없다
+    expect(within(rows[2]).getByText('1일').className).not.toBe(
+        within(rows[1]).getByText('방금').className)
+  })
+
+  /**
+   * 여러 사람이 동시에 신고한 건이 가장 급한데, 그 수가 상세를 열어야만 보였다(HP-296).
+   * 목록 응답에 이미 실려 오는 값이라 화면이 쓰기만 하면 된다.
+   */
+  it('같은 메시지에 몰린 신고 수를 목록에서 보여준다 — 1건이면 군더더기라 감춘다', async () => {
+    listReports.mockResolvedValue({
+      items: [
+        makeReportItem({ id: 1, sameMessageReportCount: 1, snapshotMessage: '한 건짜리' }),
+        makeReportItem({ id: 2, sameMessageReportCount: 3, snapshotMessage: '몰린 신고' }),
+      ],
+      nextCursor: null,
+    })
+    renderPage()
+    await screen.findByText('몰린 신고')
+
+    const rows = await screen.findAllByRole('row')
+    expect(within(rows[1]).queryByText(/묶음/)).not.toBeInTheDocument()
+    expect(within(rows[2]).getByText('묶음 ×3')).toBeInTheDocument()
   })
 
   it('상태·사유 칩 토글은 목록을 리셋해 다시 묻는다(켜진 칩 재클릭 = 해제)', async () => {
@@ -202,8 +250,10 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     await waitFor(() => expect(listReports.mock.calls.length).toBe(before + 2))
     expect(listReports.mock.calls[before]).toEqual([{ status: 'OPEN', reason: '' }, null])
     expect(listReports.mock.calls[before + 1]).toEqual([{ status: 'OPEN', reason: '' }, '101'])
-    // 2페이지 내용이 화면에 남아 있다
-    expect(await screen.findByText('두번째 페이지 메시지', { exact: false })).toBeInTheDocument()
+    // 2페이지 내용이 목록에 남아 있다 — 조치 뒤 모달이 다음 열림 건(그게 이 건이다)으로
+    // 이어지므로 같은 문구가 모달에도 뜬다. 이 테스트의 관심사는 목록이라 표로 좁힌다.
+    expect(await within(screen.getByRole('table')).findByText('두번째 페이지 메시지', { exact: false }))
+        .toBeInTheDocument()
   })
 
   it('필터 변경은 위치를 지키지 않는다 — 다른 목록이라 맨 위가 맞다', async () => {
@@ -248,5 +298,114 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
 
     await userEvent.keyboard('{Escape}') // 이번엔 모달이 닫힌다
     expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * 큐는 위에서부터 순서대로 처리하는 동선이라 조치가 끝나면 손이 마우스로 돌아가지 않아야
+ * 한다(HP-295). 30건짜리 큐에서 그 왕복이 30번이다.
+ */
+describe('키보드로 큐 밀어내기(HP-295)', () => {
+  const twoOpen = () => ({
+    items: [
+      makeReportItem({ id: 1, snapshotMessage: '첫째 건' }),
+      makeReportItem({ id: 2, snapshotMessage: '둘째 건' }),
+    ],
+    nextCursor: null,
+  })
+
+  async function openFirst(firstText = '첫째 건') {
+    renderPage()
+    await screen.findByText(firstText)
+    await userEvent.click(screen.getAllByRole('row')[1])
+    return screen.getByRole('dialog', { name: '신고 상세' })
+  }
+
+  it('B는 가림으로 닫고 모달을 유지한 채 다음 열림 건으로 넘어간다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+    expect(screen.getByText(/신고 #1 · 스냅샷 원문/)).toBeInTheDocument()
+
+    await userEvent.keyboard('b')
+
+    expect(blindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A')
+    expect(resolveReport).toHaveBeenCalledWith(1, 'RESOLVED', null, 'BLIND')
+    // 모달이 닫히지 않고 다음 건으로 이어진다 — 이게 없으면 매번 다시 집어야 한다
+    expect(await screen.findByText(/신고 #2 · 스냅샷 원문/)).toBeInTheDocument()
+  })
+
+  it('X는 기각, N은 조치 없이 종결로 닫는다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+    await userEvent.keyboard('x')
+    expect(resolveReport).toHaveBeenLastCalledWith(1, 'REJECTED', null, null)
+
+    await screen.findByText(/신고 #2 · 스냅샷 원문/)
+    await userEvent.keyboard('n')
+    expect(resolveReport).toHaveBeenLastCalledWith(2, 'RESOLVED', null, null)
+  })
+
+  it('마지막 열림 건을 처리하면 모달이 닫힌다 — 이어갈 곳이 없다', async () => {
+    listReports.mockImplementation(async () => ({
+      items: [makeReportItem({ id: 1, snapshotMessage: '마지막 건' })], nextCursor: null,
+    }))
+    await openFirst('마지막 건')
+
+    await userEvent.keyboard('x')
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument())
+  })
+
+  /** 파괴적 조치는 단축키로 실행하지 않는다 — 확인 한 겹을 남긴다. */
+  it('S는 정지 다이얼로그를 여는 데까지만 한다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+
+    await userEvent.keyboard('s')
+
+    expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
+    expect(suspendUser).not.toHaveBeenCalled()
+  })
+
+  /** 함정 ③ — 없으면 메모에 "b"를 치는 순간 메시지가 가려진다. */
+  it('처리 메모에 포커스가 있으면 단축키를 전부 무시한다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+
+    const note = screen.getByLabelText('처리 메모')
+    await userEvent.click(note)
+    await userEvent.keyboard('bnx')
+
+    expect(blindMessage).not.toHaveBeenCalled()
+    expect(resolveReport).not.toHaveBeenCalled()
+    expect(note).toHaveValue('bnx')
+  })
+
+  /** 함정 ② — 확인 겹이 떠 있는 동안 뒤의 큐가 움직이면 확인의 의미가 사라진다. */
+  it('정지 다이얼로그가 떠 있으면 큐 단축키가 죽는다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+    await userEvent.keyboard('s')
+    expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
+
+    await userEvent.keyboard('x')
+
+    expect(resolveReport).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
+  })
+
+  it('모달이 닫혀 있을 때 J/K는 행 포커스를 옮긴다 — Enter가 연다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    renderPage()
+    await screen.findByText('첫째 건')
+
+    const rows = screen.getAllByRole('row')
+    rows[1].focus()
+    await userEvent.keyboard('j')
+    expect(rows[2]).toHaveFocus()
+
+    await userEvent.keyboard('k')
+    expect(rows[1]).toHaveFocus()
   })
 })

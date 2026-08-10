@@ -41,6 +41,19 @@ export function unblindMessage(episodeId: number, msgId: string): Promise<{ blin
   return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'DELETE' })
 }
 
+/**
+ * 스포일러 점수 수동 정정(HP-294) — 범위는 0..10(BE `@Min(0) @Max(10)`, 채점 스키마 HP-109와 동일).
+ * 감사 사유는 BE가 `score=<이전>→<이후>`로 스스로 만든다 — 이전 값을 클라가 실어 보내면
+ * 화면이 낡았을 때 틀린 값이 감사에 박힌다.
+ */
+export function fixSpoilerScore(
+  episodeId: number, msgId: string, score: number,
+): Promise<{ spoilerScore: number }> {
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/spoiler-score`, {
+    method: 'PATCH', body: JSON.stringify({ score }),
+  })
+}
+
 export function suspendUser(
   userId: number, duration: SuspendDuration, reason: string,
 ): Promise<SuspensionResult> {

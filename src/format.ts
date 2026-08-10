@@ -120,3 +120,33 @@ export function isSuspensionActive(
   if (status !== 'SUSPENDED') return false
   return suspendedUntil === null || new Date(suspendedUntil).getTime() > now.getTime()
 }
+
+/**
+ * 큐 행 경과 뱃지의 톤(HP-296) — 24시간·48시간이 경계다.
+ *
+ * <p><b>빨강을 쓰지 않는다.</b> 콘솔에서 빨강은 파괴적 조치(정지) 전용이고, 오래 기다린 신고는
+ * 급할 뿐 파괴적이지 않다. 톤 이름만 두고 색은 스타일시트가 정한다.
+ */
+export type ElapsedTone = 'fresh' | 'warm' | 'hot'
+
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+
+/**
+ * 접수 이후 경과 — 큐 행의 시각(HH:mm)만으로는 3일 묵은 건과 방금 건이 같아 보인다(HP-296).
+ *
+ * <p>1시간 미만을 분으로 쪼개지 않는 이유: 큐 판단의 단위가 "지금 급한가"라서 분은 쓰이지 않고,
+ * 자리만 차지해 정작 봐야 할 이틀·사흘짜리가 묻힌다.
+ *
+ * <p>미래 시각은 0으로 눕힌다 — 서버·클라 시계가 어긋나면 음수가 나오는데, "-1시간"은
+ * 화면이 거짓말하는 것이고 그 상태에서도 급하지 않다는 사실은 맞다.
+ */
+export function elapsedSince(
+  iso: string, now: Date = new Date(),
+): { label: string; tone: ElapsedTone } {
+  const ms = Math.max(0, now.getTime() - new Date(iso).getTime())
+  const tone: ElapsedTone = ms >= 2 * DAY_MS ? 'hot' : ms >= DAY_MS ? 'warm' : 'fresh'
+  if (ms >= DAY_MS) return { label: `${Math.floor(ms / DAY_MS)}일`, tone }
+  if (ms >= HOUR_MS) return { label: `${Math.floor(ms / HOUR_MS)}시간`, tone }
+  return { label: '방금', tone }
+}

@@ -1,5 +1,5 @@
 import type { ReportItem } from '../api/types'
-import { formatKst, formatKstTime } from '../format'
+import { elapsedSince, formatKst, formatKstTime } from '../format'
 import Pill from './Pill'
 import StatusBadge from './StatusBadge'
 
@@ -18,6 +18,15 @@ function authorTitle(item: ReportItem): string | undefined {
     return undefined
   }
   return `신고 시점 이름: ${item.snapshotDisplayName}`
+}
+
+/**
+ * 접수 이후 경과(HP-296) — 시각 옆에 붙어 "3일 묵은 건과 방금 건"을 목록에서 가른다.
+ * 색은 스타일시트가 톤 이름으로 정한다(빨강은 정지 전용이라 여기 쓰지 않는다).
+ */
+function ElapsedBadge({ createdAt }: { createdAt: string }) {
+  const { label, tone } = elapsedSince(createdAt)
+  return <span className={`agebadge ${tone}`}>{label}</span>
 }
 
 export default function ReportTable({ items, selectedId, onSelect }: {
@@ -56,13 +65,25 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                     onSelect(item.id)
                   }
                 }}>
-              <td className="time" title={formatKst(item.createdAt)}>{formatKstTime(item.createdAt)}</td>
+              <td className="time" title={formatKst(item.createdAt)}>
+                {formatKstTime(item.createdAt)}
+                <ElapsedBadge createdAt={item.createdAt} />
+              </td>
               <td><Pill reason={item.reason} /></td>
               {/* 계정 이름이 정본 — 신고 시점 이름과 다르면(닉 변경) 그 사실을 title로 남긴다 */}
               <td className="party" title={authorTitle(item)}>
                 {item.targetUser?.displayName ?? item.snapshotDisplayName ?? '—'}
               </td>
-              <td className="excerpt">{item.snapshotMessage}</td>
+              {/* 여러 사람이 동시에 신고한 건이 가장 급하다 — 그 수가 상세를 열어야만 보였다.
+                  1건은 모든 행에 붙어 정보가 되지 않으므로 감춘다(HP-296). */}
+              <td className="excerpt">
+                <div className="excerpt-row">
+                  <span className="msg">{item.snapshotMessage}</span>
+                  {item.sameMessageReportCount > 1 && (
+                    <span className="cnt">묶음 ×{item.sameMessageReportCount}</span>
+                  )}
+                </div>
+              </td>
               <td className="party reporter">{item.reporter?.displayName ?? '—'}</td>
               <td><StatusBadge status={item.status} resolvedAction={item.resolvedAction} /></td>
             </tr>
