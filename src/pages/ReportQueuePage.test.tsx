@@ -395,6 +395,24 @@ describe('키보드로 큐 밀어내기(HP-295)', () => {
     expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
   })
 
+  /**
+   * 2026-08-11 실브라우저에서 발견 — 정지 다이얼로그를 띄운 뒤 <b>그 안의 빈 곳</b>(제목 등)을
+   * 클릭하면 포커스가 body로 떨어지고, 그 상태의 Esc는 다이얼로그의 onKeyDown을 거치지 않고
+   * 문서로 직행해 <b>확인 겹과 상세 모달이 함께 닫힌다</b>. 확인 겹을 띄운 의미가 사라진다.
+   */
+  it('다이얼로그 안 빈 곳을 눌러도 Esc는 위 겹만 닫는다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+    await userEvent.keyboard('s')
+    expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('heading', { name: /계정 정지/ }))
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog', { name: '계정 정지' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+  })
+
   it('모달이 닫혀 있을 때 J/K는 행 포커스를 옮긴다 — Enter가 연다', async () => {
     listReports.mockImplementation(async () => twoOpen())
     renderPage()

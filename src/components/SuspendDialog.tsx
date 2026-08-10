@@ -73,6 +73,11 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
       <div
           ref={dialogRef}
           className="dialog" role="dialog" aria-modal="true" aria-label="계정 정지"
+          // 겹 안의 빈 곳(제목·안내 문구 등)을 눌러도 포커스가 이 겹을 벗어나지 않게 한다.
+          // 없으면 포커스가 body로 떨어지고, 그 상태의 Esc는 아래 onKeyDown을 거치지 않고 문서로
+          // 직행해 **확인 겹과 상세 모달이 함께 닫힌다** — 확인 겹을 띄운 의미가 사라진다.
+          // (2026-08-11 실브라우저에서 발견. Tab 순환은 trapTab이 따로 지키므로 -1로 충분하다.)
+          tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
