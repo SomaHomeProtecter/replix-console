@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { ReportItem } from '../api/types'
 import { elapsedSince, formatKst, formatKstTime } from '../format'
 import Pill from './Pill'
@@ -21,11 +22,27 @@ function authorTitle(item: ReportItem): string | undefined {
 }
 
 /**
+ * 1분마다 지금 시각을 새로 준다.
+ *
+ * <p>없으면 경과 뱃지가 <b>렌더 시점에 굳는다</b> — 콘솔을 열어 둔 채 두는 흔한 사용(벽에 띄운
+ * 큐 화면)에서 24h·48h 경계를 넘긴 신고가 계속 옛 톤으로 남아, 나이가 유일한 신호인 바로 그
+ * 상황에서 이 기능이 무의미해진다. 분 단위면 충분하다 — 경계가 시간·일 단위다.
+ */
+function useMinuteTick(): Date {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  return now
+}
+
+/**
  * 접수 이후 경과(HP-296) — 시각 옆에 붙어 "3일 묵은 건과 방금 건"을 목록에서 가른다.
  * 색은 스타일시트가 톤 이름으로 정한다(빨강은 정지 전용이라 여기 쓰지 않는다).
  */
-function ElapsedBadge({ createdAt }: { createdAt: string }) {
-  const { label, tone } = elapsedSince(createdAt)
+function ElapsedBadge({ createdAt, now }: { createdAt: string; now: Date }) {
+  const { label, tone } = elapsedSince(createdAt, now)
   return <span className={`agebadge ${tone}`}>{label}</span>
 }
 
@@ -34,6 +51,7 @@ export default function ReportTable({ items, selectedId, onSelect }: {
   selectedId: number | null
   onSelect: (id: number) => void
 }) {
+  const now = useMinuteTick()
   if (items.length === 0) {
     return <div className="empty-hint">표시할 신고가 없습니다</div>
   }
@@ -67,7 +85,7 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                 }}>
               <td className="time" title={formatKst(item.createdAt)}>
                 {formatKstTime(item.createdAt)}
-                <ElapsedBadge createdAt={item.createdAt} />
+                <ElapsedBadge createdAt={item.createdAt} now={now} />
               </td>
               <td><Pill reason={item.reason} /></td>
               {/* 계정 이름이 정본 — 신고 시점 이름과 다르면(닉 변경) 그 사실을 title로 남긴다 */}

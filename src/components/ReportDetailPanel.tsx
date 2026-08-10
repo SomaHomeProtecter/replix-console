@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import {
   blindMessage, fixSpoilerScore, reopenReport, resolveReport, suspendUser, unblindMessage,
 } from '../api/admin'
 import type { ReportItem, SuspendDuration } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
-import { isTypingTarget } from '../queueKeys'
+import { isTypingTarget, shortcutKey } from '../queueKeys'
 import Avatar from './Avatar'
 import SuspendDialog from './SuspendDialog'
 
@@ -46,13 +46,34 @@ export default function ReportDetailPanel({ report, onActionDone, onNavigate }: 
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [score, setScore] = useState<number | null>(report.spoilerScore)
+  /**
+   * 방금 정정해 보낸 값. {@code busy}는 왕복이 끝나면 바로 풀리는데 {@code report.spoilerScore}는
+   * 재조회가 와야 갱신되므로, 그 사이 버튼이 다시 활성이 되어 같은 값으로 한 번 더 눌리면
+   * 감사에 <b>{@code score=3→3}</b>이 남는다 — 그 창을 이 값으로 덮는다(2026-08-11 리뷰).
+   */
+  const [sentScore, setSentScore] = useState<number | null>(null)
+  /**
+   * 신고별 미저장 초안(메모·고른 점수). J/K로 옮기면 아래 [report.id] 효과가 상태를 초기화해
+   * <b>쓰던 메모와 고른 정정이 경고도 없이 사라졌다</b>. 나갈 때 담아 두고 돌아오면 되살린다.
+   */
+  const draftsRef = useRef<Record<number, { note: string; score: number | null }>>({})
+  const noteRef = useRef(note)
+  const scoreRef = useRef(score)
+  noteRef.current = note
+  scoreRef.current = score
 
   useEffect(() => {
-    // 다른 행을 선택하면 입력·오류는 이전 신고의 것이므로 비운다
-    setNote('')
+    // 다른 신고로 옮기면 입력·오류는 이전 것이므로 비우되, 그 신고의 초안이 있으면 되살린다.
+    const id = report.id
+    const draft = draftsRef.current[id]
+    setNote(draft?.note ?? '')
+    setScore(draft ? draft.score : report.spoilerScore)
     setError(null)
     setDialogOpen(false)
-    setScore(report.spoilerScore)
+    setSentScore(null)
+    // 정리 함수가 <b>먼저</b> 돌아 떠나는 신고의 초안을 담는다. 최신값을 ref로 읽는 이유는
+    // 클로저가 이 렌더 시점 값에 갇혀 있어서다.
+    return () => { draftsRef.current[id] = { note: noteRef.current, score: scoreRef.current } }
     // report.spoilerScore는 의도적으로 의존성에서 뺀다 — 재조회로 같은 신고가 새 객체로 와도
     // 운영자가 고르던 점수를 되돌리지 않는다(선택은 화면의 상태지 서버의 상태가 아니다).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,6 +157,7 @@ export default function ReportDetailPanel({ report, onActionDone, onNavigate }: 
     if (score === null) return
     run(async () => {
       await fixSpoilerScore(report.episodeId, report.msgId, score)
+      setSentScore(score)
     })
   }
 
@@ -168,7 +190,13 @@ export default function ReportDetailPanel({ report, onActionDone, onNavigate }: 
       // 함정 ③: 메모에 "b"를 치는 순간 메시지가 가려지면 안 된다
       if (isTypingTarget(e.target)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      switch (e.key.toLowerCase()) {
+      const key = shortcutKey(e)
+      // 이동은 눌러 두고 훑어도 되지만 조치는 아니다 — OS 키 반복이 ~30ms마다 keydown을 쏘고
+      // 그 사이 busy가 풀리며 선택이 다음 건으로 옮겨 가, 화면에 뜬 적도 없는 신고까지 줄줄이
+      // 닫힌다(2026-08-11 리뷰 실측: X 한 번 눌러 두니 5건 기각). 조치 키만 반복을 막는다.
+      const navigating = key === 'j' || key === 'k'
+      if (e.repeat && !navigating) return
+      switch (key) {
         case 'b': e.preventDefault(); blind(); break
         case 'n': e.preventDefault(); resolveWithoutAction(); break
         case 'x': e.preventDefault(); reject(); break
@@ -239,8 +267,9 @@ export default function ReportDetailPanel({ report, onActionDone, onNavigate }: 
         <button
             type="button" className="btn btn-score"
             // 같은 값으로 정정하면 감사에 `score=8→8` 한 줄만 쌓인다 — 기록을 흐린다
+            // 서버가 아는 값 = 방금 보낸 값(재조회 전) ?? 마지막으로 읽어 온 값
             disabled={busy || report.currentStatus === null || score === null
-              || score === report.spoilerScore}
+              || score === (sentScore ?? report.spoilerScore)}
             onClick={fixScore}>
           점수 정정
         </button>

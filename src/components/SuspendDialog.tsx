@@ -50,10 +50,14 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
     const first = focusables[0]
     const last = focusables[focusables.length - 1]
     const active = document.activeElement
-    if (e.shiftKey && (active === first || !box.contains(active))) {
+    // 겹 <b>안의 포커스 가능한 요소</b>에 있는가. 컨테이너(tabIndex=-1) 자신은 여기 포함되지
+    // 않는다 — 빈 곳을 눌러 컨테이너로 떨어진 상태에서 Shift+Tab을 누르면 종전 조건이
+    // 그 경우를 놓쳐 트랩을 그대로 빠져나갔다(2026-08-11 리뷰).
+    const inside = box.contains(active) && active !== box
+    if (e.shiftKey && (!inside || active === first)) {
       e.preventDefault()
       last.focus()
-    } else if (!e.shiftKey && active === last) {
+    } else if (!e.shiftKey && (!inside || active === last)) {
       e.preventDefault()
       first.focus()
     }

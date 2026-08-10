@@ -43,3 +43,17 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   // 나가면 호출부의 `if (isTypingTarget(...))`은 통과하지만 반환 타입 계약은 이미 깨진 뒤다.
   return target.isContentEditable === true
 }
+
+/**
+ * 눌린 <b>물리 키</b>를 소문자 한 글자로 — 없으면 null.
+ *
+ * <p>{@code e.key}로 비교하면 <b>한글 IME가 켜진 순간 단축키가 통째로 먹통</b>이 된다(B는 'ㅠ',
+ * N은 'ㅜ', X는 'ㅅ'). 이 콘솔 사용자의 기본 입력 소스가 한국어라 그 상태가 예외가 아니라 정상이다.
+ * {@code e.code}는 레이아웃·IME와 무관한 물리 키라 그 문제가 없다.
+ *
+ * <p>{@code code}가 없는 환경·합성 이벤트를 위해 한 글자짜리 {@code key}로 폴백한다.
+ */
+export function shortcutKey(e: Pick<KeyboardEvent, 'code' | 'key'>): string | null {
+  if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3).toLowerCase()
+  return e.key.length === 1 ? e.key.toLowerCase() : null
+}

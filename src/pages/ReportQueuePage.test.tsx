@@ -389,6 +389,11 @@ describe('키보드로 큐 밀어내기(HP-295)', () => {
     await userEvent.keyboard('s')
     expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
 
+    // 포커스를 사유 입력 밖으로 뺀다 — 안 그러면 isTypingTarget이 먼저 키를 삼켜, dialogOpen
+    // 가드를 통째로 지워도 이 테스트가 통과한다(2026-08-11 리뷰: 엉뚱한 이유로 초록이었다).
+    await userEvent.click(screen.getByRole('button', { name: '취소' }).parentElement!)
+    expect(screen.getByLabelText('정지 사유')).not.toHaveFocus()
+
     await userEvent.keyboard('x')
 
     expect(resolveReport).not.toHaveBeenCalled()
@@ -411,6 +416,117 @@ describe('키보드로 큐 밀어내기(HP-295)', () => {
 
     expect(screen.queryByRole('dialog', { name: '계정 정지' })).not.toBeInTheDocument()
     expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+  })
+
+  /**
+   * 2026-08-11 리뷰 실측 — X를 1초 누르고 있으면 OS 키 반복이 ~30ms마다 keydown을 쏘는데,
+   * 그때는 busy가 이미 풀렸고 자동 이동이 다음 건으로 선택을 옮긴 뒤라 <b>반복마다 다른 신고가
+   * 기각된다</b>(화면에 뜬 적도 없는 건까지). 그 기각은 HP-270 기각률 지표로 흘러간다.
+   */
+  it('키를 누르고 있어도 조치는 한 번만 나간다 — 자동반복은 무시한다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+
+    const fire = (repeat: boolean) => document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'x', code: 'KeyX', repeat, bubbles: true }))
+    await act(async () => { fire(false); fire(true); fire(true); fire(true) })
+
+    expect(resolveReport).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * 한국어 입력 소스가 켜진 상태(이 콘솔 사용자의 기본)에서는 e.key가 조합 자모로 온다 —
+   * B는 'ㅠ', X는 'ㅅ'. key로만 분기하면 안내에 적힌 단축키가 통째로 먹통이 된다.
+   */
+  it('한글 IME가 켜져 있어도 단축키가 동작한다 — 물리 키로 분기한다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    await openFirst()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ㅅ', code: 'KeyX', bubbles: true }))
+    })
+
+    expect(resolveReport).toHaveBeenCalledWith(1, 'REJECTED', null, null)
+  })
+
+  /** 조치가 끝나기 전에 사용자가 닫았으면 그 뜻을 존중한다 — 낡은 selectedId로 되살리지 않는다. */
+  it('조치 중에 모달을 닫으면 되살아나지 않는다', async () => {
+    listReports.mockImplementation(async () => twoOpen())
+    let release!: () => void
+    resolveReport.mockReturnValue(new Promise((r) => { release = () => r({} as never) }))
+    await openFirst()
+
+    await userEvent.keyboard('x')          // 조치 진행 중
+    await userEvent.keyboard('{Escape}')   // 사용자가 닫는다
+    expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+
+    await act(async () => { release() })
+
+    expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * 자동 이동은 <b>큐를 밀어내는</b> 동선의 편의다. 종결분을 정정하러 '처리됨' 필터로 들어온
+   * 경우엔 이어갈 큐가 없으므로, 고치던 신고에 그대로 머물러야 결과를 확인할 수 있다.
+   */
+  it('열림이 아닌 건을 정정하면 그 자리에 머문다', async () => {
+    listReports.mockImplementation(async () => ({
+      items: [makeReportItem({ id: 1, status: 'RESOLVED', resolvedAction: 'BLIND', snapshotMessage: '종결된 건' })],
+      nextCursor: null,
+    }))
+    await openFirst('종결된 건')
+
+    await userEvent.keyboard('x')
+
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+    expect(screen.getByText(/신고 #1 · 스냅샷 원문/)).toBeInTheDocument()
+  })
+
+  /** 이동한 건이 재조회에서 빠지면 모달은 사라지는데 selectedId가 남아 J/K가 영영 안 붙었다. */
+  it('이동한 건이 재조회에서 사라지면 선택을 비워 J/K가 되살아난다', async () => {
+    listReports
+        .mockResolvedValueOnce(twoOpen())
+        .mockResolvedValue({
+          items: [
+            makeReportItem({ id: 1, snapshotMessage: '첫째 건' }),
+            makeReportItem({ id: 3, snapshotMessage: '셋째 건' }),
+          ],
+          nextCursor: null,
+        })
+    await openFirst()
+
+    await userEvent.keyboard('x')   // #2로 이동하지만 재조회에 #2가 없다
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument())
+    const rows = screen.getAllByRole('row')
+    rows[1].focus()
+    await userEvent.keyboard('j')
+    expect(rows[2]).toHaveFocus()
+  })
+
+  /** 닫힌 모달은 포커스를 body에 남긴다 — 그 상태의 J가 맨 위로 튀면 지켜 둔 자리를 잃는다. */
+  it('모달이 닫힌 뒤 J는 처리하던 자리에서 이어간다', async () => {
+    listReports.mockImplementation(async () => ({
+      items: [
+        makeReportItem({ id: 1, snapshotMessage: '첫째 건' }),
+        makeReportItem({ id: 2, snapshotMessage: '둘째 건' }),
+        makeReportItem({ id: 3, snapshotMessage: '셋째 건' }),
+      ],
+      nextCursor: null,
+    }))
+    renderPage()
+    await screen.findByText('셋째 건')
+    await userEvent.click(screen.getAllByRole('row')[3])   // 마지막 건을 연다
+    // 마우스로 모달 안 버튼을 누른다 — 그 버튼이 언마운트되며 포커스가 body로 떨어지는 실제 경로다
+    await userEvent.click(within(screen.getByRole('dialog', { name: '신고 상세' }))
+        .getByRole('button', { name: '기각' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument())
+
+    await userEvent.keyboard('j')
+
+    expect(screen.getAllByRole('row')[3]).toHaveFocus()   // 맨 위(rows[1])가 아니다
   })
 
   it('모달이 닫혀 있을 때 J/K는 행 포커스를 옮긴다 — Enter가 연다', async () => {

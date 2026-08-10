@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -262,5 +262,64 @@ describe('스포일러 점수 정정(HP-294) — 판단 재료와 조치를 같�
     await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('이미 사라진 메시지입니다')
+  })
+})
+
+describe('2026-08-11 리뷰 반영 — 겹 경계·중복 조치·초안 보존', () => {
+  /** tabIndex로 컨테이너가 포커스를 받게 되면서 trapTab의 역방향 분기가 그 경우를 놓쳤다. */
+  it('겹 안 빈 곳에 포커스가 있어도 Shift+Tab이 겹을 벗어나지 않는다', async () => {
+    renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+    const dialog = screen.getByRole('dialog', { name: '계정 정지' })
+
+    await userEvent.click(screen.getByRole('heading', { name: /계정 정지/ }))
+    expect(dialog).toHaveFocus()
+
+    await userEvent.tab({ shift: true })
+
+    expect(dialog.contains(document.activeElement)).toBe(true)
+  })
+
+  /**
+   * busy는 왕복이 끝나면 바로 풀리는데 report.spoilerScore는 재조회가 와야 갱신된다 —
+   * 그 사이 버튼이 다시 활성이라 두 번째 누름이 score=3→3 감사 행을 남긴다.
+   */
+  it('정정 요청 뒤 같은 값으로 다시 누를 수 없다', async () => {
+    let release!: () => void
+    fixSpoilerScore.mockReturnValue(new Promise((r) => {
+      release = () => r({ spoilerScore: 3 })
+    }))
+    renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+    await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
+
+    await act(async () => { release() })
+
+    expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
+    expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
+  })
+
+  /** J/K로 옮기면 [report.id] 효과가 초기화해 쓰던 메모와 고른 점수가 말없이 사라졌다. */
+  it('다른 건을 봤다 돌아와도 쓰던 메모와 고른 점수가 남는다', async () => {
+    const first = makeReportItem({ id: 1, spoilerScore: 8 })
+    const second = makeReportItem({ id: 2, spoilerScore: 5 })
+    const { rerender } = render(
+        <MemoryRouter>
+          <ReportDetailPanel report={first} onActionDone={onActionDone} />
+        </MemoryRouter>)
+
+    await userEvent.type(screen.getByLabelText('처리 메모'), '판단 보류')
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+
+    const show = (r: typeof first) => rerender(
+        <MemoryRouter>
+          <ReportDetailPanel report={r} onActionDone={onActionDone} />
+        </MemoryRouter>)
+    show(second)
+    expect(screen.getByLabelText('처리 메모')).toHaveValue('')   // 다른 건은 비어 있다
+    show(first)
+
+    expect(screen.getByLabelText('처리 메모')).toHaveValue('판단 보류')
+    expect(screen.getByRole('radio', { name: '3' })).toBeChecked()
   })
 })
