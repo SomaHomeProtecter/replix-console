@@ -65,8 +65,8 @@ function hangingBlind() {
 }
 
 const checkboxes = () => screen.getAllByRole('checkbox')
-/** 일괄 가림 버튼 — 라벨이 단계에 따라 바뀌므로(선택 N건 / 가림 중 / 목록 갱신 중) 셋 다 잡는다. */
-const blindButton = () => screen.getByRole('button', { name: /가림|갱신 중/ })
+/** 일괄 가림 버튼 — 라벨이 단계에 따라 바뀌므로(선택 N건 / 처리 중 / 목록 갱신 중) 셋 다 잡는다. */
+const blindButton = () => screen.getByRole('button', { name: /가림|처리 중|갱신 중/ })
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -303,13 +303,17 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
 
     await userEvent.click(blindButton())
 
-    expect(blindButton()).toHaveTextContent('가림 중… 1/2')
+    // 눈금은 <b>보낸 수</b>다(성공·실패 모두). "가림 N"이라 적으면 뒤이어 뜨는 실패 문구와 어긋난다.
+    expect(blindButton()).toHaveTextContent('처리 중… 1/2')
     await act(async () => { gate.resolve({ blinded: true }) })
   })
 
   /**
-   * 브라우저는 호스트당 커넥션이 6개 안팎이라 200건을 한꺼번에 쏘면 뒤쪽은 대기줄에서 시간을
-   * 다 쓰는데, 타임아웃은 <b>보낸 시점부터</b> 재므로 서버가 멀쩡해도 뒤쪽이 무더기로 끊긴다.
+   * 진행 표시가 <b>실제 진행</b>을 뜻하게 하려고 나눠 보낸다 — 한꺼번에 쏘면 눈금이 순식간에
+   * 끝까지 갔다가 한참 멈춰 있어 아무것도 알려주지 못한다. 겸해서 관리 API에 200건을 몰아치지
+   * 않는다. (커넥션 상한을 근거로 삼지 않는 이유는 BLIND_CONCURRENCY 주석 참조 — 호스트당 6개는
+   * HTTP/1.1 이야기고 이 콘솔은 h2로 붙는다. 소스가 명시적으로 금지한 근거를 테스트가 되살리면
+   * 다음 사람이 그걸 근거로 잘못 고친다.)
    */
   it('한 번에 흘려보내는 요청 수를 제한한다', async () => {
     const many = Array.from({ length: 10 }, (_, i) => makeAuthorMessage({
@@ -695,5 +699,157 @@ describe('취소·알림·경계(2026-08-11 4라운드 리뷰 반영)', () => {
     await screen.findByText('신고된 줄')
 
     expect(screen.getByText(/가림은 신고를 종결하지 않습니다/)).toBeInTheDocument()
+  })
+})
+
+describe('재조회 실패·창 밖 선택·언마운트(2026-08-12 독립 리뷰)', () => {
+  /**
+   * <b>blocker</b>. load는 오류를 안에서 삼켜 절대 reject하지 않으므로, `await load()` 뒤의
+   * 잠금 해제가 <b>재조회 실패에도 그대로 돌았다</b>. 그 결과 조치 <b>이전</b> 상태의 목록 위에서
+   * 버튼이 다시 열려, 이미 서버에 닿은 건에 또 요청이 나갈 수 있었다 — BE는 재가림을 멱등 200으로
+   * 받으므로 상태는 안 깨지지만 <b>감사에 중복 BLIND 행</b>이 쌓인다. 3인이 admin을 공유하는 한
+   * 그 로그가 되돌림 판단의 유일한 근거다.
+   */
+  it('재조회가 실패하면 선택을 비워 낡은 목록 위에서 다시 눌리지 않게 한다', async () => {
+    blindMessage.mockRejectedValue(new Error('일시 오류'))
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    // 조치는 실패 → 남은 건이 다시 골라지지만, 그 직후 재조회가 실패한다
+    listAuthorMessages.mockRejectedValueOnce(new Error('서버가 응답하지 않습니다'))
+
+    await userEvent.click(blindButton())
+
+    expect(blindButton()).toBeDisabled()
+    expect(blindButton()).toHaveTextContent('선택 0건 가림')
+  })
+
+  /** 갱신하지 못한 목록으로 운영자를 보내는 안내를 하지 않는다 — 아는 것보다 많이 말하지 않는다. */
+  it('재조회가 실패하면 문구가 화면이 낡았다고 밝힌다', async () => {
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    listAuthorMessages.mockRejectedValueOnce(new Error('서버가 응답하지 않습니다'))
+
+    await userEvent.click(blindButton())
+
+    expect(onActionDone).toHaveBeenCalledWith(expect.stringContaining('최신이 아닙니다'))
+  })
+
+  /**
+   * BE는 재생 시각 오름차순의 <b>마지막 limit개</b>를 준다(꼬리 창). 도배가 계속되면 창이 밀려,
+   * 앞쪽에 고른 줄이 <b>여전히 살아 있는데도</b> 목록에서 빠진다. 그걸 "사라졌다"로 처리하면
+   * 운영자가 고른 것이 조용히 지워져, 그만큼의 도배가 사용자에게 그대로 남는다.
+   */
+  it('상한에 잘린 창 밖의 선택은 사라진 것으로 치지 않는다', async () => {
+    listAuthorMessages.mockResolvedValue({ ...threeRows(), total: 250 })
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+    await screen.findByText('도배 첫째')
+    await userEvent.click(screen.getByRole('checkbox', { name: /도배 첫째/ }))
+    expect(blindButton()).toHaveTextContent('선택 2건 가림')
+
+    // 창이 밀려 '도배 첫째'가 목록에서 빠졌다 — 하지만 total이 커서 잘린 상태다
+    listAuthorMessages.mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: 'M-3', message: '도배 셋째' })], total: 250,
+    })
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))
+    await screen.findByText(/목록 창 밖에 있습니다/)
+
+    expect(blindButton()).toHaveTextContent('선택 2건 가림')   // 지워지지 않았다
+  })
+
+  /** 잘리지 않은 목록에서 사라진 것은 진짜로 없어진 것이다 — 그건 뺀다. */
+  it('잘리지 않은 목록에서 사라진 선택은 뺀다', async () => {
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+    await screen.findByText('도배 첫째')
+    await userEvent.click(screen.getByRole('checkbox', { name: /도배 첫째/ }))
+
+    listAuthorMessages.mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: 'M-3', message: '도배 셋째' })], total: 1,
+    })
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))
+    await screen.findByText('도배 셋째')
+
+    expect(blindButton()).toHaveTextContent('선택 0건 가림')
+    expect(screen.queryByText(/목록 창 밖에 있습니다/)).not.toBeInTheDocument()
+  })
+
+  /**
+   * 모달은 <b>암묵적으로도</b> 사라진다 — 앞선 조치의 큐 재조회가 늦게 커밋돼 그 신고가 열림
+   * 목록에서 빠지면 통째로 없어진다. 그때 배치를 두면 진행 표시도 취소 손잡이도 없는
+   * <b>화면 없는 쓰기</b>가 남고, 운영자는 같은 작성자의 다른 신고(묶음 ×N)를 열어 두 번째
+   * 배치를 걸 수 있다 — 겹치면 감사에 중복 BLIND 행이 쌓인다.
+   */
+  it('언마운트되면 남은 요청을 더 보내지 않는다', async () => {
+    const many = Array.from({ length: 10 }, (_, i) => makeAuthorMessage({
+      msgId: `S-${i}`, message: `도배 ${i}`, playbackTime: i,
+    }))
+    listAuthorMessages.mockResolvedValue({ rows: many, total: 10 })
+    // ⚠️ 첫 물결을 <b>끝나게</b> 해야 이 테스트가 뜻이 있다. 매달린 채로 두면 일꾼이 다음 건을
+    // 집으러 가지 못해, 중단하든 안 하든 요청 수가 그대로라 둘을 구분하지 못한다.
+    const gates: Array<(v: { blinded: boolean }) => void> = []
+    blindMessage.mockImplementation((_ep: number, _id: string, signal?: AbortSignal) =>
+      new Promise((ok, fail) => {
+        gates.push(ok)
+        const abort = () => fail(new DOMException('aborted', 'AbortError'))
+        if (signal?.aborted) abort()
+        else signal?.addEventListener('abort', abort, { once: true })
+      }))
+    const { unmount } = renderPanel()
+    await screen.findByText('도배 0')
+    for (const box of checkboxes()) await userEvent.click(box)
+    await userEvent.click(blindButton())
+    expect(blindMessage).toHaveBeenCalledTimes(6)   // 첫 물결만
+
+    unmount()
+    await act(async () => { gates.forEach((ok) => ok({ blinded: true })) })
+
+    // 중단하지 않으면 일꾼이 남은 4건을 집어 계속 쏜다 — 화면 없는 쓰기가 남는다
+    expect(blindMessage).toHaveBeenCalledTimes(6)
+  })
+
+  /**
+   * 잠금은 progress가 걸고 있는데 목록이 비면 조치 줄이 사라져 [취소]까지 없어졌다 —
+   * 잠긴 채 출구가 없는 상태. 재조회가 빈 목록을 들고 오는 경우(전부 TTL 만료 등)에 열린다.
+   */
+  it('목록이 비어도 진행 중이면 취소 손잡이를 남긴다', async () => {
+    hangingBlind()
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+    await screen.findByText('신고된 줄')
+    await userEvent.click(blindButton())
+
+    listAuthorMessages.mockResolvedValue({ rows: [], total: 0 })
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))
+    await act(async () => {})
+
+    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument()
+  })
+
+  /** 일시적으로 빈 응답이 오면 그걸로 미리 체크가 영영 꺼져, 다음 조회에 줄이 와도 안 골라진다. */
+  it('첫 조회가 비어 있으면 미리 체크를 다음 조회로 미룬다', async () => {
+    listAuthorMessages.mockResolvedValueOnce({ rows: [], total: 0 })
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+    await screen.findByText(/남긴 글이 없습니다/)
+
+    listAuthorMessages.mockResolvedValue(threeRows())
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))
+    await screen.findByText('신고된 줄')
+
+    expect(screen.getByRole('checkbox', { name: /신고된 줄/ })).toBeChecked()
+  })
+
+  /** 취소 뒤 곧바로 다시 거는 것은 흔한 동선이다 — 새 컨트롤러로 깨끗이 시작돼야 한다. */
+  it('취소한 뒤 다시 걸면 정상적으로 나간다', async () => {
+    hangingBlind()
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    await userEvent.click(blindButton())
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+    await waitFor(() => expect(blindButton()).toBeEnabled())
+
+    blindMessage.mockResolvedValue({ blinded: true })
+    await userEvent.click(blindButton())
+
+    expect(blindMessage).toHaveBeenLastCalledWith(42, '01FIXTUREMSG0000000000000A',
+        expect.any(AbortSignal))
+    expect(await screen.findByRole('button', { name: /선택 0건 가림/ })).toBeDisabled()
   })
 })

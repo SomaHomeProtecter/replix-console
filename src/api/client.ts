@@ -94,6 +94,10 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   } catch (e) {
     // <b>우리가</b> 끊은 것만 TIMEOUT으로 바꾼다. 호출자가 끊은 것(화면 이탈 등)까지 타임아웃이라
     // 부르면 화면이 "서버가 느리다"고 거짓말하고, 운영자가 없는 장애를 쫓는다.
+    //
+    // ⚠️ 다만 이 문구는 토큰 갱신이 멎었을 때도 뜬다(상한이 getToken까지 덮으므로) — 그때는
+    // 서버가 아니라 Keycloak이 원인이다. 갱신은 취소할 수 없어 여기서 구분할 방법이 없고,
+    // 화면을 푸는 쪽이 정확한 원인을 대는 것보다 급하다고 보고 이 결을 받아들였다.
     if (timedOut) {
       throw new ApiHttpError(0, TIMEOUT_CODE,
           `서버가 ${API_TIMEOUT_MS / 1000}초 안에 응답하지 않아 요청을 취소했습니다`)

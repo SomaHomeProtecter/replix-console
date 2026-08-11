@@ -12,11 +12,19 @@ import SuspendDialog from './SuspendDialog'
 /** 채점 스키마(HP-109)와 같은 범위 — BE가 `@Min(0) @Max(10)`으로 되돌려 보내므로 화면이 먼저 막는다. */
 const SCORE_CHOICES = Array.from({ length: 11 }, (_, i) => i)
 
-/** Redis 실황 표기 — null은 이미 사라진 메시지(TTL·삭제)라는 뜻이다(계약). */
+/**
+ * Redis 실황 표기 — null은 이미 사라진 메시지(TTL·삭제)라는 뜻이다(계약).
+ *
+ * <p>클린봇 차단({@code blocked_*})도 <b>이름을 붙여</b> 준다. 종전에는 폴백으로 원문
+ * `blocked_profanity`가 그대로 찍혔는데, 바로 아래 작성자 글 목록은 같은 값을 `클린봇`으로
+ * 부른다 — 한 모달 안에서 같은 사실을 두 어휘로 말하는 꼴이었다(이 패널이 스스로 정한 규칙:
+ * "같은 사실을 두 화면이 다르게 부르지 않는다").
+ */
 function liveStatusLabel(currentStatus: string | null): string {
   if (currentStatus === null) return '사라짐(만료·삭제)'
   if (currentStatus === 'blinded') return '가림'
   if (currentStatus === 'visible') return '표시 중'
+  if (currentStatus.startsWith('blocked_')) return '클린봇 차단'
   return currentStatus
 }
 

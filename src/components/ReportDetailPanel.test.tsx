@@ -547,3 +547,39 @@ describe('신고 전환 시 자식을 새로 마운트한다(key={report.id})', 
     expect(screen.queryByText(/1건 실패/)).not.toBeInTheDocument()
   })
 })
+
+/**
+ * 한 모달 안에서 같은 사실을 두 어휘로 말하면 안 된다(이 패널이 스스로 정한 규칙). 폴백이
+ * 원문을 그대로 찍던 동안 메타 줄은 `blocked_profanity`, 바로 아래 작성자 글 목록은 `클린봇`
+ * 이었다 — currentStatus는 Redis에서 온 제약 없는 문자열이라 실제로 도달한다.
+ */
+it('클린봇 차단 실황을 원문이 아니라 이름으로 적는다', () => {
+  renderPanel(makeReportItem({ currentStatus: 'blocked_profanity' }))
+
+  expect(screen.getByText(/현재 상태 클린봇 차단/)).toBeInTheDocument()
+  expect(screen.queryByText(/blocked_profanity/)).not.toBeInTheDocument()
+})
+
+describe('잠금 사슬 — 패널 쓰기가 자식을 막는가', () => {
+  /**
+   * `busy={busy}`를 `busy={false}`로 바꾸는 변이가 모든 테스트를 통과했다(2026-08-12 독립 리뷰).
+   * 그 회귀가 나가면 <b>[기각]이 도는 중에 일괄 가림을 시작</b>할 수 있다 — 한 신고에
+   * "부당해서 기각"과 "타당해서 가리는 중"이 동시에 기록되고, HP-270의 신고자 기각률은
+   * 되돌릴 수 없어 그 신고자의 지표가 영구히 오염된다.
+   */
+  it('패널이 조치 중이면 자식의 일괄 가림도 막힌다', async () => {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: '01FIXTUREMSG0000000000000A', message: '신고된 줄' })],
+      total: 1,
+    })
+    resolveReport.mockImplementation(() => new Promise(() => {}))
+    renderPanel()
+    await screen.findByRole('button', { name: /선택 1건 가림/ })
+
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+
+    expect(screen.getByRole('button', { name: /선택 1건 가림/ })).toBeDisabled()
+    expect(screen.getAllByRole('checkbox').every((c) => (c as HTMLInputElement).disabled)).toBe(true)
+    expect(admin.blindMessage).not.toHaveBeenCalled()
+  })
+})

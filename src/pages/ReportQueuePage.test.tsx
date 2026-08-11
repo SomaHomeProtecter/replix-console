@@ -431,4 +431,32 @@ describe('일괄 가림 결과는 모달이 닫혀도 화면에 남는다(HP-298
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
+
+  /**
+   * 잠금 사슬의 <b>자식 → 페이지</b> 구간. 다른 테스트들은 패널 자신의 쓰기(기각)로만 잠그므로,
+   * `onBusyChange(locked)`를 `onBusyChange(busy)`로 바꾸는 변이가 모든 테스트를 통과했다
+   * (2026-08-12 독립 리뷰). 그 회귀가 나가면 <b>일괄 가림 도중 모달이 닫혀</b> 결과를 알릴
+   * 화면이 사라진다 — 못 가린 건은 여전히 사용자에게 보이는데 화면 어디에도 그 사실이 없다.
+   */
+  it('자식의 일괄 가림 중에도 모달이 닫히지 않는다', async () => {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [{
+        msgId: '01FIXTUREMSG0000000000000A', message: '범인은 집사다',
+        playbackTime: 100, status: 'visible',
+      }],
+      total: 1,
+    })
+    vi.mocked(admin.blindMessage).mockImplementation(() => new Promise(() => {}))
+    const { container } = renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+
+    await userEvent.click(await screen.findByRole('button', { name: /선택 1건 가림/ }))
+
+    await userEvent.click(container.querySelector('.modal-backdrop')!)
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '닫기' })).toBeDisabled()
+  })
 })

@@ -253,6 +253,14 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .hist { border-top: 1px solid var(--line-2); padding-top: 10px; font-size: 11.5px; color: var(--muted-2); }
 .hist b { color: var(--ink); }
 .error-box { background: var(--red-soft); color: var(--red); border-radius: 6px; padding: 8px 11px; font-size: 12px; }
+/* 조치 결과 문구(HP-298 일부 실패·취소). <b>오류가 아니라 주의</b>다 — 빨강은 이 콘솔에서
+   파괴적 조치(정지) 전용이고(HP-223 확정 제약), 일부 실패는 "다시 손봐야 할 일"이지 고장이
+   아니다. 오류와 같은 외피를 입히면 운영자가 둘을 구분하지 못한다. */
+.notice-box {
+  background: var(--warn-bg); color: var(--amber-ink);
+  border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 8px 11px; font-size: 12px;
+}
 .hint { color: var(--muted); font-size: 12px; }
 
 /* ── 정지 다이얼로그 (cm-dlg) ── */

@@ -189,28 +189,59 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
     return () => { alive.current = false }
   }, [])
 
-  const load = useCallback(async () => {
-    if (authorId === null) return
+  /**
+   * 언마운트되면 진행 중인 배치를 <b>끊는다</b>.
+   *
+   * <p>모달은 운영자가 닫는 길(백드롭·Esc·✕)만 막혀 있고, <b>암묵적으로도</b> 사라진다 —
+   * 앞선 조치의 큐 재조회가 늦게 커밋돼 그 신고가 열림 목록에서 빠지면 모달이 통째로 없어진다.
+   * 그때 배치를 그냥 두면 <b>화면 없는 쓰기</b>가 남는다: 진행 표시도 취소 손잡이도 없고,
+   * 부모 잠금은 이미 풀렸으므로 운영자는 다른 신고를 열어 <b>같은 작성자에게 두 번째 배치</b>를
+   * 걸 수 있다(묶음 ×N은 큐가 오히려 강조하는 경우다). 두 배치가 같은 msgId에 겹치면 감사에
+   * 중복 BLIND 행이 쌓인다. 알릴 화면이 사라진 배치는 계속해 봐야 얻는 것이 없다.
+   */
+  useEffect(() => () => canceller.current?.abort(), [])
+
+  /**
+   * 목록을 다시 읽는다. <b>반환값은 "화면이 갱신됐는가"</b>다 — {@code 'ok'}만이 커밋을 뜻한다.
+   *
+   * <p>이 값을 안 돌려주던 동안 실제 결함이 있었다: 이 함수는 오류를 안에서 삼켜 <b>절대
+   * reject하지 않으므로</b>, 부르는 쪽의 `await load()` 뒤 잠금 해제가 재조회 실패에도 그대로
+   * 돌았다. 그 결과 <b>낡은 목록 위에서 버튼이 다시 열려</b>, 방금 서버에 닿은 건에 또 요청이
+   * 나가고 감사에 중복 BLIND 행이 쌓일 수 있었다(2026-08-12 독립 리뷰 blocker).
+   */
+  const load = useCallback(async (): Promise<'ok' | 'failed' | 'stale'> => {
+    if (authorId === null) return 'stale'
     const mine = ++seq.current
     setLoading(true)
     setLoadError(null)
     try {
       const page = await listAuthorMessages(report.episodeId, authorId, report.msgId)
-      if (!alive.current || mine !== seq.current) return
+      if (!alive.current || mine !== seq.current) return 'stale'
       setRows(page.rows)
       setTotal(page.total)
       const blindable = new Set(page.rows.filter((r) => canBlind(r.status)).map((r) => r.msgId))
+      const onPage = new Set(page.rows.map((r) => r.msgId))
+      // 상한에 잘렸는가. BE는 재생 시각 오름차순의 <b>마지막 limit개</b>를 준다(꼬리 창) —
+      // 도배가 계속되면 창이 밀려, 앞쪽에 고른 줄이 <b>여전히 살아 있는데도</b> 목록에서 빠진다.
+      const truncated = page.total > page.rows.length
       if (seeded.current) {
-        // 재조회는 운영자가 고른 것을 지우지 않는다 — 사라졌거나 이미 가려진 것만 뺀다.
-        setPicked((prev) => new Set([...prev].filter((id) => blindable.has(id))))
-      } else {
+        // 재조회는 운영자가 고른 것을 지우지 않는다. 빼는 것은 <b>없어진 것이 확실한 것</b>뿐이다 —
+        // 이미 가려졌거나(가릴 수 없음), 잘리지 않은 목록에서 사라진 것. 잘린 목록에서 안 보이는
+        // 것은 "없어졌다"가 아니라 "판정할 수 없다"라 그대로 둔다(창 밖 선택은 아래 안내로 밝힌다).
+        setPicked((prev) => new Set([...prev].filter(
+            (id) => blindable.has(id) || (truncated && !onPage.has(id)))))
+      } else if (page.rows.length > 0) {
         // 처음 읽었을 때만 신고로 올라온 줄을 미리 고른다(실패 후 재시도로 처음 성공해도 여기).
+        // 빈 목록으로는 씨를 뿌리지 않는다 — 일시적으로 빈 응답이 오면 그걸로 미리 체크가
+        // 영영 꺼져, 다음 조회에 줄이 와도 아무것도 안 골라진 채 열린다.
         seeded.current = true
         setPicked(new Set(blindable.has(report.msgId) ? [report.msgId] : []))
       }
+      return 'ok'
     } catch (e) {
-      if (!alive.current || mine !== seq.current) return
+      if (!alive.current || mine !== seq.current) return 'stale'
       setLoadError(e instanceof Error ? e.message : String(e))
+      return 'failed'
     } finally {
       if (alive.current && mine === seq.current) setLoading(false)
     }
@@ -224,6 +255,9 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
 
   const working = progress !== null
   const blocked = busy || working
+  /** 고른 것 중 지금 목록 창에 없는 수 — 상한에 잘렸을 때만 0이 아니다(load의 truncated 주석). */
+  const offscreenPicks = [...picked].filter(
+      (id) => !rows.some((r) => r.msgId === id)).length
 
   // 쓰기가 도는 동안 부모의 조치 버튼도 잠근다. 언마운트에도 반드시 풀어야 부모가 갇히지 않는다.
   // 축은 progress가 아니라 <b>불리언</b>이다 — progress는 진행 눈금마다 바뀌어, 그대로 축에 두면
@@ -253,33 +287,44 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
           () => { if (alive.current) setProgress((p) => (p ? { ...p, done: p.done + 1 } : p)) })
       const left = [...failed, ...skipped]
       const succeeded = targets.length - left.length
-      // 문구는 <b>일어난 일</b>만 말한다. "다시 골라 두었다" 같은 약속을 적으면, 그 사이 사라진
-      // 줄이 병합에서 빠졌을 때 화면이 거짓말을 한다. 지금 무엇이 골라져 있는지는 버튼 라벨
-      // (`선택 N건 가림`)이 스스로 말하므로, 두 문구가 어긋날 일이 없다.
-      // 취소 문구에 "N건 처리"라고만 적으면 나머지가 <b>안 됐다</b>는 뜻으로 읽힌다. 끊긴 요청이
-      // 서버에 닿았는지는 여기서 알 수 없고 목록만이 안다 — 그래서 확정된 수만 말하고 나머지는
-      // 목록을 보라고 한다. 아는 것보다 많이 말하지 않는다.
-      const notice = controller.signal.aborted
-          ? `일괄 가림을 취소했습니다 — ${succeeded}건 완료, 나머지는 목록에서 확인하세요`
-          : left.length > 0
-            ? `${targets.length}건 중 ${left.length}건 실패했습니다`
-            : undefined
+      const cancelled = controller.signal.aborted
+      let refreshed: 'ok' | 'failed' | 'stale' = 'stale'
 
       if (alive.current) {
-        // 보내는 단계는 끝났다 — 여기서부터 [취소]는 할 일이 없다(아래 Progress.sending 주석).
+        // 보내는 단계는 끝났다 — 여기서부터 [취소]는 할 일이 없다(Progress.sending 주석).
         setProgress((p) => (p ? { ...p, sending: false } : p))
-        if (notice) setActionError(notice)
         // 남은 건을 <b>다시 고른 채로</b> 둔다. 건수만 알려주면 운영자는 40건 중 어느 3건이
-        // 남았는지 알 길이 없어 처음부터 다시 훑어야 한다. 아래 재조회는 가릴 수 있는 줄의
-        // 선택을 유지하므로(load의 병합) 이 선택이 살아남고, 그새 사라진 줄만 빠진다.
+        // 남았는지 알 길이 없어 처음부터 다시 훑어야 한다. 재조회는 가릴 수 있는 줄의 선택을
+        // 유지하므로(load의 병합) 이 선택이 살아남는다.
         if (left.length > 0) setPicked(new Set(left))
         // 성공분을 화면에 반영하려면 다시 읽어야 한다(낙관적으로 고쳐 쓰면 실패분과 어긋난다).
-        // 취소한 경우에도 반드시 읽는다 — 끊긴 요청이 서버에 닿았는지는 여기서만 알 수 있다.
-        await load()
-        // 잠금은 재조회가 커밋된 <b>뒤에</b> 푼다. 먼저 풀면 목록이 아직 옛것인 채 버튼이 열려,
-        // 한 번 더 누르면 이미 가린 건에 또 요청이 나가고 감사에 중복 BLIND 행이 쌓인다.
+        // 취소한 경우에도 반드시 읽는다 — 끊긴 요청이 서버에 닿았는지는 목록만이 안다.
+        refreshed = await load()
+        if (refreshed !== 'ok') {
+          // <b>확인하지 못한 목록에 대고 버튼을 다시 무장하지 않는다.</b> 재조회가 실패하면
+          // 화면의 줄들은 조치 <b>이전</b> 상태다 — 그 위에서 [가림]을 한 번 더 누르면 이미
+          // 서버에 닿은 건에 또 요청이 나가고, BE는 재가림을 멱등 200으로 받으므로 감사에만
+          // 중복 BLIND 행이 쌓인다(3인이 admin을 공유해 되돌림 판단의 근거가 흐려진다).
+          setPicked(new Set())
+        }
+        // 잠금은 재조회가 <b>끝난</b> 뒤에 푼다. 먼저 풀면 목록이 아직 옛것인 채 버튼이 열린다.
         setProgress(null)
       }
+
+      // 문구는 <b>아는 것만</b> 말한다. 재조회가 실패했으면 "목록에서 확인하세요"라고 할 수 없다 —
+      // 그 목록이 바로 갱신에 실패한 그 목록이라, 운영자를 낡은 화면으로 보내는 안내가 된다.
+      // 취소 문구도 마찬가지로 확정된 수만 센다: 끊긴 요청이 서버에 닿았는지는 화면이 모른다.
+      const stale = refreshed === 'failed' ? ' 목록을 새로 읽지 못해 화면이 최신이 아닙니다.' : ''
+      const notice = cancelled
+          ? `일괄 가림을 취소했습니다 — ${succeeded}건 완료.`
+            + (stale || ' 나머지는 목록에서 확인하세요.')
+          : left.length > 0
+            ? `${targets.length}건 중 ${left.length}건 실패했습니다.${stale}`
+            : stale
+              ? `${targets.length}건을 가렸습니다.${stale}`
+              : undefined
+      if (alive.current && notice) setActionError(notice)
+      // 컨트롤러 참조를 놓아 준다(GC). 배치가 끝나 아무도 쓰지 않는다 — 가드가 아니다.
       canceller.current = null
       // 큐 재조회는 <b>언마운트와 무관하게</b> 나간다 — 갱신 대상이 사라진 이 컴포넌트가
       // 아니라 부모 페이지이기 때문이다. 가드 안에 넣으면 가림 도중 모달을 닫았을 때
@@ -289,7 +334,9 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
     })()
   }
 
-  if (authorId === null) {
+  // 배치가 도는 동안에는 이른 반환을 하지 않는다 — 잠금은 progress가 걸고 있는데 여기서
+  // 화면을 비워 버리면 [취소]까지 함께 사라져, 잠긴 채 손잡이가 없는 상태가 된다(리뷰 major).
+  if (authorId === null && !working) {
     return <div className="hint">작성자 정보가 없어 글을 모아 볼 수 없습니다</div>
   }
 
@@ -320,6 +367,12 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
       {loading && rows.length === 0 && <div className="hint">불러오는 중…</div>}
       {!loading && rows.length === 0 && !loadError && (
         <div className="hint">이 회차에 남긴 글이 없습니다</div>
+      )}
+      {/* 잘린 창 밖에 있는 선택을 밝힌다. 도배가 계속되면 꼬리 창이 밀려 앞서 고른 줄이
+          목록에서 안 보이게 되는데, 그 선택은 <b>살아 있고 가림 대상에 그대로 들어간다</b> —
+          화면에 안 보이는 것이 골라져 있다는 사실을 안 적으면 운영자가 셈을 못 맞춘다. */}
+      {offscreenPicks > 0 && (
+        <div className="hint">고른 {picked.size}건 중 {offscreenPicks}건은 목록 창 밖에 있습니다 — 가림에는 함께 들어갑니다</div>
       )}
       {/* 신고된 줄이 목록에 없으면 그렇게 말한다. BE는 상한에 잘려도 그 줄을 되끼워 주지만
           (keep 파라미터), 그새 만료·삭제됐으면 되끼울 것이 없어 조용히 빠진다 — 운영자는
@@ -352,7 +405,10 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
       )}
       {/* 고를 것이 없으면 조치 줄도 내린다 — 빈 목록 아래 "선택 0건 가림"과 종결 안내만 남으면
           무엇을 하라는 화면인지 알 수 없다. */}
-      {rows.length > 0 && (
+      {/* 고를 것이 없으면 조치 줄을 내린다 — 다만 <b>배치가 도는 동안에는 반드시 남긴다</b>.
+          잠금은 progress가 걸고 있어서, 재조회가 빈 목록을 들고 오면(전부 TTL 만료 등) 이 줄이
+          사라지며 [취소]까지 없어져 모달이 잠긴 채 출구가 없어진다(리뷰 major). */}
+      {(rows.length > 0 || working) && (
         <>
           <div className="msg-picks-acts">
             <button
@@ -361,10 +417,12 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
                 onClick={blindPicked}>
               {/* 단계를 라벨로 밝힌다. 종전에는 누른 뒤 화면이 <b>누르기 전과 똑같아</b> 보여
                   (목록이 이미 차 있어 스피너도 안 떴다) 운영자가 한 번 더 누르는 일이 났다. */}
+              {/* 눈금은 <b>보낸 수</b>다(성공·실패 모두 센다) — "가림 12/40"이라 적으면 12건이
+                  가려진 뜻이 되어, 뒤이어 뜨는 "40건 중 3건 실패"와 어긋난다. */}
               {progress === null
                 ? `선택 ${picked.size}건 가림`
                 : progress.sending
-                  ? `가림 중… ${progress.done}/${progress.total}`
+                  ? `처리 중… ${progress.done}/${progress.total}`
                   : '목록 갱신 중…'}
             </button>
             {/* 보내는 동안 모달이 잠기므로(결과를 알릴 화면을 지키려고) <b>빠져나갈 손잡이</b>가

@@ -5,7 +5,7 @@ vi.mock('../env', () => ({
   env: { apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '' },
 }))
 
-import { blindMessage, fixSpoilerScore } from './admin'
+import { blindMessage, fixSpoilerScore, listAuthorMessages } from './admin'
 
 /**
  * 계약 테스트 — 콘솔이 만드는 요청이 BE가 받는 것과 <b>문자열 단위로</b> 같은지 고정한다.
@@ -83,5 +83,39 @@ describe('blindMessage — 취소 signal이 요청까지 닿는가', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('http://api.test/api/v1/admin/messages/42/M-1/blind')
     expect(init.method).toBe('POST')
+  })
+})
+
+/**
+ * `keep`은 BE의 `withKept()`와 짝을 이루는 계약이다 — 상한에 잘려 신고된 줄이 창 밖으로 밀려도
+ * 그 줄만은 되끼워 준다. 화면 쪽 테스트는 admin 모듈을 목으로 두므로 "래퍼를 keep과 함께
+ * 불렀다"까지만 보고, <b>그게 실제 쿼리스트링이 되는지</b>는 아무도 안 봤다(2026-08-12 독립
+ * 리뷰 — 파라미터를 통째로 지워도 192개가 전부 초록이었다).
+ */
+describe('listAuthorMessages — BE 계약(HP-298)과 같은 경로·파라미터인가', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValue(new Response('{"rows":[],"total":0}', { status: 200 }))
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('GET /api/v1/admin/messages/{ep}/by-author/{userId}?keep={msgId}', async () => {
+    await listAuthorMessages(42, 9, '01FIXTUREMSG0000000000000A')
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+        'http://api.test/api/v1/admin/messages/42/by-author/9'
+        + '?keep=01FIXTUREMSG0000000000000A')
+  })
+
+  it('keep이 없으면 파라미터 자체를 빼고 부른다(BE의 "미지정 = 없음"과 맞춤)', async () => {
+    await listAuthorMessages(42, 9)
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+        'http://api.test/api/v1/admin/messages/42/by-author/9')
   })
 })

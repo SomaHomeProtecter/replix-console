@@ -149,7 +149,7 @@ export default function ReportQueuePage() {
             setFilters(next)
           }} />
       {error && <div className="error-box queue-error" role="alert">{error}</div>}
-      {notice && <div className="error-box queue-error" role="status">{notice}</div>}
+      {notice && <div className="notice-box queue-error" role="status">{notice}</div>}
       <ReportTable items={items} selectedId={selectedId} onSelect={setSelectedId} />
       {nextCursor && (
         <button
