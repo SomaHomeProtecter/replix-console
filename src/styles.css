@@ -112,7 +112,15 @@ button { font: inherit; }
   background: none; border: none; cursor: pointer;
   color: var(--muted); font-size: 14px; padding: 4px 6px; border-radius: 6px;
 }
-.modal-close:hover { color: var(--ink); background: var(--line-2); }
+.modal-close:hover:not(:disabled) { color: var(--ink); background: var(--line-2); }
+/* 조치를 처리하는 동안은 닫을 수 없다(HP-298) — 눌리지 않는데 눌릴 것처럼 보이면 고장으로 읽힌다.
+   hover 반응까지 함께 꺼야 "누를 수 있다"는 신호가 남지 않는다. */
+.modal-close:disabled { opacity: .35; cursor: progress; }
+
+/* 진행 중 목록 — 잠긴 동안 흐리게 두어 지금 손댈 수 없다는 것이 한눈에 보인다 */
+.author-msgs[aria-busy='true'] .msg-picks { opacity: .55; }
+/* [선택 N건 가림] 옆의 [취소] — 도는 동안만 나타난다(HP-298) */
+.msg-picks-acts { display: flex; align-items: center; gap: 10px; }
 
 /* 필터 툴바 (cm-toolbar — pill 칩) */
 .filter-bar {

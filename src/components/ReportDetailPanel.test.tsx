@@ -1,10 +1,10 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import { ApiHttpError } from '../api/client'
-import { makeReportItem } from '../test/fixtures'
+import { makeAuthorMessage, makeReportItem } from '../test/fixtures'
 import ReportDetailPanel from './ReportDetailPanel'
 
 vi.mock('../api/admin')
@@ -17,18 +17,21 @@ const suspendUser = vi.mocked(admin.suspendUser)
 const fixSpoilerScore = vi.mocked(admin.fixSpoilerScore)
 
 const onActionDone = vi.fn()
+const onBusyChange = vi.fn()
 
 function renderPanel(report = makeReportItem()) {
   const view = render(
       <MemoryRouter>
-        <ReportDetailPanel report={report} onActionDone={onActionDone} />
+        <ReportDetailPanel
+          report={report} onActionDone={onActionDone} onBusyChange={onBusyChange} />
       </MemoryRouter>)
   return {
     ...view,
     /** 재조회가 같은 신고를 새 값으로 들고 온 상황 — 부모가 새 report 객체를 내려준다. */
     reload: (next: ReturnType<typeof makeReportItem>) => view.rerender(
         <MemoryRouter>
-          <ReportDetailPanel report={next} onActionDone={onActionDone} />
+          <ReportDetailPanel
+            report={next} onActionDone={onActionDone} onBusyChange={onBusyChange} />
         </MemoryRouter>),
   }
 }
@@ -442,4 +445,105 @@ describe('2026-08-11 리뷰 반영 — 겹 경계·중복 조치·초안 보존'
     expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
   })
 
+})
+
+describe('작성자 글 일괄 가림과의 잠금(HP-298)', () => {
+  /** 신고된 줄이 미리 체크된 상태로 열리게 하는 목록. */
+  function withAuthorRows() {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: '01FIXTUREMSG0000000000000A', message: '신고된 줄' })],
+      total: 1,
+    })
+  }
+
+  /**
+   * 일괄 가림이 도는 동안 [기각]이 눌리면 한 신고에 <b>"타당해서 가리는 중"과 "부당해서 기각"이
+   * 동시에</b> 기록된다. 게다가 기각은 신고를 큐에서 빼 이 패널을 언마운트하므로 가림의 성패를
+   * 알릴 화면까지 사라져, 40건 중 3건이 실패해도 운영자는 전부 가려진 줄 안다.
+   * HP-270의 신고자 기각률은 되돌릴 수 없어 잘못 쌓인 기각 한 건이 지표를 영구히 오염시킨다.
+   */
+  it('일괄 가림이 도는 동안 조치 버튼을 전부 막는다', async () => {
+    withAuthorRows()
+    vi.mocked(admin.blindMessage).mockImplementation(() => new Promise(() => {}))
+    renderPanel()
+    const bulk = await screen.findByRole('button', { name: /선택 1건 가림/ })
+
+    await userEvent.click(bulk)
+
+    expect(screen.getByRole('button', { name: '기각' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '가림' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '조치 없이 종결' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /계정 정지/ })).toBeDisabled()
+    expect(resolveReport).not.toHaveBeenCalled()
+  })
+
+  /** 잠금이 안 풀리면 패널이 죽은 것과 같다 — 끝나면 반드시 되돌아와야 한다. */
+  it('일괄 가림이 끝나면 조치 버튼이 다시 열린다', async () => {
+    withAuthorRows()
+    renderPanel()
+    const bulk = await screen.findByRole('button', { name: /선택 1건 가림/ })
+
+    await userEvent.click(bulk)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '기각' })).toBeEnabled())
+  })
+
+  /**
+   * 쓰기 도중 패널이 사라지면 <b>반드시 잠금을 놓아야</b> 한다. 모달 닫기는 막혀 있지만
+   * 신고가 큐에서 빠지거나(필터 변경 등) 목록이 갈리면 패널은 언마운트된다. 그때 페이지의
+   * "쓰기 중"이 참으로 남으면 <b>다음에 연 모달이 영영 안 닫힌다</b> — 잠금의 주인이 이미
+   * 사라졌으니 풀어 줄 사람도 없다.
+   */
+  it('쓰기 도중 사라져도 페이지의 잠금을 놓는다 — 다음 모달이 갇히지 않게', async () => {
+    onBusyChange.mockClear()
+    resolveReport.mockImplementation(() => new Promise(() => {}))
+    const { unmount } = renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+    expect(onBusyChange).toHaveBeenLastCalledWith(true)
+
+    unmount()
+
+    expect(onBusyChange).toHaveBeenLastCalledWith(false)
+  })
+
+  /** 패널이 쓰기 중이라는 사실은 페이지도 알아야 한다 — 모달이 도중에 닫히지 않게. */
+  it('쓰기 중임을 페이지에 알리고 끝나면 푼다', async () => {
+    onBusyChange.mockClear()
+    const gate: { resolve: () => void } = { resolve: () => {} }
+    resolveReport.mockImplementation(() => new Promise((r) => {
+      gate.resolve = () => r({ id: 101, status: 'REJECTED' } as never)
+    }))
+    renderPanel()
+
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+    expect(onBusyChange).toHaveBeenLastCalledWith(true)
+
+    await act(async () => { gate.resolve() })
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false))
+  })
+})
+
+describe('신고 전환 시 자식을 새로 마운트한다(key={report.id})', () => {
+  /**
+   * 자식(작성자 글 목록)은 신고마다 <b>새로 마운트</b>돼야 한다. 안 그러면 이전 신고에서 남은
+   * 선택·실패 배너·진행 상태가 다음 신고로 따라가, 아무 조치도 안 한 신고에 "1건 실패"가
+   * 떠 있거나 운영자가 본 적 없는 글이 골라진 채로 남는다.
+   *
+   * <p>이 단언이 <b>부모 쪽에</b> 있어야 하는 이유: 자식 테스트의 하네스는 스스로 key를 주므로
+   * 검증 대상을 테스트가 직접 공급해 버린다 — 부모가 실제로 key를 거는지는 증명하지 못한다.
+   */
+  it('이전 신고의 실패 배너가 다음 신고로 따라가지 않는다', async () => {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: '01FIXTUREMSG0000000000000A', message: '신고된 줄' })],
+      total: 1,
+    })
+    vi.mocked(admin.blindMessage).mockRejectedValue(new Error('일시 오류'))
+    const { reload } = renderPanel(makeReportItem({ id: 101 }))
+    await userEvent.click(await screen.findByRole('button', { name: /선택 1건 가림/ }))
+    expect(screen.getByText(/1건 실패/)).toBeInTheDocument()
+
+    reload(makeReportItem({ id: 102 }))   // 같은 메시지의 다른 신고(묶음 ×N)
+
+    expect(screen.queryByText(/1건 실패/)).not.toBeInTheDocument()
+  })
 })

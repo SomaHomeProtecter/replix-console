@@ -33,8 +33,15 @@ export function reopenReport(reportId: number): Promise<ResolveResult> {
   return apiFetch(`/api/v1/admin/reports/${reportId}/reopen`, { method: 'POST' })
 }
 
-export function blindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {
-  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST' })
+/**
+ * @param signal 일괄 가림이 <b>취소</b>를 걸 수 있게 받는다(HP-298). 취소해도 이미 서버에 닿은
+ *   건은 처리될 수 있으므로, 취소 뒤에는 목록을 다시 읽어 실제 상태로 맞춘다 — 취소는 "안 나간
+ *   것으로 친다"가 아니라 "더 보내지 않고 기다리기를 멈춘다"이다.
+ */
+export function blindMessage(
+  episodeId: number, msgId: string, signal?: AbortSignal,
+): Promise<{ blinded: boolean }> {
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST', signal })
 }
 
 /**

@@ -30,13 +30,42 @@ function liveStatusLabel(currentStatus: string | null): string {
  * 것은 재오픈 버튼이 한다. 종전에는 가림 해제가 재오픈까지 자동으로 해 "판정"과 "제재 상태"가
  * 엉켰다 — 자세한 근거는 {@code unblind} 주석.
  */
-export default function ReportDetailPanel({ report, onActionDone }: {
+export default function ReportDetailPanel({ report, onActionDone, onBusyChange }: {
   report: ReportItem
-  /** 조치 후 부모가 목록을 다시 읽는다. */
-  onActionDone: () => void
+  /**
+   * 조치 후 부모가 목록을 다시 읽는다. 인자로 <b>결과 문구</b>가 올 수 있다(HP-298 일괄 가림) —
+   * 그 문구는 이 패널이 사라진 뒤에도 남아야 해서 페이지가 들고 있는다.
+   */
+  onActionDone: (notice?: string) => void
+  /**
+   * 쓰기가 도는 동안 페이지가 모달을 닫지 못하게 한다(HP-298).
+   *
+   * <p>모달은 백드롭 클릭·Esc·✕로 닫히는데, 쓰기 도중 닫히면 이 패널이 언마운트돼 결과를
+   * <b>알릴 곳이 사라진다</b> — 일부 실패한 일괄 가림이 조용히 넘어가면 운영자는 전부 가려진 줄
+   * 안다. 백드롭은 특히 잘못 눌리기 쉽다.
+   *
+   * <p><b>얼마나 잠기나</b>: 요청 하나는 {@code API_TIMEOUT_MS}에 끊긴다. 다만 일괄 가림은
+   * 여러 물결로 나뉘어 나가므로 <b>전체는 그 상한의 배수</b>가 될 수 있다(40건이면 7물결).
+   * 그래서 자동 상한만 믿지 않고 일괄 가림에 <b>취소</b> 버튼을 둔다 — 갇히는 경우를 없애는 것은
+   * 그쪽이다. 부모는 렌더마다 바뀌지 않는 함수를 줘야 한다(setState 함수 등).
+   */
+  onBusyChange: (busy: boolean) => void
 }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  /**
+   * 자식(작성자 글 일괄 가림)이 쓰기 중 — 그동안 여기 조치 버튼도 막는다.
+   *
+   * <p>안 막으면 일괄 가림이 도는 중에 [기각]이 눌려, 한 신고에 "타당해서 가리는 중"과
+   * "부당해서 기각"이 동시에 기록된다. 게다가 기각은 신고를 큐에서 빼 이 패널을 언마운트하므로
+   * 가림의 성패를 알릴 화면도 함께 사라진다. HP-270의 신고자 기각률은 <b>되돌릴 수 없어</b>
+   * 잘못 쌓인 기각 한 건이 그 신고자의 지표를 영구히 오염시킨다.
+   *
+   * <p>막는 범위는 <b>규칙 하나</b>로 둔다 — 쓰기가 도는 동안에는 다른 쓰기를 시작하지 않는다.
+   * 어떤 조합만 예외로 두면 그 예외마다 "이건 왜 되지?"를 다시 따져야 하고, 그 되묻기가 이
+   * 화면을 세 라운드 흔든 원인이었다.
+   */
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -73,6 +102,17 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     // 점수만 보면 미채점 메시지가 사라지는 경우 null → null이라 아무 일도 안 일어나, 이미 없는
     // 메시지에 대한 선택이 화면에 남는다(4차 리뷰).
   }, [report.id, report.spoilerScore, report.currentStatus])
+
+  /**
+   * 쓰기를 새로 시작할 수 없는 상태 — 내 조치가 돌거나({@code busy}) 자식의 일괄 가림이
+   * 돌거나({@code bulkBusy}). <b>규칙 하나로 둔다: 쓰기가 도는 동안에는 다른 쓰기를 시작하지
+   * 않는다.</b> 어떤 조합만 예외로 두면 그 예외마다 "이건 왜 되지?"를 다시 따져야 한다.
+   */
+  const locked = busy || bulkBusy
+
+  // 부모(페이지)에게도 같은 사실을 알린다 — 모달이 쓰기 도중 닫히지 않게.
+  useEffect(() => { onBusyChange(locked) }, [locked, onBusyChange])
+  useEffect(() => () => onBusyChange(false), [onBusyChange])
 
   const noteOrNull = () => {
     const trimmed = note.trim()
@@ -228,7 +268,7 @@ export default function ReportDetailPanel({ report, onActionDone }: {
                   type="radio" name={`spoiler-score-${report.id}`} value={n}
                   checked={score === n}
                   // 사라진 메시지는 BE가 404로 되돌려 보낸다 — 눌러 보고 실패하지 않게 미리 막는다
-                  disabled={busy || report.currentStatus === null}
+                  disabled={locked || report.currentStatus === null}
                   onChange={() => setPicked(n)} />
               <span>{n}</span>
             </label>
@@ -237,9 +277,12 @@ export default function ReportDetailPanel({ report, onActionDone }: {
         <button
             type="button" className="btn btn-score"
             // 기준은 하나다 — <b>지금 서버가 아는 값과 다르면</b> 보낼 수 있다. 같은 값이면
-            // 감사에 `score=8→8` 한 줄만 쌓여 기록을 흐린다. 조치 중(busy)은 재조회가 끝날
-            // 때까지 이어지므로, 왕복 직후 같은 값으로 한 번 더 눌리는 창도 여기서 닫힌다.
-            disabled={busy || report.currentStatus === null || picked === null
+            // 감사에 `score=8→8` 한 줄만 쌓여 기록을 흐린다.
+            //
+            // ⚠️ 왕복 직후 중복을 막는 것은 locked가 아니다 — locked는 쓰기가 끝나는 순간
+            // 풀리고(run의 finally) 재조회까지 이어지지 않는다. 그 창을 닫는 것은 아래
+            // `picked === report.spoilerScore`와 보낸 뒤의 setPicked(null)이다(fixScore 주석).
+            disabled={locked || report.currentStatus === null || picked === null
               || picked === report.spoilerScore}
             onClick={fixScore}>
           점수 정정
@@ -251,25 +294,27 @@ export default function ReportDetailPanel({ report, onActionDone }: {
           위에 온다(점수 줄과 같은 규칙). */}
       {/* key로 신고마다 새로 마운트한다 — 같은 메시지에 신고가 둘일 때 목록이 빈 채 남던
           문제를 구조적으로 없앤다(AuthorMessages의 report prop 주석 참조). */}
-      <AuthorMessages key={report.id} report={report} busy={busy} onActionDone={onActionDone} />
+      <AuthorMessages
+          key={report.id} report={report} busy={busy}
+          onActionDone={onActionDone} onBusyChange={setBulkBusy} />
 
       <h5 className="side-h">조치</h5>
       {error && <div className="error-box" role="alert">{error}</div>}
       <div className="acts">
-        <button type="button" className="btn btn-blind" disabled={busy} onClick={blind}>가림</button>
+        <button type="button" className="btn btn-blind" disabled={locked} onClick={blind}>가림</button>
         <button
             type="button" className="btn btn-susp"
             // WITHDRAWN은 BE가 409로 거부한다 — 다이얼로그까지 갔다 실패하지 않게 미리 막는다(리뷰 m6)
-            disabled={busy || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
+            disabled={locked || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
             title={report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
             onClick={() => setDialogOpen(true)}>
           계정 정지…
         </button>
         {/* "조치 없음"은 별개 상태 이름이라 기각 버튼에 괄호로 붙어 있으면 둘이 뒤섞여 읽힌다 */}
-        <button type="button" className="btn" disabled={busy} onClick={resolveWithoutAction}>
+        <button type="button" className="btn" disabled={locked} onClick={resolveWithoutAction}>
           조치 없이 종결
         </button>
-        <button type="button" className="btn" disabled={busy} onClick={reject}>기각</button>
+        <button type="button" className="btn" disabled={locked} onClick={reject}>기각</button>
       </div>
 
       <label className="note-in">
@@ -288,12 +333,12 @@ export default function ReportDetailPanel({ report, onActionDone }: {
             && report.openReportCount !== report.sameMessageReportCount
             && ` (열림 ${report.openReportCount}건)`}</span>
         {report.currentStatus === 'blinded' && (
-          <> · <button type="button" className="btn-link" disabled={busy} onClick={unblind}>가림 해제</button></>
+          <> · <button type="button" className="btn-link" disabled={locked} onClick={unblind}>가림 해제</button></>
         )}
         {/* 재오픈은 종결된 신고에만, 그리고 명시적으로만(HP-268) — 가림 해제가 자동으로 하던 일을
             운영자 판단으로 옮겼다. 되돌리는 행위와 다시 심사하는 판단은 별개다. */}
         {report.status !== 'OPEN' && (
-          <> · <button type="button" className="btn-link" disabled={busy} onClick={reopen}>신고 재오픈</button></>
+          <> · <button type="button" className="btn-link" disabled={locked} onClick={reopen}>신고 재오픈</button></>
         )}
         {/* 아래 처리 정보는 조치 이력 라벨과 같은 어휘를 쓴다(HP-268) —
             같은 사실을 두 화면이 다르게 부르지 않는다 */}
@@ -309,7 +354,7 @@ export default function ReportDetailPanel({ report, onActionDone }: {
       {dialogOpen && report.targetUser && (
         <SuspendDialog
             targetName={report.targetUser.displayName ?? `#${report.targetUser.id}`}
-            busy={busy}
+            busy={locked}
             onConfirm={suspend}
             onCancel={() => setDialogOpen(false)} />
       )}

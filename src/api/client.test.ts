@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../auth', () => ({ getToken: vi.fn(async () => 'test-token') }))
+
+import { getToken } from '../auth'
 vi.mock('../env', () => ({
   env: { apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '' },
 }))
 
-import { ApiHttpError, apiFetch, qs } from './client'
+import { API_TIMEOUT_MS, ApiHttpError, apiFetch, qs } from './client'
 
 describe('apiFetch', () => {
   const fetchMock = vi.fn()
@@ -68,5 +70,124 @@ describe('qs', () => {
 
   it('전부 비면 빈 문자열', () => {
     expect(qs({ a: null, b: undefined, c: '' })).toBe('')
+  })
+})
+
+describe('apiFetch 타임아웃(HP-298)', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  /**
+   * 실제 fetch처럼 — signal이 끊기면 AbortError로 거절하고, 그 전에는 영영 매달린다.
+   * <b>이미</b> 끊긴 signal로 부르면 곧바로 거절하는 것까지 흉내 낸다(실물이 그렇다).
+   */
+  function hangingFetch() {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => new Promise((_ok, fail) => {
+      const abort = () => fail(new DOMException('aborted', 'AbortError'))
+      if (init.signal?.aborted) abort()
+      else init.signal?.addEventListener('abort', abort, { once: true })
+    }))
+  }
+
+  it('응답이 없으면 정해진 시간 뒤 끊고 TIMEOUT으로 알린다', async () => {
+    hangingFetch()
+
+    const settled = apiFetch('/x').catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(API_TIMEOUT_MS)
+    const error = await settled
+
+    expect(error).toBeInstanceOf(ApiHttpError)
+    expect((error as ApiHttpError).code).toBe('TIMEOUT')
+    expect((error as ApiHttpError).status).toBe(0)
+  })
+
+  it('시간 전에는 끊지 않는다 — 느린 요청을 성급히 죽이지 않는다', async () => {
+    hangingFetch()
+
+    const settled = apiFetch('/x').then(() => 'ok', () => 'failed')
+    await vi.advanceTimersByTimeAsync(API_TIMEOUT_MS - 1)
+
+    expect(await Promise.race([settled, Promise.resolve('pending')])).toBe('pending')
+  })
+
+  it('끝난 요청의 타이머는 즉시 지운다 — 남겨두면 나중에 끊는다', async () => {
+    fetchMock.mockResolvedValue(new Response('{"ok":true}', { status: 200 }))
+
+    expect(await apiFetch('/x')).toEqual({ ok: true })
+
+    // 시간을 흘려보내고 세면 안 된다 — 안 지웠어도 그때 실행돼 0이 되므로 늘 통과한다.
+    // 끝난 <b>직후</b>에 0이어야 "지웠다"가 증명된다.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('실패한 요청의 타이머도 지운다', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 403 }))
+
+    await apiFetch('/x').catch(() => undefined)
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('호출자가 중간에 끊은 것은 타임아웃으로 둔갑시키지 않는다', async () => {
+    hangingFetch()
+    const caller = new AbortController()
+
+    const settled = apiFetch('/x', { signal: caller.signal }).catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(1) // 요청이 실제로 나가고 나서 끊는다
+    caller.abort()
+    const error = await settled
+
+    expect((error as ApiHttpError).code).not.toBe('TIMEOUT')
+    expect((error as DOMException).name).toBe('AbortError')
+  })
+
+  it('이미 끊긴 signal로 부르면 요청을 보내지 않은 것처럼 곧바로 끝난다', async () => {
+    hangingFetch()
+
+    const error = await apiFetch('/x', { signal: AbortSignal.abort() })
+        .catch((e: unknown) => e)
+
+    expect((error as DOMException).name).toBe('AbortError')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('apiFetch — 토큰 갱신도 상한 안에 둔다(HP-298)', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.mocked(getToken).mockResolvedValue('test-token')
+  })
+
+  /**
+   * 토큰 갱신은 fetch보다 <b>앞</b>이라 signal이 닿지 않는다 — 여기서 새면 시간 상한을 걸어도
+   * 화면 잠금이 무기한 남는다. keycloak-js는 취소 수단이 없어 밑의 작업은 계속 돌지만,
+   * 기다리는 쪽은 상한 안에 반드시 풀려야 한다.
+   */
+  it('토큰 갱신이 멎어도 상한 안에 TIMEOUT으로 끝난다', async () => {
+    vi.mocked(getToken).mockImplementation(() => new Promise(() => {}))
+
+    const settled = apiFetch('/x').catch((e: unknown) => e)
+    await vi.advanceTimersByTimeAsync(API_TIMEOUT_MS)
+    const error = await settled
+
+    expect((error as ApiHttpError).code).toBe('TIMEOUT')
+    expect(fetchMock).not.toHaveBeenCalled()   // 토큰이 없으니 요청도 안 나갔다
   })
 })

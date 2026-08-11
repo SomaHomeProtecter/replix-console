@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
@@ -11,6 +11,8 @@ const listAuthorMessages = vi.mocked(admin.listAuthorMessages)
 const blindMessage = vi.mocked(admin.blindMessage)
 
 const onActionDone = vi.fn()
+/** 부모가 줘야 하는 "렌더마다 바뀌지 않는" 함수 — 모듈 수준에 두어 그 계약대로 쓴다. */
+const onBusyChange = vi.fn()
 
 /** 신고된 줄 + 같은 사람이 그 회차에 남긴 다른 줄들. */
 function threeRows() {
@@ -26,14 +28,40 @@ function threeRows() {
 }
 
 /** 부모는 key={report.id}로 신고마다 새로 마운트한다 — 여기서도 같은 방식으로 그린다. */
-function renderPanel(report = makeReportItem()) {
+function renderPanel(report = makeReportItem(), busy = false) {
   const view = render(
-      <AuthorMessages key={report.id} report={report} busy={false} onActionDone={onActionDone} />)
+      <AuthorMessages
+          key={report.id} report={report} busy={busy}
+          onActionDone={onActionDone} onBusyChange={onBusyChange} />)
   return {
     ...view,
     rerenderWith: (next: ReturnType<typeof makeReportItem>) => view.rerender(
-        <AuthorMessages key={next.id} report={next} busy={false} onActionDone={onActionDone} />),
+        <AuthorMessages
+            key={next.id} report={next} busy={false}
+            onActionDone={onActionDone} onBusyChange={onBusyChange} />),
   }
+}
+
+/** 테스트가 결정 시점을 잡을 수 있게 밖에서 푸는 약속. */
+function deferred<T>() {
+  let resolve!: (v: T) => void
+  let reject!: (e: unknown) => void
+  const promise = new Promise<T>((ok, fail) => { resolve = ok; reject = fail })
+  return { promise, resolve, reject }
+}
+
+/**
+ * 실제 apiFetch처럼 — 응답이 없다가 signal이 끊기면 거절한다.
+ * 이걸 안 지키면(그냥 영영 매달리는 promise) 취소해도 배치가 끝나지 않아, 테스트가
+ * <b>실제로는 없는</b> 교착을 재현하게 된다.
+ */
+function hangingBlind() {
+  blindMessage.mockImplementation((_ep: number, _msgId: string, signal?: AbortSignal) =>
+    new Promise((_ok, fail) => {
+      const abort = () => fail(new DOMException('aborted', 'AbortError'))
+      if (signal?.aborted) abort()
+      else signal?.addEventListener('abort', abort, { once: true })
+    }))
 }
 
 const checkboxes = () => screen.getAllByRole('checkbox')
@@ -91,8 +119,8 @@ describe('작성자 글 일괄 보기·가림(HP-298)', () => {
     await userEvent.click(blindButton())
 
     expect(blindMessage).toHaveBeenCalledTimes(2)
-    expect(blindMessage).toHaveBeenCalledWith(42, 'M-1')
-    expect(blindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A')
+    expect(blindMessage).toHaveBeenCalledWith(42, 'M-1', expect.any(AbortSignal))
+    expect(blindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A', expect.any(AbortSignal))
     expect(onActionDone).toHaveBeenCalled()
   })
 
@@ -113,8 +141,29 @@ describe('작성자 글 일괄 보기·가림(HP-298)', () => {
     await userEvent.click(blindButton())
 
     expect(blindMessage).toHaveBeenCalledTimes(2)      // 실패해도 나머지를 멈추지 않는다
-    expect(screen.getByRole('alert')).toHaveTextContent('1건 실패')
+    expect(screen.getByRole('alert')).toHaveTextContent('2건 중 1건')
     expect(onActionDone).toHaveBeenCalled()             // 성공분 반영을 위해 재조회
+  })
+
+  /**
+   * 실패한 건을 <b>다시 골라 둔다</b>. 건수만 알려주면 운영자는 40건 중 어느 3건이 남았는지
+   * 알 길이 없어 목록을 처음부터 다시 훑어야 한다 — 그 사이 이미 가려진 것을 또 고르면 감사에
+   * 뜻 없는 BLIND 행이 쌓인다. 실패분만 체크된 채로 두면 [가림]을 한 번 더 누르는 것이 곧 재시도다.
+   */
+  it('실패한 건만 다시 골라 둔다 — 어느 건이 남았는지 알 수 있게', async () => {
+    blindMessage.mockImplementation(async (_ep: number, msgId: string) => {
+      if (msgId === 'M-1') throw new Error('일시 오류')
+      return { blinded: true }
+    })
+    renderPanel()
+    await screen.findByText('도배 첫째')
+    await userEvent.click(screen.getByRole('checkbox', { name: /도배 첫째/ }))
+
+    await userEvent.click(blindButton())
+
+    expect(screen.getByRole('checkbox', { name: /도배 첫째/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /신고된 줄/ })).not.toBeChecked()
+    expect(blindButton()).toHaveTextContent('선택 1건 가림')
   })
 
   /**
@@ -201,20 +250,76 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
   })
 
   /**
-   * 보내고 나면 <b>선택을 비워</b> 같은 건이 두 번 나가지 않는다. 잠금을 재조회까지 끌지
-   * 않는 이유: 그러면 조회가 멎었을 때 화면이 무기한 잠긴다(2라운드 지적 — HP-294에서 이미
-   * 같은 실패를 겪고 되돌렸던 구조다). 점수 정정 버튼과 같은 해법이다.
+   * 보내는 즉시 <b>선택을 비운다</b> — 같은 건이 두 번 나가는 창을 그 자리에서 닫는다.
    */
-  it('보내고 나면 선택이 풀려 같은 건이 두 번 나가지 않는다', async () => {
+  it('보내는 즉시 선택이 비어 같은 건이 두 번 나가지 않는다', async () => {
     renderPanel()
     await screen.findByText('신고된 줄')
-    // 재조회는 영영 안 온다 — 그래도 버튼은 잠겨 있어야 한다
-    listAuthorMessages.mockImplementationOnce(() => new Promise(() => {}))
+
+    await userEvent.click(blindButton())
+
+    expect(blindMessage).toHaveBeenCalledTimes(1)
+    expect(blindButton()).toHaveTextContent('선택 0건 가림')
+    expect(screen.getByRole('checkbox', { name: /신고된 줄/ })).not.toBeChecked()
+  })
+
+  /**
+   * <b>잠금은 재조회가 커밋될 때까지 유지한다.</b> 먼저 풀면 목록이 아직 옛것인 채 버튼이 열려,
+   * 한 번 더 누르면 이미 가린 건에 또 요청이 나가고 감사에 중복 BLIND 행이 쌓인다.
+   *
+   * <p>한때 이 잠금을 뺐던 이유는 "조회가 멎으면 화면이 무기한 잠긴다"였는데, 그건 잠금이 아니라
+   * <b>끊는 장치가 없던 것</b>이 원인이었다. 지금은 요청 하나가 apiFetch의 API_TIMEOUT_MS에
+   * 끊기고(그 보장은 client.test.ts가 지킨다), 배치 전체가 길어지는 경우는 [취소]가 받는다.
+   * 여기서는 admin API가 mock이라 시간 상한이 돌지 않으므로 이 테스트로는 그 부분을 증명하지 않는다.
+   */
+  it('재조회가 커밋될 때까지 잠근 채로 둔다 — 중복 조치 방지', async () => {
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    listAuthorMessages.mockImplementationOnce(() => new Promise(() => {}))   // 재조회가 안 온다
 
     await userEvent.click(blindButton())
 
     expect(blindButton()).toBeDisabled()
-    expect(blindButton()).toHaveTextContent('선택 0건 가림')
+    expect(screen.getAllByRole('checkbox').every((c) => (c as HTMLInputElement).disabled)).toBe(true)
+  })
+
+  /**
+   * 누른 뒤 화면이 <b>누르기 전과 똑같아</b> 보이면(목록이 이미 차 있어 스피너도 안 뜬다)
+   * 운영자는 안 눌린 줄 알고 한 번 더 누른다 — 그 순간 감사에 중복 행이 쌓인다.
+   */
+  it('진행 중에는 몇 건까지 처리했는지 보여준다', async () => {
+    const gate = deferred<{ blinded: boolean }>()
+    blindMessage
+        .mockResolvedValueOnce({ blinded: true })
+        .mockImplementationOnce(() => gate.promise)
+    renderPanel()
+    await screen.findByText('도배 첫째')
+    await userEvent.click(screen.getByRole('checkbox', { name: /도배 첫째/ }))
+
+    await userEvent.click(blindButton())
+
+    expect(blindButton()).toHaveTextContent('가림 중… 1/2')
+    await act(async () => { gate.resolve({ blinded: true }) })
+  })
+
+  /**
+   * 브라우저는 호스트당 커넥션이 6개 안팎이라 200건을 한꺼번에 쏘면 뒤쪽은 대기줄에서 시간을
+   * 다 쓰는데, 타임아웃은 <b>보낸 시점부터</b> 재므로 서버가 멀쩡해도 뒤쪽이 무더기로 끊긴다.
+   */
+  it('한 번에 흘려보내는 요청 수를 제한한다', async () => {
+    const many = Array.from({ length: 10 }, (_, i) => makeAuthorMessage({
+      msgId: `S-${i}`, message: `도배 ${i}`, playbackTime: i,
+    }))
+    listAuthorMessages.mockResolvedValue({ rows: many, total: 10 })
+    blindMessage.mockImplementation(() => new Promise(() => {}))   // 하나도 안 끝난다
+    renderPanel()
+    await screen.findByText('도배 0')
+    for (const box of checkboxes()) await userEvent.click(box)
+    expect(blindButton()).toHaveTextContent('선택 10건 가림')
+
+    await userEvent.click(blindButton())
+
+    expect(blindMessage).toHaveBeenCalledTimes(6)
   })
 
   /**
@@ -281,4 +386,266 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
     expect(within(row).getByText('클린봇')).toBeInTheDocument()
   })
 
+})
+
+describe('선택 보존·경합(2026-08-11 4라운드 재설계)', () => {
+  /**
+   * 클린봇이 막은 줄({@code blocked_*})도 <b>미리 체크</b>돼야 한다. 렌더는 고를 수 있게 고쳤는데
+   * 미리 체크만 {@code visible} 조건으로 남아, 클린봇에 걸린 줄이 신고되면 정작 <b>신고된 그
+   * 줄이 하나도 안 골라진</b> 채 열렸다(3라운드). 운영자가 [가림]을 눌러도 그 줄은 안 가려진다.
+   */
+  it('클린봇이 막은 줄이 신고된 것이면 그 줄을 미리 고른다', async () => {
+    listAuthorMessages.mockResolvedValue({
+      rows: [makeAuthorMessage({
+        msgId: '01FIXTUREMSG0000000000000A', message: '욕설 섞인 신고 줄',
+        status: 'blocked_profanity',
+      })],
+      total: 1,
+    })
+    renderPanel()
+    await screen.findByText('욕설 섞인 신고 줄')
+
+    expect(screen.getByRole('checkbox')).toBeChecked()
+    expect(blindButton()).toBeEnabled()
+  })
+
+  /**
+   * <b>재조회가 운영자의 선택을 지우지 않는다</b> — 이 규칙 하나가 리뷰 세 라운드가 왕복한
+   * 지뢰를 없앤다. 종전에는 재조회가 선택을 통째로 갈아 끼워, "언제 다시 읽느냐"를 정할 때마다
+   * 운영자 작업이 날아갈 위험을 함께 저울질해야 했다(그래서 재조회 축을 넣었다 뺐다 했다).
+   * 재조회가 무해하면 그 다툼 자체가 사라진다.
+   */
+  it('재조회가 운영자가 손으로 고른 것을 지우지 않는다', async () => {
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+    await screen.findByText('도배 첫째')
+    await userEvent.click(screen.getByRole('checkbox', { name: /도배 첫째/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /도배 셋째/ }))
+
+    // 부모가 신고된 메시지를 가렸다 — 실황이 바뀌어 이 목록을 다시 읽는다
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))
+    await act(async () => {})
+
+    expect(screen.getByRole('checkbox', { name: /도배 첫째/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /도배 셋째/ })).toBeChecked()
+  })
+
+  /**
+   * 선택을 보존하되 <b>가릴 수 없게 된 것은 뺀다</b>. 사라졌거나 이미 가려진 줄이 고른 채로
+   * 남으면 [가림]이 그 건에 요청을 보내 뜻 없는 감사 행이 쌓이거나 404가 난다.
+   */
+  it('재조회에서 이미 가려졌거나 사라진 줄의 선택은 뺀다', async () => {
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+    await screen.findByText('도배 첫째')
+    await userEvent.click(screen.getByRole('checkbox', { name: /도배 첫째/ }))
+    expect(blindButton()).toHaveTextContent('선택 2건 가림')
+
+    listAuthorMessages.mockResolvedValue({
+      rows: [
+        // 첫째는 그새 가려졌고, 신고된 줄은 아예 사라졌다(TTL·삭제)
+        makeAuthorMessage({ msgId: 'M-1', message: '도배 첫째', status: 'blinded' }),
+        makeAuthorMessage({ msgId: 'M-3', message: '도배 셋째' }),
+      ],
+      total: 2,
+    })
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))
+    await screen.findByText('도배 셋째')
+
+    expect(blindButton()).toBeDisabled()
+    expect(blindButton()).toHaveTextContent('선택 0건 가림')
+  })
+
+  /**
+   * 미리 체크는 <b>처음 한 번</b>뿐이다. 재조회 때마다 다시 씨를 뿌리면, 운영자가 일부러 푼
+   * 신고된 줄이 재조회마다 되살아나 결국 의도치 않게 가려진다.
+   */
+  it('재조회가 미리 체크를 다시 뿌리지 않는다 — 일부러 푼 것을 되살리지 않는다', async () => {
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+    await screen.findByText('신고된 줄')
+    await userEvent.click(screen.getByRole('checkbox', { name: /신고된 줄/ }))   // 일부러 푼다
+    expect(blindButton()).toHaveTextContent('선택 0건 가림')
+
+    rerenderWith(makeReportItem({ currentStatus: 'blocked_hate' }))
+    await act(async () => {})
+
+    expect(screen.getByRole('checkbox', { name: /신고된 줄/ })).not.toBeChecked()
+  })
+
+  /**
+   * <b>한 신고 안에서</b> 조회 둘이 겹칠 수 있다 — 일괄 가림 뒤의 재조회와, 그 가림으로 신고된
+   * 줄의 실황이 바뀌어 걸리는 재조회가 그렇다. 늦게 도착한 쪽이 먼저 나간 응답을 덮으면
+   * 방금 가린 줄이 목록에 '표시 중'으로 되살아난다.
+   */
+  it('한 신고 안에서 늦게 온 응답이 나중 응답을 덮지 않는다', async () => {
+    const slow = deferred<{ rows: ReturnType<typeof makeAuthorMessage>[]; total: number }>()
+    listAuthorMessages
+        .mockImplementationOnce(() => slow.promise)
+        .mockResolvedValue({
+          rows: [makeAuthorMessage({ msgId: 'M-9', message: '최신 목록' })], total: 1,
+        })
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
+
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))   // 같은 신고, 실황만 바뀜
+    await screen.findByText('최신 목록')
+    await act(async () => {
+      slow.resolve({ rows: [makeAuthorMessage({ msgId: 'M-0', message: '낡은 목록' })], total: 1 })
+    })
+
+    expect(screen.queryByText('낡은 목록')).not.toBeInTheDocument()
+    expect(screen.getByText('최신 목록')).toBeInTheDocument()
+  })
+
+  /**
+   * 쓰기가 도는 동안 <b>부모의 조치 버튼도</b> 막아야 한다 — 안 그러면 일괄 가림 도중 [기각]이
+   * 눌려 한 신고에 "타당해서 가리는 중"과 "부당해서 기각"이 동시에 기록되고, 기각이 신고를
+   * 큐에서 빼며 이 패널을 언마운트해 가림의 성패를 알릴 화면까지 사라진다.
+   */
+  it('쓰기가 도는 동안 부모에게 알리고, 끝나면 푼다', async () => {
+    const gate = deferred<{ blinded: boolean }>()
+    blindMessage.mockImplementationOnce(() => gate.promise)
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    onBusyChange.mockClear()
+
+    await userEvent.click(blindButton())
+    expect(onBusyChange).toHaveBeenLastCalledWith(true)
+
+    await act(async () => { gate.resolve({ blinded: true }) })
+    expect(onBusyChange).toHaveBeenLastCalledWith(false)
+  })
+
+  /** 언마운트에도 반드시 풀어야 한다 — 안 그러면 부모가 영영 잠긴 채 남는다. */
+  it('쓰기 도중 언마운트돼도 부모의 잠금을 푼다', async () => {
+    blindMessage.mockImplementation(() => new Promise(() => {}))
+    const { unmount } = renderPanel()
+    await screen.findByText('신고된 줄')
+    await userEvent.click(blindButton())
+    expect(onBusyChange).toHaveBeenLastCalledWith(true)
+
+    unmount()
+
+    expect(onBusyChange).toHaveBeenLastCalledWith(false)
+  })
+})
+
+describe('취소·알림·경계(2026-08-11 4라운드 리뷰 반영)', () => {
+  /**
+   * 도는 동안 모달이 잠기므로(결과를 알릴 화면을 지키려고) <b>빠져나갈 손잡이</b>가 없으면
+   * 서버가 응답을 안 할 때 갇힌다 — 자동 상한은 요청 하나에만 걸려, 40건이면 상한 × 물결 수만큼
+   * 곱해진다(200건이면 몇 분). 취소는 "안 나간 것으로 친다"가 아니라 "더 보내지 않는다"이다.
+   */
+  it('취소하면 남은 건을 더 보내지 않는다', async () => {
+    const many = Array.from({ length: 10 }, (_, i) => makeAuthorMessage({
+      msgId: `S-${i}`, message: `도배 ${i}`, playbackTime: i,
+    }))
+    listAuthorMessages.mockResolvedValue({ rows: many, total: 10 })
+    hangingBlind()
+    renderPanel()
+    await screen.findByText('도배 0')
+    for (const box of checkboxes()) await userEvent.click(box)
+    await userEvent.click(blindButton())
+    expect(blindMessage).toHaveBeenCalledTimes(6)   // 첫 물결만 나갔다
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(blindMessage).toHaveBeenCalledTimes(6)   // 나머지 4건은 영영 안 나간다
+    expect(await screen.findByRole('alert')).toHaveTextContent('취소했습니다')
+    // 보낸 6건도 끊겼고 4건은 안 나갔다 — 확정되지 않은 10건이 그대로 골라져 있어야
+    // 운영자가 [가림]을 한 번 더 누르는 것으로 이어서 할 수 있다.
+    expect(blindButton()).toHaveTextContent('선택 10건 가림')
+  })
+
+  /** 취소해도 이미 서버에 닿은 건은 처리될 수 있다 — 실제 상태는 재조회만이 말해 준다. */
+  it('취소해도 목록을 다시 읽어 실제 상태로 맞춘다', async () => {
+    hangingBlind()
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    listAuthorMessages.mockClear()
+    await userEvent.click(blindButton())
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    await waitFor(() => expect(listAuthorMessages).toHaveBeenCalled())
+    expect(onActionDone).toHaveBeenCalledWith(expect.stringContaining('취소'))
+  })
+
+  /** 취소가 끝나면 잠금이 풀려야 한다 — 안 풀리면 취소 버튼이 갇힘을 못 없앤 것이다. */
+  it('취소가 끝나면 잠금이 풀린다', async () => {
+    hangingBlind()
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    await userEvent.click(blindButton())
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false))
+    expect(screen.queryByRole('button', { name: '취소' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * 결과 문구는 <b>페이지까지</b> 올린다. 이 컴포넌트 안에만 두면 신고가 큐에서 빠져 패널이
+   * 언마운트되는 순간 "40건 중 3건 실패"가 함께 사라진다 — 그 3건은 여전히 사용자에게 보이는데
+   * 화면 어디에도 그 사실이 없다.
+   */
+  it('일부 실패 사실을 부모에게도 올린다 — 화면이 사라져도 남게', async () => {
+    blindMessage.mockRejectedValue(new Error('일시 오류'))
+    renderPanel()
+    await screen.findByText('신고된 줄')
+
+    await userEvent.click(blindButton())
+
+    expect(onActionDone).toHaveBeenCalledWith(expect.stringContaining('1건 실패'))
+  })
+
+  /** 다 잘되면 올릴 것이 없다 — 없는 문구를 올리면 이전 실패가 지워지지 않는다. */
+  it('전부 성공하면 알릴 문구가 없다', async () => {
+    renderPanel()
+    await screen.findByText('신고된 줄')
+
+    await userEvent.click(blindButton())
+
+    expect(onActionDone).toHaveBeenCalledWith(undefined)
+  })
+
+  /** 부모가 다른 조치를 하는 동안 여기서도 새 조치를 받으면 두 쓰기가 겹친다. */
+  it('부모가 조치 중이면 여기서도 아무것도 고르거나 보낼 수 없다', async () => {
+    renderPanel(makeReportItem(), true)
+    await screen.findByText('신고된 줄')
+
+    expect(blindButton()).toBeDisabled()
+    expect(checkboxes().every((c) => (c as HTMLInputElement).disabled)).toBe(true)
+  })
+
+  /** 작성자를 모르면 그 사람의 글을 모을 수 없다 — 빈 목록으로 오해하게 두지 않는다. */
+  it('대상 사용자 정보가 없으면 조회하지 않고 그렇게 말한다', async () => {
+    renderPanel(makeReportItem({ targetUser: null }))
+
+    expect(screen.getByText(/작성자 정보가 없어/)).toBeInTheDocument()
+    expect(listAuthorMessages).not.toHaveBeenCalled()
+  })
+
+  /**
+   * BE는 상한에 잘려도 신고된 줄을 되끼워 준다(keep) — 다만 그새 만료·삭제됐으면 되끼울 것이
+   * 없어 조용히 빠진다. 그 사실을 안 적으면 운영자는 '신고됨' 표가 없는 이유를 몰라 엉뚱한
+   * 줄을 신고된 줄로 여긴다.
+   */
+  it('신고된 줄이 목록에 없으면 사라졌다고 말한다', async () => {
+    listAuthorMessages.mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: 'M-1', message: '남은 글' })], total: 1,
+    })
+    renderPanel()
+    await screen.findByText('남은 글')
+
+    expect(screen.getByText(/신고된 줄은 목록에 없습니다/)).toBeInTheDocument()
+  })
+
+  /**
+   * 일괄 가림은 신고를 닫지 않는다. 안 적으면 운영자는 가렸으니 끝난 줄 알고 넘어가고,
+   * 그 신고는 큐에 열린 채 남아 다음 사람이 같은 건을 또 본다.
+   */
+  it('가림이 신고를 종결하지 않는다고 화면에 적는다', async () => {
+    renderPanel()
+    await screen.findByText('신고된 줄')
+
+    expect(screen.getByText(/가림은 신고를 종결하지 않습니다/)).toBeInTheDocument()
+  })
 })

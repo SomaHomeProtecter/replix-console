@@ -6,22 +6,87 @@ import type { AuthorMessage, ReportItem } from '../api/types'
  * 상태 표식(HP-298). Redis {@code status}는 네 값이다 — {@code visible} ·
  * {@code blocked_profanity} · {@code blocked_hate}(클린봇 차단) · {@code blinded}(운영자 가림).
  */
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<string, string | undefined> = {
   blinded: '가림',
   blocked_profanity: '클린봇',
   blocked_hate: '클린봇',
 }
 
 /**
- * 다시 가려도 뜻이 없는 것은 <b>운영자 가림뿐</b>이다.
+ * 가려서 뜻이 있는 줄인가 — <b>"가릴 수 있다"를 정하는 이 파일의 유일한 자리</b>.
  *
- * <p>클린봇 차단({@code blocked_*})은 <b>사용자에게 숨겨지지 않는다</b> — 서버가 본문을 지우는
- * 것은 {@code blinded}뿐이고, {@code blocked_*}는 본문을 그대로 내려보내 FE가 클린봇 토글에
- * 따라 가린다(ChatHistoryService). 즉 <b>사용자가 필터를 끄면 보이므로</b> 운영자가 가려야 할
- * 대상이다. 한때 이것도 선택 불가로 막았는데, 표식만 보고 "이미 안 보인다"고 단정한 탓이었다.
+ * <p>미리 체크·체크박스 활성·행 표시가 각자 판단하면 셋이 어긋난다. 실제로 어긋났었다: 렌더는
+ * 클린봇 줄을 고를 수 있게 고쳤는데 <b>미리 체크만</b> {@code visible} 조건으로 남아, 클린봇이
+ * 막은 줄이 신고되면 정작 신고된 그 줄이 하나도 안 골라진 채 열렸다(2026-08-11 3라운드).
+ * 그래서 판정을 함수 하나로 모으고, 쓰는 쪽은 이것만 부른다.
+ *
+ * <p>기준은 {@code blinded}뿐이다. 클린봇 차단({@code blocked_*})은 <b>사용자에게 숨겨지지
+ * 않는다</b> — 서버가 본문을 지우는 것은 {@code blinded}뿐이고 {@code blocked_*}는 본문을 그대로
+ * 내려보내 FE가 클린봇 토글에 따라 가린다(ChatHistoryService). 즉 사용자가 필터를 끄면 보이므로
+ * 운영자가 가려야 할 대상이다. 이미 가린 것만 다시 가려도 상태가 그대로고 감사에 뜻 없는 행만
+ * 쌓인다.
  */
-function alreadyBlinded(status: string): boolean {
-  return status === 'blinded'
+function canBlind(status: string): boolean {
+  return status !== 'blinded'
+}
+
+/**
+ * 동시에 띄우는 가림 요청 수.
+ *
+ * <p><b>진행 표시가 실제 진행을 뜻하게 하려고</b> 나눠 보낸다. 전부 동시에 띄우면 "n/N"이
+ * 순식간에 N 근처까지 갔다가 한참 멈춰 있어, 진행 표시가 진행을 알려주지 못한다. 겸해서
+ * 관리 API에 한 번에 200건을 몰아치지 않는다.
+ *
+ * <p>(커넥션 상한을 근거로 삼지 않는다 — 호스트당 6개는 HTTP/1.1 이야기고 이 콘솔은 h2로
+ * 붙는다. 근거가 틀린 채로 숫자만 맞는 주석은 다음 사람을 잘못된 방향으로 고치게 만든다.)
+ */
+const BLIND_CONCURRENCY = 6
+
+/** 일괄 가림의 결과 — 무엇이 <b>남았는지</b>가 핵심이다. */
+interface BlindOutcome {
+  /** 보냈는데 실패한 건(취소로 끊긴 것 포함 — 서버에 닿았는지는 재조회가 판정한다). */
+  failed: string[]
+  /** 취소돼 아예 보내지 않은 건. */
+  skipped: string[]
+}
+
+/**
+ * 고른 건을 {@code BLIND_CONCURRENCY}개씩 흘려보내며 <b>어느 건이 남았는지</b> 돌려준다.
+ *
+ * <p>하나가 실패해도 나머지를 멈추지 않는다 — 가림은 건별로 확정되므로 앞선 성공을 되돌릴 수 없고,
+ * 중간에 멈추면 어디까지 됐는지 알기도 어렵다. 실패 <b>건수</b>가 아니라 <b>어느 건</b>인지를
+ * 돌려주는 이유는 호출부 주석 참조(다시 골라 둔다).
+ *
+ * <p>{@code signal}이 끊기면 <b>새로 보내지 않고</b> 멈춘다. 이미 나간 요청도 함께 끊기지만,
+ * 서버에 닿은 것은 처리될 수 있으므로 "취소했으니 아무 일도 없었다"고 단정하지 않는다 —
+ * 실제 상태는 뒤이은 재조회가 말해 준다.
+ */
+async function blindEach(
+  episodeId: number, targets: string[], signal: AbortSignal, onEach: () => void,
+): Promise<BlindOutcome> {
+  const failed: string[] = []
+  let next = 0
+  const worker = async () => {
+    // next++는 await 사이에 끼지 않는다 — 단일 스레드라 두 일꾼이 같은 번호를 집을 수 없다.
+    while (next < targets.length && !signal.aborted) {
+      const msgId = targets[next++]
+      try {
+        await blindMessage(episodeId, msgId, signal)
+      } catch {
+        failed.push(msgId)
+      }
+      onEach()
+    }
+  }
+  await Promise.all(
+      Array.from({ length: Math.min(BLIND_CONCURRENCY, targets.length) }, worker))
+  return { failed, skipped: targets.slice(next) }
+}
+
+/** 진행 중인 일괄 가림. null = 놀고 있음. 이 값 하나가 진행 표시이자 잠금이다. */
+interface Progress {
+  done: number
+  total: number
 }
 
 /**
@@ -37,8 +102,20 @@ function alreadyBlinded(status: string): boolean {
  * <p><b>가림은 고른 건마다 단건 API를 부른다.</b> 일괄 엔드포인트를 만들면 감사가 한 행으로
  * 뭉쳐지는데, "모든 2xx 쓰기 조치가 1행씩 남긴다"는 {@code AdminAction} 원칙은 3인이 같은
  * admin 권한을 공유하는 한 되돌림 판단의 유일한 근거다.
+ *
+ * <h4>상태 설계 — 세 라운드를 왕복하고 정한 것(2026-08-11)</h4>
+ * <ol>
+ *   <li><b>운영자가 손으로 고른 것({@code picked})은 재조회가 지우지 않는다.</b> 사라졌거나
+ *       이미 가려진 것만 뺀다. 종전에는 재조회가 선택을 통째로 갈아 끼워, 목록을 새로 읽어야 할
+ *       때마다 운영자가 고른 것이 날아갔다. 그래서 "재조회를 언제 거느냐"가 지뢰가 됐고 리뷰가
+ *       그 축을 넣었다 뺐다 했다. 재조회가 무해해지면 그 다툼 자체가 사라진다.</li>
+ *   <li><b>쓰기가 도는 동안에는 잠근다</b>({@code onBusyChange}로 부모까지). 안 잠그면 일괄 가림
+ *       도중 [기각]이 눌려 "신고가 타당해서 가리는 중"과 "신고가 부당해서 기각"이 한 건에
+ *       동시에 기록된다. 잠금이 무기한이 아니게 된 것은 {@code API_TIMEOUT_MS}가 생긴 덕이다 —
+ *       그전에는 잠그면 얼고 안 잠그면 중복이라 어느 쪽으로 가도 결함이었다.</li>
+ * </ol>
  */
-export default function AuthorMessages({ report, busy, onActionDone }: {
+export default function AuthorMessages({ report, busy, onActionDone, onBusyChange }: {
   /**
    * ⚠️ 부모는 이 컴포넌트를 {@code key={report.id}}로 그린다 — 신고가 바뀌면 <b>새로 마운트</b>된다.
    * 상태 초기화 효과로 처리하지 않는 이유: 같은 메시지에 신고가 둘이면(묶음 ×N) 두 신고의
@@ -48,14 +125,27 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
   report: ReportItem
   /** 부모(상세 패널)가 다른 조치를 진행 중 — 그동안 여기서도 새 조치를 받지 않는다. */
   busy: boolean
-  onActionDone: () => void
+  /**
+   * 조치가 끝났으니 큐를 다시 읽으라는 신호. <b>결과 문구를 함께 올린다</b> — 일부 실패한 사실이
+   * 이 컴포넌트 안에만 있으면 신고가 큐에서 빠져 패널이 언마운트되는 순간 함께 사라져,
+   * 운영자는 전부 가려진 줄 안다. 페이지에 올려 두면 모달이 닫혀도 화면에 남는다.
+   */
+  onActionDone: (notice?: string) => void
+  /**
+   * 여기서 쓰기가 도는 동안 부모의 조치 버튼도 막는다.
+   *
+   * <p>부모는 렌더마다 바뀌지 않는 함수를 주는 편이 좋다(setState 함수 등). 매 렌더 새로 만들면
+   * 아래 효과가 매번 다시 돈다 — 같은 값으로 setState 하면 React가 빠져나가므로 무한 루프까지
+   * 가지는 않지만 불필요한 왕복이 쌓인다. 강제할 수단은 없으니 <b>보호 장치로 여기지 말 것</b>.
+   */
+  onBusyChange: (busy: boolean) => void
 }) {
   const authorId = report.targetUser?.id ?? null
   const [rows, setRows] = useState<AuthorMessage[]>([])
   const [total, setTotal] = useState(0)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
-  const [working, setWorking] = useState(false)
+  const [progress, setProgress] = useState<Progress | null>(null)
   /**
    * 오류를 <b>두 칸으로 나눈다</b>. 하나로 두면 가림 뒤 재조회가 방금 띄운 실패 문구를 지워
    * "일부 실패"가 조용히 사라진다 — 운영자는 전부 가려진 줄 안다. 목록을 못 읽은 것과
@@ -65,13 +155,24 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
   const [actionError, setActionError] = useState<string | null>(null)
 
   /**
-   * 경합 가드 — 부모 {@code ReportQueuePage.load}와 같은 패턴이다(거기 주석: "경합 가드").
-   * 신고를 빠르게 옮기면 두 조회가 겹치는데, 늦게 도착한 <b>이전</b> 신고의 응답이 지금 신고의
-   * 목록과 미리 체크된 msgId를 덮어쓴다. 그 상태로 가림을 누르면 운영자가 본 적 없는 남의 글이
-   * 가려진다. {@code alive}는 언마운트(모달 닫힘) 뒤 상태 갱신을 막는다.
+   * 경합 가드 — 조회 두 개가 <b>이 신고 안에서</b> 겹칠 수 있다. 일괄 가림 뒤의 재조회와,
+   * 그 가림으로 신고된 줄의 실황이 바뀌어 아래 효과가 거는 재조회가 그렇다. 늦게 도착한 쪽이
+   * 먼저 나간 응답을 덮으면 방금 가린 줄이 목록에 '표시 중'으로 되살아난다.
+   * {@code alive}는 언마운트(모달 닫힘) 뒤 상태 갱신을 막는다.
    */
   const seq = useRef(0)
   const alive = useRef(true)
+  /**
+   * 진행 중인 일괄 가림을 끊는 손잡이.
+   *
+   * <p>이게 없으면 잠금의 최악 시간이 <b>요청 하나의 상한이 아니라 그 상한 × 물결 수</b>가 된다.
+   * 서버가 응답을 안 하면 40건 = 7물결 × 15초 ≈ 105초 동안 모달이 닫히지도, 다른 조치가 되지도
+   * 않는다(200건이면 8분). 자동 상한을 더 촘촘히 잡는 대신 <b>운영자에게 손잡이를 준다</b> —
+   * 정상적으로 오래 걸리는 배치를 성급히 죽이지 않으면서, 갇히는 경우는 없앤다.
+   */
+  const canceller = useRef<AbortController | null>(null)
+  /** 미리 체크는 <b>처음 한 번</b>만 한다 — 그 뒤 재조회는 운영자의 선택을 건드리지 않는다. */
+  const seeded = useRef(false)
   useEffect(() => {
     alive.current = true
     return () => { alive.current = false }
@@ -87,11 +188,15 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
       if (!alive.current || mine !== seq.current) return
       setRows(page.rows)
       setTotal(page.total)
-      // 신고로 올라온 줄만 미리 고른다. 이미 가려졌거나 클린봇이 막은 것은 고르지 않는다 —
-      // 다시 가려도 상태는 그대로고 감사에 뜻 없는 행만 쌓인다.
-      const reported = page.rows.find(
-          (r) => r.msgId === report.msgId && r.status === 'visible')
-      setPicked(new Set(reported ? [reported.msgId] : []))
+      const blindable = new Set(page.rows.filter((r) => canBlind(r.status)).map((r) => r.msgId))
+      if (seeded.current) {
+        // 재조회는 운영자가 고른 것을 지우지 않는다 — 사라졌거나 이미 가려진 것만 뺀다.
+        setPicked((prev) => new Set([...prev].filter((id) => blindable.has(id))))
+      } else {
+        // 처음 읽었을 때만 신고로 올라온 줄을 미리 고른다(실패 후 재시도로 처음 성공해도 여기).
+        seeded.current = true
+        setPicked(new Set(blindable.has(report.msgId) ? [report.msgId] : []))
+      }
     } catch (e) {
       if (!alive.current || mine !== seq.current) return
       setLoadError(e instanceof Error ? e.message : String(e))
@@ -99,19 +204,19 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
       if (alive.current && mine === seq.current) setLoading(false)
     }
     // currentStatus를 축에 넣는다 — 부모가 신고된 메시지를 가리거나 풀면 이 목록도 낡는다.
-    // 별도 신호(reloadKey)를 두지 않는 이유: 그건 <b>모든</b> 부모 조치에 재조회를 걸어,
-    // 점수 정정처럼 이 목록과 무관한 조치까지 운영자가 골라 둔 선택을 지웠다(2라운드 지적).
+    // 이제 재조회가 선택을 지우지 않으므로(위 병합) 축을 넓게 잡아도 운영자 작업이 날아가지
+    // 않는다. 그래도 이 축만 쓰는 것은 <b>정확</b>하기 때문이다 — 점수 정정처럼 이 목록과 무관한
+    // 조치에까지 왕복을 걸 이유가 없다.
   }, [report.episodeId, report.msgId, report.currentStatus, authorId])
 
-  /**
-   * 언제나 <b>최신</b> load를 가리킨다. 아래 일괄 가림의 콜백이 클릭 시점 클로저를 그대로
-   * await 하면, 그 낡은 load가 {@code ++seq}를 해 오히려 최신이 되어 <b>자기 경합 가드를
-   * 통과</b>하고 이전 신고의 목록을 덮어썼다(2라운드 지적 — 가드를 넣으면서 우회로를 함께 만든 셈).
-   */
-  const loadRef = useRef(load)
-  useEffect(() => { loadRef.current = load }, [load])
-
   useEffect(() => { void load() }, [load])
+
+  // 쓰기가 도는 동안 부모의 조치 버튼도 잠근다. 언마운트에도 반드시 풀어야 부모가 갇히지 않는다.
+  useEffect(() => { onBusyChange(progress !== null) }, [progress, onBusyChange])
+  useEffect(() => () => onBusyChange(false), [onBusyChange])
+
+  const working = progress !== null
+  const blocked = busy || working
 
   const toggle = (msgId: string) => setPicked((prev) => {
     const next = new Set(prev)
@@ -119,39 +224,51 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
     return next
   })
 
-  /**
-   * 고른 건을 하나씩 가린다. <b>하나가 실패해도 나머지를 멈추지 않는다</b> — 가림은 건별로
-   * 확정되므로 앞선 성공을 되돌릴 수 없고, 중간에 멈추면 어디까지 됐는지도 알기 어렵다.
-   * 실패 건수는 화면에 적는다: 조용히 넘어가면 운영자는 전부 가려진 줄 안다.
-   *
-   * <p><b>재조회가 커밋될 때까지 잠금을 유지한다.</b> 먼저 풀면 {@code picked}가 아직 낡은 채로
-   * 버튼이 열려, 한 번 더 누르면 이미 가린 건에 또 요청이 나가고 감사에 중복 BLIND 행이 쌓인다.
-   */
   const blindPicked = () => {
-    if (picked.size === 0) return
-    setWorking(true)
-    setActionError(null)
+    if (picked.size === 0 || blocked) return
     const targets = [...picked]
-    // 보내는 즉시 선택을 비운다 — 이걸로 "같은 건이 두 번 나가는" 창이 닫힌다. 잠금을
-    // 재조회까지 끌지 않는 이유: 그러면 조회가 멎었을 때 화면이 무기한 잠긴다(HP-294에서
-    // 이미 같은 실패를 겪고 되돌렸던 구조를 2라운드에서 다시 지적받았다).
+    const controller = new AbortController()
+    canceller.current = controller
+    setProgress({ done: 0, total: targets.length })
+    setActionError(null)
+    // 보내는 즉시 선택을 비운다 — 이걸로 "같은 건이 두 번 나가는" 창이 닫힌다.
     setPicked(new Set())
-    void Promise.allSettled(targets.map((msgId) => blindMessage(report.episodeId, msgId)))
-        .then((results) => {
-          const failed = results.filter((r) => r.status === 'rejected').length
-          // 언마운트(모달 닫힘) 뒤에는 <b>이 컴포넌트의</b> 상태만 건드리지 않는다.
-          if (alive.current) {
-            if (failed > 0) setActionError(`${targets.length}건 중 ${failed}건 실패했습니다`)
-            setWorking(false)
-            // 성공분을 화면에 반영하려면 다시 읽어야 한다(낙관적으로 고쳐 쓰면 실패분과 어긋난다).
-            // 반드시 최신 load여야 한다 — 이유는 loadRef 주석 참조.
-            void loadRef.current()
-          }
-          // 큐 재조회는 <b>언마운트와 무관하게</b> 나간다 — 갱신 대상이 사라진 이 컴포넌트가
-          // 아니라 부모 페이지이기 때문이다. 가드 안에 넣으면 가림 도중 모달을 닫았을 때
-          // 서버는 바뀌었는데 큐만 낡아 방금 가린 메시지가 '표시 중'으로 남는다.
-          onActionDone()
-        })
+
+    void (async () => {
+      const { failed, skipped } = await blindEach(
+          report.episodeId, targets, controller.signal,
+          () => { if (alive.current) setProgress((p) => (p ? { ...p, done: p.done + 1 } : p)) })
+      const left = [...failed, ...skipped]
+      const succeeded = targets.length - left.length
+      // 문구는 <b>일어난 일</b>만 말한다. "다시 골라 두었다" 같은 약속을 적으면, 그 사이 사라진
+      // 줄이 병합에서 빠졌을 때 화면이 거짓말을 한다. 지금 무엇이 골라져 있는지는 버튼 라벨
+      // (`선택 N건 가림`)이 스스로 말하므로, 두 문구가 어긋날 일이 없다.
+      const notice = controller.signal.aborted
+          ? `일괄 가림을 취소했습니다 — ${targets.length}건 중 ${succeeded}건 처리`
+          : left.length > 0
+            ? `${targets.length}건 중 ${left.length}건 실패했습니다`
+            : undefined
+
+      if (alive.current) {
+        if (notice) setActionError(notice)
+        // 남은 건을 <b>다시 고른 채로</b> 둔다. 건수만 알려주면 운영자는 40건 중 어느 3건이
+        // 남았는지 알 길이 없어 처음부터 다시 훑어야 한다. 아래 재조회는 가릴 수 있는 줄의
+        // 선택을 유지하므로(load의 병합) 이 선택이 살아남고, 그새 사라진 줄만 빠진다.
+        if (left.length > 0) setPicked(new Set(left))
+        // 성공분을 화면에 반영하려면 다시 읽어야 한다(낙관적으로 고쳐 쓰면 실패분과 어긋난다).
+        // 취소한 경우에도 반드시 읽는다 — 끊긴 요청이 서버에 닿았는지는 여기서만 알 수 있다.
+        await load()
+        // 잠금은 재조회가 커밋된 <b>뒤에</b> 푼다. 먼저 풀면 목록이 아직 옛것인 채 버튼이 열려,
+        // 한 번 더 누르면 이미 가린 건에 또 요청이 나가고 감사에 중복 BLIND 행이 쌓인다.
+        setProgress(null)
+      }
+      canceller.current = null
+      // 큐 재조회는 <b>언마운트와 무관하게</b> 나간다 — 갱신 대상이 사라진 이 컴포넌트가
+      // 아니라 부모 페이지이기 때문이다. 가드 안에 넣으면 가림 도중 모달을 닫았을 때
+      // 서버는 바뀌었는데 큐만 낡아 방금 가린 메시지가 '표시 중'으로 남는다.
+      // 문구도 함께 올린다 — 이 컴포넌트가 사라져도 결과가 화면에 남게.
+      onActionDone(notice)
+    })()
   }
 
   if (authorId === null) {
@@ -159,13 +276,15 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
   }
 
   return (
-    <div className="author-msgs">
+    <div className="author-msgs" aria-busy={working}>
       <h5 className="side-h">
         이 회차 이 사용자 메시지
         {total > rows.length && (
           // 조용히 자르면 "이게 전부"로 읽혀 남은 도배를 놓친다
           <span className="hint"> — {total}건 중 {rows.length}건만 표시</span>
         )}
+        {/* 이미 목록이 있는 채로 다시 읽는 중이면 화면이 놀고 있는 것처럼 보인다 */}
+        {loading && rows.length > 0 && <span className="hint"> · 갱신 중…</span>}
       </h5>
       {actionError && <div className="error-box" role="alert">{actionError}</div>}
       {loadError && <div className="error-box" role="alert">{loadError}</div>}
@@ -173,20 +292,24 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
       {!loading && rows.length === 0 && !loadError && (
         <div className="hint">이 회차에 남긴 글이 없습니다</div>
       )}
+      {/* 신고된 줄이 목록에 없으면 그렇게 말한다. BE는 상한에 잘려도 그 줄을 되끼워 주지만
+          (keep 파라미터), 그새 만료·삭제됐으면 되끼울 것이 없어 조용히 빠진다 — 운영자는
+          '신고됨' 표가 안 보이는 이유를 알 수 없어 엉뚱한 줄을 신고된 줄로 여긴다. */}
+      {rows.length > 0 && !rows.some((r) => r.msgId === report.msgId) && (
+        <div className="hint">신고된 줄은 목록에 없습니다 — 이미 사라진 메시지입니다(만료·삭제)</div>
+      )}
       {rows.length > 0 && (
         <ul className="msg-picks">
           {rows.map((row) => {
             const label = STATUS_LABELS[row.status]
-            const blinded = alreadyBlinded(row.status)
+            const blindable = canBlind(row.status)
             return (
-              <li key={row.msgId} className={blinded ? 'blinded' : undefined}>
+              <li key={row.msgId} className={blindable ? undefined : 'blinded'}>
                 <label>
                   <input
                       type="checkbox"
                       checked={picked.has(row.msgId)}
-                      // 이미 운영자가 가린 글만 고를 것이 없다(재가림은 감사에 뜻 없는 행만
-                      // 남긴다). 클린봇 차단은 사용자가 필터를 끄면 보이므로 고를 수 있다.
-                      disabled={blinded || busy || working}
+                      disabled={!blindable || blocked}
                       onChange={() => toggle(row.msgId)} />
                   <span className="pt">{Math.floor(row.playbackTime)}초</span>
                   <span className="txt">{row.message}</span>
@@ -198,12 +321,28 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
           })}
         </ul>
       )}
-      <button
-          type="button" className="btn"
-          disabled={picked.size === 0 || busy || working}
-          onClick={blindPicked}>
-        선택 {picked.size}건 가림
-      </button>
+      <div className="msg-picks-acts">
+        <button
+            type="button" className="btn"
+            disabled={picked.size === 0 || blocked}
+            onClick={blindPicked}>
+          {/* 진행 수를 적는다. 종전에는 누른 뒤 화면이 <b>누르기 전과 똑같아</b> 보여(목록이 이미
+              차 있어 스피너도 안 떴다) 운영자가 한 번 더 누르는 일이 났다. */}
+          {progress ? `가림 중… ${progress.done}/${progress.total}` : `선택 ${picked.size}건 가림`}
+        </button>
+        {/* 도는 동안 모달이 잠기므로(결과를 알릴 화면을 지키려고) <b>빠져나갈 손잡이</b>가 반드시
+            있어야 한다. 서버가 응답을 안 하면 자동 상한만으로는 물결 수만큼 곱해져 몇 분씩 갇힌다. */}
+        {progress && (
+          <button
+              type="button" className="btn-link"
+              onClick={() => canceller.current?.abort()}>
+            취소
+          </button>
+        )}
+      </div>
+      {/* 일괄 가림은 <b>신고를 닫지 않는다</b>. 화면에 안 적으면 운영자는 가렸으니 끝난 줄 알고
+          넘어가고, 그 신고는 큐에 열린 채 남아 다음 사람이 같은 건을 또 본다. */}
+      <div className="hint">가림은 신고를 종결하지 않습니다 — 아래에서 따로 종결하세요</div>
     </div>
   )
 }

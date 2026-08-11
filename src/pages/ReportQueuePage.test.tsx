@@ -326,3 +326,83 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
   })
 })
+
+describe('쓰기 도중에는 모달을 닫지 않는다(HP-298)', () => {
+  /**
+   * 모달이 쓰기 도중 닫히면 상세 패널이 언마운트돼 <b>결과를 알릴 곳이 사라진다</b> —
+   * 일괄 가림이 40건 중 3건 실패했는데 그 사실이 조용히 없어지면 운영자는 전부 가려진 줄 알고
+   * 넘어간다. 백드롭 클릭은 특히 잘못 눌리기 쉬워 "실수로 닫힘"이 흔하다.
+   *
+   * <p>갇히지 않는 근거는 둘이다 — 요청 하나는 apiFetch의 API_TIMEOUT_MS에 끊기고, 배치 전체가
+   * 그 배수만큼 길어지는 경우는 일괄 가림 옆의 [취소]가 받는다. 끊는 장치가 하나도 없던 동안에는
+   * 이 잠금 자체를 걸 수 없었다(걸면 얼고, 안 걸면 결과가 사라졌다).
+   */
+  function openModalWithPendingWrite() {
+    vi.mocked(admin.resolveReport).mockImplementation(() => new Promise(() => {}))
+  }
+
+  it('백드롭 클릭·Esc로 닫히지 않고 ✕도 잠긴다', async () => {
+    openModalWithPendingWrite()
+    const { container } = renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(within(screen.getByRole('dialog', { name: '신고 상세' }))
+        .getByRole('button', { name: '기각' }))
+
+    await userEvent.click(container.querySelector('.modal-backdrop')!)
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: '닫기' })).toBeDisabled()
+  })
+
+  it('쓰기가 끝나면 다시 닫을 수 있다 — 잠금이 남으면 모달이 갇힌다', async () => {
+    // clearAllMocks는 호출 기록만 지우고 구현은 남긴다 — 앞 테스트가 심은 "영영 안 끝나는"
+    // 구현이 새면 여기서도 잠긴 채라 원인과 무관한 실패가 난다(이 파일 beforeEach 주석 참조).
+    vi.mocked(admin.resolveReport).mockResolvedValue({ id: 101, status: 'REJECTED' } as never)
+    const { container } = renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(within(screen.getByRole('dialog', { name: '신고 상세' }))
+        .getByRole('button', { name: '기각' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '닫기' })).toBeEnabled())
+
+    await userEvent.click(container.querySelector('.modal-backdrop')!)
+
+    expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+  })
+})
+
+describe('일괄 가림 결과는 모달이 닫혀도 화면에 남는다(HP-298)', () => {
+  /**
+   * 페이지 → 상세 패널 → 작성자 글 목록으로 이어지는 <b>3단 합성</b>을 실제 행으로 통과시킨다.
+   * 다른 테스트들은 작성자 목록을 빈 배열로 스텁해, 잠금·알림이 지나는 이 경로가 통째로
+   * 검증되지 않았다(2026-08-11 4라운드 리뷰).
+   *
+   * <p>핵심은 <b>결과가 살아남는가</b>이다. 일부 실패 사실이 모달 안에만 있으면 신고가 큐에서
+   * 빠지거나 운영자가 모달을 닫는 순간 함께 사라진다 — 못 가린 메시지는 여전히 사용자에게
+   * 보이는데 화면 어디에도 그 사실이 없다.
+   */
+  it('일부 실패하면 모달을 닫아도 결과가 목록 화면에 남는다', async () => {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [{
+        msgId: '01FIXTUREMSG0000000000000A', message: '범인은 집사다',
+        playbackTime: 100, status: 'visible',
+      }],
+      total: 1,
+    })
+    vi.mocked(admin.blindMessage).mockRejectedValue(new Error('일시 오류'))
+    const { container } = renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+
+    await userEvent.click(await screen.findByRole('button', { name: /선택 1건 가림/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '닫기' })).toBeEnabled())
+    await userEvent.click(container.querySelector('.modal-backdrop')!)
+
+    expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('1건 실패')
+  })
+})
