@@ -635,6 +635,24 @@ describe('취소·알림·경계(2026-08-11 4라운드 리뷰 반영)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('나머지는 목록에서 확인')
   })
 
+  /**
+   * 조회가 실패하면 <b>다시 시도할 손잡이</b>가 있어야 한다. 없으면 모달을 닫았다 다시 여는 것
+   * 말고는 이 기능을 쓸 방법이 없다 — apiFetch에 시간 상한이 생긴 뒤로 조회가 "영영 로딩 중"
+   * 대신 실패로 끝나게 됐으므로 이 길이 실제로 열린다.
+   */
+  it('목록 조회가 실패하면 다시 시도할 수 있다', async () => {
+    listAuthorMessages.mockRejectedValueOnce(new Error('서버가 응답하지 않습니다'))
+    renderPanel()
+    await screen.findByText('서버가 응답하지 않습니다')
+
+    listAuthorMessages.mockResolvedValue(threeRows())
+    await userEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+
+    expect(await screen.findByText('도배 첫째')).toBeInTheDocument()
+    // 처음 성공한 조회이므로 여기서 신고된 줄을 미리 고른다(재조회가 아니다)
+    expect(screen.getByRole('checkbox', { name: /신고된 줄/ })).toBeChecked()
+  })
+
   /** 고를 것이 없는데 "선택 0건 가림"과 종결 안내만 남으면 무엇을 하라는 화면인지 알 수 없다. */
   it('이 회차에 남긴 글이 없으면 조치 줄을 내린다', async () => {
     listAuthorMessages.mockResolvedValue({ rows: [], total: 0 })

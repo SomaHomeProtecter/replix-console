@@ -305,7 +305,18 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
         {loading && rows.length > 0 && <span className="hint"> · 갱신 중…</span>}
       </h5>
       {actionError && <div className="error-box" role="alert">{actionError}</div>}
-      {loadError && <div className="error-box" role="alert">{loadError}</div>}
+      {loadError && (
+        <div className="error-box" role="alert">
+          {loadError}
+          {/* 다시 시도할 손잡이가 없으면 여기가 막다른 길이다 — 모달을 닫았다 다시 여는 것
+              말고는 이 기능을 쓸 방법이 없다. apiFetch에 시간 상한이 생긴 뒤로 조회가
+              "영영 로딩 중" 대신 <b>실패로 끝나게</b> 됐으므로, 이 길이 실제로 자주 열린다. */}
+          {' '}
+          <button type="button" className="btn-link" disabled={blocked} onClick={() => void load()}>
+            다시 시도
+          </button>
+        </div>
+      )}
       {loading && rows.length === 0 && <div className="hint">불러오는 중…</div>}
       {!loading && rows.length === 0 && !loadError && (
         <div className="hint">이 회차에 남긴 글이 없습니다</div>
