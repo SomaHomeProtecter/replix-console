@@ -139,13 +139,17 @@ export default function AuthorMessages({ report, busy, onActionDone }: {
     void Promise.allSettled(targets.map((msgId) => blindMessage(report.episodeId, msgId)))
         .then((results) => {
           const failed = results.filter((r) => r.status === 'rejected').length
-          // 언마운트(모달 닫힘) 뒤에는 알릴 화면이 없다 — 상태를 건드리지 않고 조용히 끝낸다.
-          if (!alive.current) return
-          if (failed > 0) setActionError(`${targets.length}건 중 ${failed}건 실패했습니다`)
-          setWorking(false)
-          // 성공분을 화면에 반영하려면 다시 읽어야 한다(낙관적으로 고쳐 쓰면 실패분과 어긋난다).
-          // 반드시 최신 load여야 한다 — 이유는 loadRef 주석 참조.
-          void loadRef.current()
+          // 언마운트(모달 닫힘) 뒤에는 <b>이 컴포넌트의</b> 상태만 건드리지 않는다.
+          if (alive.current) {
+            if (failed > 0) setActionError(`${targets.length}건 중 ${failed}건 실패했습니다`)
+            setWorking(false)
+            // 성공분을 화면에 반영하려면 다시 읽어야 한다(낙관적으로 고쳐 쓰면 실패분과 어긋난다).
+            // 반드시 최신 load여야 한다 — 이유는 loadRef 주석 참조.
+            void loadRef.current()
+          }
+          // 큐 재조회는 <b>언마운트와 무관하게</b> 나간다 — 갱신 대상이 사라진 이 컴포넌트가
+          // 아니라 부모 페이지이기 때문이다. 가드 안에 넣으면 가림 도중 모달을 닫았을 때
+          // 서버는 바뀌었는데 큐만 낡아 방금 가린 메시지가 '표시 중'으로 남는다.
           onActionDone()
         })
   }

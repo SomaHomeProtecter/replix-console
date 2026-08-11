@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
@@ -115,6 +115,24 @@ describe('작성자 글 일괄 보기·가림(HP-298)', () => {
     expect(blindMessage).toHaveBeenCalledTimes(2)      // 실패해도 나머지를 멈추지 않는다
     expect(screen.getByRole('alert')).toHaveTextContent('1건 실패')
     expect(onActionDone).toHaveBeenCalled()             // 성공분 반영을 위해 재조회
+  })
+
+  /**
+   * 가림 도중 모달을 닫아도 <b>큐 재조회는 나가야 한다</b>. onActionDone이 갱신하는 것은
+   * 사라진 이 컴포넌트가 아니라 <b>부모 페이지</b>라, 언마운트 가드 안에 넣으면 서버는
+   * 바뀌었는데 큐만 낡아 방금 가린 메시지가 '표시 중'으로 남는다.
+   */
+  it('가림 도중 모달이 닫혀도 큐 재조회는 나간다', async () => {
+    const { unmount } = renderPanel()
+    await screen.findByText('신고된 줄')
+    let finish!: (v: { blinded: boolean }) => void
+    blindMessage.mockImplementationOnce(() => new Promise((r) => { finish = r as never }))
+
+    await userEvent.click(blindButton())
+    unmount()
+    await act(async () => { finish({ blinded: true }) })
+
+    expect(onActionDone).toHaveBeenCalled()
   })
 
   /** 이미 가린 글을 또 가리면 감사에 뜻 없는 행만 쌓인다 — 고를 수 없게 하고 그렇게 적는다. */
