@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -75,10 +75,19 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
     expect(screen.getByText(/사라짐/)).toBeInTheDocument()
   })
 
-  it('대상 사용자 카드는 사용자 상세로 이어진다', () => {
+  /** 작성자 카드에만 있던 상세 진입을 신고자 카드에도 연다(HP-270) — 남용자에게 닿는 길. */
+  it('신고자 카드도 사용자 상세로 이어진다', () => {
     renderPanel()
-    const link = screen.getByRole('link', { name: /사용자 상세/ })
-    expect(link).toHaveAttribute('href', '/users/9')
+    const links = screen.getAllByRole('link', { name: /사용자 상세/ })
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/users/9', '/users/7'])
+  })
+
+  it('대상 사용자 카드는 사용자 상세로 이어진다', () => {
+    const { container } = renderPanel()
+    // 신고자 카드에도 같은 링크가 생겼으므로(HP-270) 대상 카드로 좁혀 찾는다
+    const targetCard = container.querySelector('.target-card:not(.reporter-card)')!
+    expect(within(targetCard as HTMLElement).getByRole('link', { name: /사용자 상세/ }))
+        .toHaveAttribute('href', '/users/9')
   })
 
   it('종결된 신고는 무슨 조치였는지와 함께 처리 정보를 보여준다', () => {

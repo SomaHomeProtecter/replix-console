@@ -1,5 +1,5 @@
 import type {
-  AdminActionType, ReportReason, ReportStatus, ResolutionAction, ResolveOutcome,
+  AdminActionType, ReportReason, ReportsSent, ReportStatus, ResolutionAction, ResolveOutcome,
   SuspendDuration, UserStatus,
 } from './api/types'
 
@@ -171,4 +171,25 @@ export function elapsedSince(
   if (ms >= DAY_MS) return { label: `${Math.floor(ms / DAY_MS)}일`, tone }
   if (ms >= HOUR_MS) return { label: `${Math.floor(ms / HOUR_MS)}시간`, tone }
   return { label: '방금', tone }
+}
+
+/**
+ * 신고자 신뢰도 한 줄(HP-270) — "이 사람의 신고 중 몇 %가 기각됐나".
+ *
+ * <p><b>분모는 판정분이지 보낸 전체가 아니다.</b> 아직 아무도 안 본 OPEN을 분모에 넣으면,
+ * 막 20건을 쏟아부어 큐에 쌓인 <b>바로 그 순간</b> 기각률이 가장 낮게 나온다 — 지표가 가장
+ * 필요한 때 가장 무해해 보이는 셈이라, 이 티켓이 막으려던 "인상에 기댄 정지"를 오히려 부추긴다.
+ *
+ * <p>같은 이유로 판정 0건은 <b>0%가 아니라 "판정 전"</b>이다. 0%는 "이 사람 신고는 다 타당했다"는
+ * 뜻이 되는데 실제로는 "아직 아무도 안 봤다"이고, 둘은 정반대다.
+ *
+ * <p>분모를 문구에 함께 적는 이유: 같은 "기각 3건"이 판정 3건 중이면 100%, 30건 중이면 10%라
+ * 뜻이 정반대인데, 비율만 보이면 읽는 사람이 그걸 알 수 없다.
+ */
+export function reporterTrustLine(sent: ReportsSent): string {
+  if (sent.total === 0) return '보낸 신고 없음'
+  if (sent.judged === 0) return `보낸 신고 ${sent.total}건 · 판정 전`
+  const rate = Math.round((sent.rejected / sent.judged) * 100)
+  return `보낸 신고 ${sent.total}건 · 기각 ${sent.rejected}건`
+    + ` (판정 ${sent.judged}건 중 ${rate}%)`
 }

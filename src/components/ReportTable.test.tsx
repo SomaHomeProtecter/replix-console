@@ -1,4 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeReportItem } from '../test/fixtures'
 import ReportTable from './ReportTable'
@@ -18,7 +20,10 @@ describe('경과 뱃지는 시간을 따라간다', () => {
     vi.setSystemTime(new Date('2026-08-11T00:00:00Z'))
     const createdAt = '2026-08-10T00:01:00Z' // 23시간 59분 전
 
-    render(<ReportTable items={[makeReportItem({ createdAt })]} selectedId={null} onSelect={() => {}} />)
+    render(
+        <MemoryRouter>
+          <ReportTable items={[makeReportItem({ createdAt })]} selectedId={null} onSelect={() => {}} />
+        </MemoryRouter>)
     expect(screen.getByText('23시간')).toBeInTheDocument()
 
     act(() => { vi.advanceTimersByTime(2 * 60 * 1000) })
@@ -38,10 +43,13 @@ describe('경과 뱃지는 시간을 따라간다', () => {
    * 않았다</b> — 두 곳이 함께 눕고 나서야 그 가드가 의미를 갖는다. 행 단위로 확인한다.
    */
   it('시각이 깨진 신고가 있어도 표는 그려지고 그 칸만 모른다고 말한다', () => {
-    render(<ReportTable
-        items={[makeReportItem({ id: 1, createdAt: '깨진값', snapshotMessage: '깨진 시각 신고' }),
-          makeReportItem({ id: 2, snapshotMessage: '멀쩡한 신고' })]}
-        selectedId={null} onSelect={() => {}} />)
+    render(
+        <MemoryRouter>
+          <ReportTable
+              items={[makeReportItem({ id: 1, createdAt: '깨진값', snapshotMessage: '깨진 시각 신고' }),
+                makeReportItem({ id: 2, snapshotMessage: '멀쩡한 신고' })]}
+              selectedId={null} onSelect={() => {}} />
+        </MemoryRouter>)
 
     expect(screen.getByText('멀쩡한 신고')).toBeInTheDocument()   // 표 전체가 살아 있다
     const rows = screen.getAllByRole('row')
@@ -51,11 +59,39 @@ describe('경과 뱃지는 시간을 따라간다', () => {
   it('화면에서 내려가면 타이머를 놓는다', () => {
     vi.useFakeTimers()
     const { unmount } = render(
-        <ReportTable items={[makeReportItem()]} selectedId={null} onSelect={() => {}} />)
+        <MemoryRouter>
+          <ReportTable items={[makeReportItem()]} selectedId={null} onSelect={() => {}} />
+        </MemoryRouter>)
     expect(vi.getTimerCount()).toBe(1)
 
     unmount()
 
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('신고자 동선(HP-270)', () => {
+  const renderTable = (onSelect = () => {}) => render(
+      <MemoryRouter>
+        <ReportTable items={[makeReportItem()]} selectedId={null} onSelect={onSelect} />
+      </MemoryRouter>)
+
+  /**
+   * 종전엔 사용자 상세로 들어가는 길이 <b>작성자 경유뿐</b>이었다 — 신고자를 보려면 그 사람이
+   * 누군가에게 신고당한 적이 있어야 했다. 신고 남용을 보려는데 남용자에게 닿을 길이 없었다.
+   */
+  it('신고자 이름으로 그 사용자 상세에 들어갈 수 있다', () => {
+    renderTable()
+    expect(screen.getByRole('link', { name: '신고자닉' })).toHaveAttribute('href', '/users/7')
+  })
+
+  /** 행 클릭은 상세 모달을 여는 동작이라, 링크 클릭이 그걸 함께 발동시키면 안 된다. */
+  it('신고자를 눌러도 행의 상세 모달은 열리지 않는다', async () => {
+    const onSelect = vi.fn()
+    renderTable(onSelect)
+
+    await userEvent.click(screen.getByRole('link', { name: '신고자닉' }))
+
+    expect(onSelect).not.toHaveBeenCalled()
   })
 })

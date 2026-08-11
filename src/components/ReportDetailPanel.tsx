@@ -207,6 +207,11 @@ export default function ReportDetailPanel({ report, onActionDone }: {
             name={report.reporter?.displayName ?? null} />
         <span className="un">{report.reporter?.displayName ?? '(알 수 없음)'}</span>
         <span className="role">신고자</span>
+        {/* 작성자 카드에만 있던 상세 진입을 신고자 쪽에도 연다(HP-270) — 신고 남용은
+            신고자 화면에서만 판단할 수 있는데 거기 가는 길이 없었다. */}
+        {report.reporter && (
+          <Link className="btn-link ul" to={`/users/${report.reporter.id}`}>사용자 상세 →</Link>
+        )}
       </div>
 
       {/* 판단 재료(점수)와 조치를 같은 눈높이에 둔다 — 점수 줄이 조치 그리드 바로 위다(HP-294). */}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, suspensionChip,
+  actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, reporterTrustLine,
+  suspensionChip,
 } from './format'
 
 describe('formatKst 계열', () => {
@@ -116,5 +117,36 @@ describe('elapsedSince — 큐 행의 대기 시간 뱃지(HP-296)', () => {
   it('읽을 수 없는 시각은 모른다고 말한다 — 방금이라고 하지 않는다', () => {
     expect(elapsedSince('깨진값', now)).toEqual({ label: '—', tone: 'fresh' })
     expect(elapsedSince('', now)).toEqual({ label: '—', tone: 'fresh' })
+  })
+})
+
+describe('reporterTrustLine — 신고자 신뢰도 한 줄(HP-270)', () => {
+  it('판정분을 분모로 기각률을 낸다 — 분모를 문구에 함께 적는다', () => {
+    expect(reporterTrustLine({ total: 12, judged: 10, rejected: 3 }))
+        .toBe('보낸 신고 12건 · 기각 3건 (판정 10건 중 30%)')
+  })
+
+  /**
+   * 판정이 0건이면 기각률은 <b>모르는 것</b>이지 0%가 아니다. 0%로 적으면 "이 사람 신고는
+   * 다 타당하다"는 뜻이 되는데, 실제로는 아직 아무도 안 봤다는 뜻이다 — 정반대다.
+   * 막 20건을 쏟아부어 큐에 쌓인 신고자가 여기 해당한다.
+   */
+  it('판정 전이면 0%가 아니라 판정 전이라고 말한다', () => {
+    expect(reporterTrustLine({ total: 20, judged: 0, rejected: 0 }))
+        .toBe('보낸 신고 20건 · 판정 전')
+  })
+
+  it('보낸 적이 없으면 비율을 만들지 않는다', () => {
+    expect(reporterTrustLine({ total: 0, judged: 0, rejected: 0 })).toBe('보낸 신고 없음')
+  })
+
+  it('전부 타당했으면 0%로 적는다 — 판정이 있었으므로 아는 값이다', () => {
+    expect(reporterTrustLine({ total: 5, judged: 5, rejected: 0 }))
+        .toBe('보낸 신고 5건 · 기각 0건 (판정 5건 중 0%)')
+  })
+
+  it('나누어떨어지지 않으면 반올림한다', () => {
+    expect(reporterTrustLine({ total: 3, judged: 3, rejected: 1 }))
+        .toBe('보낸 신고 3건 · 기각 1건 (판정 3건 중 33%)')
   })
 })

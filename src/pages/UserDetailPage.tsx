@@ -7,7 +7,7 @@ import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import {
-  actionLabel, formatKstShort, isSuspensionActive, suspensionChip,
+  actionLabel, formatKstShort, isSuspensionActive, reporterTrustLine, suspensionChip,
 } from '../format'
 
 const CHIP_CLASSES: Record<UserStatus, string> = {
@@ -96,6 +96,9 @@ export default function UserDetailPage() {
             </span>
           </h1>
           <div className="uid">userId {profile.id} · provider {profile.authProvider}</div>
+          {/* 보낸 신고 집계(HP-270) — 받은 신고 탭과 <b>반대 축</b>이라 라벨 없이는 어느 쪽
+              수인지 알 수 없다. 정지 여부를 인상이 아니라 이 수로 판단하라는 자리다. */}
+          <div className="sent-trust">{reporterTrustLine(detail.reportsSent)}</div>
         </div>
         <div className="top-act">
           {profile.status === 'SUSPENDED' && (

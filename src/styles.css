@@ -293,6 +293,13 @@ table.report-table { width: 100%; border-collapse: collapse; }
 }
 .user-header h1 { margin: 0; font-size: 16px; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .user-header .uid { font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-weight: 400; }
+/* 보낸 신고 집계(HP-270) — uid 줄 아래 보조 정보. 숫자가 나란히 읽히도록 tabular-nums.
+   색을 따로 주지 않는다: 이건 경고가 아니라 판단 재료이고, 색으로 미리 판정하면
+   "인상에 기대지 말라"는 이 지표의 목적과 어긋난다. */
+.user-header .sent-trust {
+  margin-top: 2px; font-size: 11.5px; color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
 .user-header .top-act { margin-left: auto; display: flex; gap: 8px; }
 /* 기본 정보 가로 스트립(HP-268) — 좌측 240px 칸에선 이메일이 두 줄로 접혔고, 칸을 넓히면
    조치 이력이 좁아져 돌려막기가 됐다. 한 줄로 펴서 탭이 전체 폭을 쓰게 한다. */

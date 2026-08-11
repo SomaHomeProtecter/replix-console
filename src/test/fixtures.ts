@@ -73,6 +73,7 @@ export function makeUserDetail(overrides: Partial<UserDetail> = {}): UserDetail 
     reportsReceived: [makeReceivedReport()],
     actions: [makeActionRow()],
     suspensions: [makeActionRow()],
+    reportsSent: { total: 0, judged: 0, rejected: 0 },
     ...overrides,
   }
 }
