@@ -34,10 +34,13 @@ function renderPanel(report = makeReportItem()) {
 }
 
 beforeEach(() => {
+  // 상세 패널은 이제 작성자 글 목록(HP-298)을 자식으로 품는다 — 그 조회를 스텁하지 않으면
+  // 자식이 오류 배너를 띄워 이 파일의 role="alert" 단언들이 엉뚱한 것을 잡는다.
   // clearAllMocks는 <b>호출 기록만</b> 지우고 구현은 남긴다 — 앞선 테스트가 심어 둔
   // mockReturnValue(영영 resolve 안 되는 promise)나 mockRejectedValue가 뒤 테스트로 새어,
   // 원인과 무관한 실패가 줄줄이 난다(4차 리뷰). reset은 구현까지 지운다.
   vi.resetAllMocks()
+  vi.mocked(admin.listAuthorMessages).mockResolvedValue({ rows: [], total: 0 })
 })
 
 describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 카드', () => {

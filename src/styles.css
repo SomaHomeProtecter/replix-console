@@ -392,3 +392,22 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .score-chip input { position: absolute; opacity: 0; pointer-events: none; }
 .btn-score { padding: 4px 10px; font-size: 11.5px; margin-left: auto; }
 
+/* 작성자 글 일괄 보기·가림(HP-298) — 상세 모달 안, 조치 그리드 위(판단 재료). */
+.author-msgs { margin-top: 4px; }
+.author-msgs .hint { font-weight: 400; }
+.msg-picks { list-style: none; margin: 0 0 8px; padding: 0; max-height: 168px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.msg-picks li + li { border-top: 1px solid var(--line-2); }
+.msg-picks label { display: flex; align-items: center; gap: 8px; padding: 5px 9px;
+  font-size: 12px; cursor: pointer; }
+.msg-picks li.blinded label { cursor: default; }
+/* 재생 시각 — 도배는 시간 순서로 읽어야 판단이 서므로 눈금처럼 고정폭으로 세운다 */
+.msg-picks .pt { flex: none; width: 46px; font-family: var(--mono); font-size: 10.5px;
+  color: var(--muted); font-variant-numeric: tabular-nums; }
+.msg-picks .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--body); }
+.msg-picks li.blinded .txt { color: var(--muted); text-decoration: line-through; }
+/* 표식은 계측이 아니라 상태라 사유 pill과 형태가 겹치지 않게 외곽선으로 둔다(HP-296 원칙) */
+.msg-picks .mark { flex: none; font-size: 10px; padding: 0 4px; border-radius: 4px;
+  border: 1px solid var(--line-strong); color: var(--muted-2); white-space: nowrap; }
+.msg-picks .mark.rep { border-color: var(--amber); color: var(--amber-ink); }

@@ -5,6 +5,7 @@ import {
 } from '../api/admin'
 import type { ReportItem, SuspendDuration } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
+import AuthorMessages from './AuthorMessages'
 import Avatar from './Avatar'
 import SuspendDialog from './SuspendDialog'
 
@@ -243,6 +244,11 @@ export default function ReportDetailPanel({ report, onActionDone }: {
           점수 정정
         </button>
       </div>
+
+      {/* 작성자가 이 회차에 남긴 다른 글(HP-298) — 조치 그리드 <b>앞</b>에 둔다. 도배인지
+          아닌지는 나머지 줄을 봐야 정해지므로 이것도 판단 재료이고, 판단 재료는 조치보다
+          위에 온다(점수 줄과 같은 규칙). */}
+      <AuthorMessages report={report} busy={busy} onActionDone={onActionDone} />
 
       <h5 className="side-h">조치</h5>
       {error && <div className="error-box" role="alert">{error}</div>}

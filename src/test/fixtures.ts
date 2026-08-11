@@ -1,4 +1,6 @@
-import type { AdminActionRow, ReceivedReport, ReportItem, UserDetail } from '../api/types'
+import type {
+  AdminActionRow, AuthorMessage, ReceivedReport, ReportItem, UserDetail,
+} from '../api/types'
 
 /** 테스트 픽스처 — BE 계약(api/types.ts) 형태의 대표값. 필요한 칸만 overrides로 바꾼다. */
 export function makeReportItem(overrides: Partial<ReportItem> = {}): ReportItem {
@@ -74,6 +76,17 @@ export function makeUserDetail(overrides: Partial<UserDetail> = {}): UserDetail 
     actions: [makeActionRow()],
     suspensions: [makeActionRow()],
     reportsSent: { total: 0, judged: 0, rejected: 0 },
+    ...overrides,
+  }
+}
+
+export function makeAuthorMessage(overrides: Partial<AuthorMessage> = {}): AuthorMessage {
+  return {
+    msgId: '01FIXTUREMSG0000000000000A',
+    message: '범인은 집사다',
+    playbackTime: 100,
+    status: 'visible',
+    spoilerScore: 8,
     ...overrides,
   }
 }

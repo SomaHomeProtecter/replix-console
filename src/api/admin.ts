@@ -1,7 +1,7 @@
 import { apiFetch, qs } from './client'
 import type {
-  ReportPage, ReportReason, ReportStatus, ResolutionAction, ResolveResult, SuspendDuration,
-  SuspensionResult, UserDetail,
+  AuthorMessages, ReportPage, ReportReason, ReportStatus, ResolutionAction, ResolveResult,
+  SuspendDuration, SuspensionResult, UserDetail,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -35,6 +35,14 @@ export function reopenReport(reportId: number): Promise<ResolveResult> {
 
 export function blindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {
   return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST' })
+}
+
+/**
+ * 그 회차에서 그 작성자가 남긴 글 모아 보기(HP-298) — 일괄 가림의 재료.
+ * 가림 자체는 이 목록으로 고른 뒤 {@link blindMessage}를 건별로 부른다(감사 1건 1행 유지).
+ */
+export function listAuthorMessages(episodeId: number, userId: number): Promise<AuthorMessages> {
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/by-author/${userId}`)
 }
 
 export function unblindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {
