@@ -405,4 +405,30 @@ describe('일괄 가림 결과는 모달이 닫혀도 화면에 남는다(HP-298
     expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('1건 실패')
   })
+
+  /**
+   * 다른 목록을 보는데 이전 목록에서 난 "1건 실패"가 그대로 떠 있으면, 지금 보는 신고들에서
+   * 난 일로 읽힌다. 결과 문구는 <b>그 목록의 것</b>이지 화면 전체의 것이 아니다.
+   */
+  it('필터를 바꾸면 이전 결과 문구를 내린다', async () => {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [{
+        msgId: '01FIXTUREMSG0000000000000A', message: '범인은 집사다',
+        playbackTime: 100, status: 'visible',
+      }],
+      total: 1,
+    })
+    vi.mocked(admin.blindMessage).mockRejectedValue(new Error('일시 오류'))
+    const { container } = renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(await screen.findByRole('button', { name: /선택 1건 가림/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '닫기' })).toBeEnabled())
+    await userEvent.click(container.querySelector('.modal-backdrop')!)
+    expect(screen.getByRole('status')).toHaveTextContent('1건 실패')
+
+    await userEvent.click(screen.getByRole('button', { name: '열림' }))   // 필터 해제
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
 })

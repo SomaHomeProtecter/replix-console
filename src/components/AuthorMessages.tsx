@@ -120,8 +120,10 @@ interface Progress {
  *       그 축을 넣었다 뺐다 했다. 재조회가 무해해지면 그 다툼 자체가 사라진다.</li>
  *   <li><b>쓰기가 도는 동안에는 잠근다</b>({@code onBusyChange}로 부모까지). 안 잠그면 일괄 가림
  *       도중 [기각]이 눌려 "신고가 타당해서 가리는 중"과 "신고가 부당해서 기각"이 한 건에
- *       동시에 기록된다. 잠금이 무기한이 아니게 된 것은 {@code API_TIMEOUT_MS}가 생긴 덕이다 —
- *       그전에는 잠그면 얼고 안 잠그면 중복이라 어느 쪽으로 가도 결함이었다.</li>
+ *       동시에 기록된다. 잠글 수 있게 된 것은 <b>끊는 수단이 생긴</b> 덕이다 — 그전에는 잠그면
+ *       얼고 안 잠그면 중복이라 어느 쪽으로 가도 결함이었다. 끊는 수단은 둘이다: 요청 하나는
+ *       {@code API_TIMEOUT_MS}가 끊고, 배치 전체가 그 배수만큼 길어지는 경우는 [취소]가 받는다.
+ *       <b>상한 하나로 전체가 보장되지는 않는다</b> — 그렇게 적으면 안 된다.</li>
  * </ol>
  */
 export default function AuthorMessages({ report, busy, onActionDone, onBusyChange }: {
@@ -220,12 +222,14 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
 
   useEffect(() => { void load() }, [load])
 
-  // 쓰기가 도는 동안 부모의 조치 버튼도 잠근다. 언마운트에도 반드시 풀어야 부모가 갇히지 않는다.
-  useEffect(() => { onBusyChange(progress !== null) }, [progress, onBusyChange])
-  useEffect(() => () => onBusyChange(false), [onBusyChange])
-
   const working = progress !== null
   const blocked = busy || working
+
+  // 쓰기가 도는 동안 부모의 조치 버튼도 잠근다. 언마운트에도 반드시 풀어야 부모가 갇히지 않는다.
+  // 축은 progress가 아니라 <b>불리언</b>이다 — progress는 진행 눈금마다 바뀌어, 그대로 축에 두면
+  // 200건짜리 배치가 부모 상태를 200번 흔든다(값은 같아 화면은 그대로지만 왕복만 쌓인다).
+  useEffect(() => { onBusyChange(working) }, [working, onBusyChange])
+  useEffect(() => () => onBusyChange(false), [onBusyChange])
 
   const toggle = (msgId: string) => setPicked((prev) => {
     const next = new Set(prev)
@@ -252,8 +256,11 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
       // 문구는 <b>일어난 일</b>만 말한다. "다시 골라 두었다" 같은 약속을 적으면, 그 사이 사라진
       // 줄이 병합에서 빠졌을 때 화면이 거짓말을 한다. 지금 무엇이 골라져 있는지는 버튼 라벨
       // (`선택 N건 가림`)이 스스로 말하므로, 두 문구가 어긋날 일이 없다.
+      // 취소 문구에 "N건 처리"라고만 적으면 나머지가 <b>안 됐다</b>는 뜻으로 읽힌다. 끊긴 요청이
+      // 서버에 닿았는지는 여기서 알 수 없고 목록만이 안다 — 그래서 확정된 수만 말하고 나머지는
+      // 목록을 보라고 한다. 아는 것보다 많이 말하지 않는다.
       const notice = controller.signal.aborted
-          ? `일괄 가림을 취소했습니다 — ${targets.length}건 중 ${succeeded}건 처리`
+          ? `일괄 가림을 취소했습니다 — ${succeeded}건 완료, 나머지는 목록에서 확인하세요`
           : left.length > 0
             ? `${targets.length}건 중 ${left.length}건 실패했습니다`
             : undefined
@@ -332,33 +339,39 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
           })}
         </ul>
       )}
-      <div className="msg-picks-acts">
-        <button
-            type="button" className="btn"
-            disabled={picked.size === 0 || blocked}
-            onClick={blindPicked}>
-          {/* 진행 수를 적는다. 종전에는 누른 뒤 화면이 <b>누르기 전과 똑같아</b> 보여(목록이 이미
-              차 있어 스피너도 안 떴다) 운영자가 한 번 더 누르는 일이 났다. */}
-          {progress === null
-            ? `선택 ${picked.size}건 가림`
-            : progress.sending
-              ? `가림 중… ${progress.done}/${progress.total}`
-              : '목록 갱신 중…'}
-        </button>
-        {/* 보내는 동안 모달이 잠기므로(결과를 알릴 화면을 지키려고) <b>빠져나갈 손잡이</b>가 반드시
-            있어야 한다. 서버가 응답을 안 하면 자동 상한은 요청 하나에만 걸려, 물결 수만큼 곱해진
-            시간 동안 갇힌다. 갱신 단계는 조회 한 번이라 그 상한 안에 반드시 끝난다. */}
-        {progress?.sending && (
-          <button
-              type="button" className="btn-link"
-              onClick={() => canceller.current?.abort()}>
-            취소
-          </button>
-        )}
-      </div>
-      {/* 일괄 가림은 <b>신고를 닫지 않는다</b>. 화면에 안 적으면 운영자는 가렸으니 끝난 줄 알고
-          넘어가고, 그 신고는 큐에 열린 채 남아 다음 사람이 같은 건을 또 본다. */}
-      <div className="hint">가림은 신고를 종결하지 않습니다 — 아래에서 따로 종결하세요</div>
+      {/* 고를 것이 없으면 조치 줄도 내린다 — 빈 목록 아래 "선택 0건 가림"과 종결 안내만 남으면
+          무엇을 하라는 화면인지 알 수 없다. */}
+      {rows.length > 0 && (
+        <>
+          <div className="msg-picks-acts">
+            <button
+                type="button" className="btn"
+                disabled={picked.size === 0 || blocked}
+                onClick={blindPicked}>
+              {/* 단계를 라벨로 밝힌다. 종전에는 누른 뒤 화면이 <b>누르기 전과 똑같아</b> 보여
+                  (목록이 이미 차 있어 스피너도 안 떴다) 운영자가 한 번 더 누르는 일이 났다. */}
+              {progress === null
+                ? `선택 ${picked.size}건 가림`
+                : progress.sending
+                  ? `가림 중… ${progress.done}/${progress.total}`
+                  : '목록 갱신 중…'}
+            </button>
+            {/* 보내는 동안 모달이 잠기므로(결과를 알릴 화면을 지키려고) <b>빠져나갈 손잡이</b>가
+                반드시 있어야 한다. 서버가 응답을 안 하면 자동 상한은 요청 하나에만 걸려, 물결 수만큼
+                곱해진 시간 동안 갇힌다. 갱신 단계는 조회 한 번이라 그 상한 안에 반드시 끝난다. */}
+            {progress?.sending && (
+              <button
+                  type="button" className="btn-link"
+                  onClick={() => canceller.current?.abort()}>
+                취소
+              </button>
+            )}
+          </div>
+          {/* 일괄 가림은 <b>신고를 닫지 않는다</b>. 화면에 안 적으면 운영자는 가렸으니 끝난 줄 알고
+              넘어가고, 그 신고는 큐에 열린 채 남아 다음 사람이 같은 건을 또 본다. */}
+          <div className="hint">가림은 신고를 종결하지 않습니다 — 아래에서 따로 종결하세요</div>
+        </>
+      )}
     </div>
   )
 }

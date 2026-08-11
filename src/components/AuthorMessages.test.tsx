@@ -620,6 +620,31 @@ describe('취소·알림·경계(2026-08-11 4라운드 리뷰 반영)', () => {
     expect(checkboxes().every((c) => (c as HTMLInputElement).disabled)).toBe(true)
   })
 
+  /**
+   * 취소 문구는 <b>아는 것보다 많이 말하지 않는다</b>. 끊긴 요청이 서버에 닿았는지는 화면이
+   * 알 수 없고 목록만이 안다 — "N건 처리"로만 끝내면 나머지가 안 됐다는 뜻으로 읽힌다.
+   */
+  it('취소 문구는 확정된 것만 말하고 나머지는 목록을 보라고 한다', async () => {
+    hangingBlind()
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    await userEvent.click(blindButton())
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('나머지는 목록에서 확인')
+  })
+
+  /** 고를 것이 없는데 "선택 0건 가림"과 종결 안내만 남으면 무엇을 하라는 화면인지 알 수 없다. */
+  it('이 회차에 남긴 글이 없으면 조치 줄을 내린다', async () => {
+    listAuthorMessages.mockResolvedValue({ rows: [], total: 0 })
+    renderPanel()
+    await screen.findByText(/남긴 글이 없습니다/)
+
+    expect(screen.queryByRole('button', { name: /가림/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/종결하지 않습니다/)).not.toBeInTheDocument()
+  })
+
   /** 작성자를 모르면 그 사람의 글을 모을 수 없다 — 빈 목록으로 오해하게 두지 않는다. */
   it('대상 사용자 정보가 없으면 조회하지 않고 그렇게 말한다', async () => {
     renderPanel(makeReportItem({ targetUser: null }))

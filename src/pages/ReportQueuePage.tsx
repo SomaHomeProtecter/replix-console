@@ -143,6 +143,9 @@ export default function ReportQueuePage() {
           filters={filters}
           onChange={(next) => {
             setSelectedId(null) // 필터가 바뀌면 목록이 리셋되므로 선택도 함께 비운다
+            // 조치 결과 문구도 함께 내린다 — 다른 목록을 보는데 이전 목록에서 난 "3건 실패"가
+            // 그대로 떠 있으면, 지금 보는 신고들에서 난 일로 읽힌다.
+            setNotice(null)
             setFilters(next)
           }} />
       {error && <div className="error-box queue-error" role="alert">{error}</div>}
