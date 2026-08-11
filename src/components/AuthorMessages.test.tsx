@@ -65,7 +65,8 @@ function hangingBlind() {
 }
 
 const checkboxes = () => screen.getAllByRole('checkbox')
-const blindButton = () => screen.getByRole('button', { name: /가림/ })
+/** 일괄 가림 버튼 — 라벨이 단계에 따라 바뀌므로(선택 N건 / 가림 중 / 목록 갱신 중) 셋 다 잡는다. */
+const blindButton = () => screen.getByRole('button', { name: /가림|갱신 중/ })
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -280,7 +281,11 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
     await userEvent.click(blindButton())
 
     expect(blindButton()).toBeDisabled()
+    expect(blindButton()).toHaveTextContent('목록 갱신 중')   // 무엇을 기다리는지 이름을 밝힌다
     expect(screen.getAllByRole('checkbox').every((c) => (c as HTMLInputElement).disabled)).toBe(true)
+    // 보내는 단계가 끝났으므로 [취소]는 내려간다 — 눌러도 할 일이 없는 손잡이를 남기면
+    // 멎은 것처럼 보이는 화면에서 유일한 출구가 반응조차 안 하는 꼴이 된다.
+    expect(screen.queryByRole('button', { name: '취소' })).not.toBeInTheDocument()
   })
 
   /**

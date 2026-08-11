@@ -87,6 +87,15 @@ async function blindEach(
 interface Progress {
   done: number
   total: number
+  /**
+   * 아직 <b>요청을 보내는</b> 단계인가. 다 보낸 뒤에는 목록을 다시 읽는 단계로 넘어간다.
+   *
+   * <p>둘을 구분하는 이유는 [취소] 때문이다. 취소가 하는 일은 "더 보내지 않는다"인데,
+   * 다 보낸 뒤에도 버튼이 남아 있으면 눌러도 아무 일이 없다 — 멎은 것처럼 보이는 화면에서
+   * 유일한 손잡이가 반응조차 안 하면 운영자는 화면이 고장 났다고 판단한다. 그래서 보내는
+   * 동안만 내놓고, 그 뒤에는 무엇을 기다리는 중인지(목록 갱신) 이름을 밝힌다.
+   */
+  sending: boolean
 }
 
 /**
@@ -229,7 +238,7 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
     const targets = [...picked]
     const controller = new AbortController()
     canceller.current = controller
-    setProgress({ done: 0, total: targets.length })
+    setProgress({ done: 0, total: targets.length, sending: true })
     setActionError(null)
     // 보내는 즉시 선택을 비운다 — 이걸로 "같은 건이 두 번 나가는" 창이 닫힌다.
     setPicked(new Set())
@@ -250,6 +259,8 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
             : undefined
 
       if (alive.current) {
+        // 보내는 단계는 끝났다 — 여기서부터 [취소]는 할 일이 없다(아래 Progress.sending 주석).
+        setProgress((p) => (p ? { ...p, sending: false } : p))
         if (notice) setActionError(notice)
         // 남은 건을 <b>다시 고른 채로</b> 둔다. 건수만 알려주면 운영자는 40건 중 어느 3건이
         // 남았는지 알 길이 없어 처음부터 다시 훑어야 한다. 아래 재조회는 가릴 수 있는 줄의
@@ -328,11 +339,16 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
             onClick={blindPicked}>
           {/* 진행 수를 적는다. 종전에는 누른 뒤 화면이 <b>누르기 전과 똑같아</b> 보여(목록이 이미
               차 있어 스피너도 안 떴다) 운영자가 한 번 더 누르는 일이 났다. */}
-          {progress ? `가림 중… ${progress.done}/${progress.total}` : `선택 ${picked.size}건 가림`}
+          {progress === null
+            ? `선택 ${picked.size}건 가림`
+            : progress.sending
+              ? `가림 중… ${progress.done}/${progress.total}`
+              : '목록 갱신 중…'}
         </button>
-        {/* 도는 동안 모달이 잠기므로(결과를 알릴 화면을 지키려고) <b>빠져나갈 손잡이</b>가 반드시
-            있어야 한다. 서버가 응답을 안 하면 자동 상한만으로는 물결 수만큼 곱해져 몇 분씩 갇힌다. */}
-        {progress && (
+        {/* 보내는 동안 모달이 잠기므로(결과를 알릴 화면을 지키려고) <b>빠져나갈 손잡이</b>가 반드시
+            있어야 한다. 서버가 응답을 안 하면 자동 상한은 요청 하나에만 걸려, 물결 수만큼 곱해진
+            시간 동안 갇힌다. 갱신 단계는 조회 한 번이라 그 상한 안에 반드시 끝난다. */}
+        {progress?.sending && (
           <button
               type="button" className="btn-link"
               onClick={() => canceller.current?.abort()}>
