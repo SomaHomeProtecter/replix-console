@@ -351,7 +351,10 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
         {/* 이미 목록이 있는 채로 다시 읽는 중이면 화면이 놀고 있는 것처럼 보인다 */}
         {loading && rows.length > 0 && <span className="hint"> · 갱신 중…</span>}
       </h5>
-      {actionError && <div className="error-box" role="alert">{actionError}</div>}
+      {/* 조치 결과는 <b>오류가 아니라 주의</b>다 — 페이지에 올라가는 같은 문구와 같은 외피를
+          입힌다. 한 문장이 자리에 따라 빨강이 됐다 호박이 됐다 하면 심각도가 자리에 달린 것처럼
+          읽힌다. 목록을 못 읽은 것(아래 loadError)만 오류다. */}
+      {actionError && <div className="notice-box" role="status">{actionError}</div>}
       {loadError && (
         <div className="error-box" role="alert">
           {loadError}

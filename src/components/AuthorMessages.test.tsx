@@ -142,7 +142,7 @@ describe('작성자 글 일괄 보기·가림(HP-298)', () => {
     await userEvent.click(blindButton())
 
     expect(blindMessage).toHaveBeenCalledTimes(2)      // 실패해도 나머지를 멈추지 않는다
-    expect(screen.getByRole('alert')).toHaveTextContent('2건 중 1건')
+    expect(screen.getByRole('status')).toHaveTextContent('2건 중 1건')
     expect(onActionDone).toHaveBeenCalled()             // 성공분 반영을 위해 재조회
   })
 
@@ -367,12 +367,12 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
     const { rerenderWith } = renderPanel(makeReportItem({ id: 1 }))
     await screen.findByText('신고된 줄')
     await userEvent.click(blindButton())
-    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
 
     listAuthorMessages.mockResolvedValue({ rows: [], total: 0 })
     rerenderWith(makeReportItem({ id: 2, msgId: 'OTHER' }))
 
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
   /**
@@ -557,7 +557,7 @@ describe('취소·알림·경계(2026-08-11 4라운드 리뷰 반영)', () => {
     await userEvent.click(screen.getByRole('button', { name: '취소' }))
 
     expect(blindMessage).toHaveBeenCalledTimes(6)   // 나머지 4건은 영영 안 나간다
-    expect(await screen.findByRole('alert')).toHaveTextContent('취소했습니다')
+    expect(await screen.findByRole('status')).toHaveTextContent('취소했습니다')
     // 보낸 6건도 끊겼고 4건은 안 나갔다 — 확정되지 않은 10건이 그대로 골라져 있어야
     // 운영자가 [가림]을 한 번 더 누르는 것으로 이어서 할 수 있다.
     expect(blindButton()).toHaveTextContent('선택 10건 가림')
@@ -636,7 +636,7 @@ describe('취소·알림·경계(2026-08-11 4라운드 리뷰 반영)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '취소' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('나머지는 목록에서 확인')
+    expect(await screen.findByRole('status')).toHaveTextContent('나머지는 목록에서 확인')
   })
 
   /**
