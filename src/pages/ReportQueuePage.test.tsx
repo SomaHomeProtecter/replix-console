@@ -20,6 +20,9 @@ beforeEach(() => {
   // 매번 새로 파싱된 배열을 주는데, 같은 참조를 재사용하면 setItems가 bail-out 해 재렌더가
   // 아예 일어나지 않는다. 그 상태로는 "재조회 후" 동작을 검증할 수 없다.
   listReports.mockImplementation(async () => ({ items: [makeReportItem()], nextCursor: null }))
+  // 상세 모달이 품는 작성자 글 목록(HP-298)도 스텁한다 — 없으면 이 파일의 모달 테스트가
+  // 의도한 화면이 아니라 자식이 실패한 화면을 검증하게 된다(2026-08-11 자체 리뷰).
+  vi.mocked(admin.listAuthorMessages).mockResolvedValue({ rows: [], total: 0 })
 })
 
 describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () => {

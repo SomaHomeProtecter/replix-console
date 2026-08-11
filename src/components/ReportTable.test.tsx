@@ -85,6 +85,22 @@ describe('신고자 동선(HP-270)', () => {
     expect(screen.getByRole('link', { name: '신고자닉' })).toHaveAttribute('href', '/users/7')
   })
 
+  /**
+   * 행의 onKeyDown이 대상과 무관하게 Enter/Space를 preventDefault 하면, 행 안의 링크는
+   * <b>키보드로 활성화할 수 없다</b> — 마우스로만 닿는 동선이 된다. 종전 테스트는 마우스
+   * 전파만 봤다(2026-08-11 자체 리뷰).
+   */
+  it('신고자 링크는 키보드로도 열린다 — 행 핸들러가 삼키지 않는다', async () => {
+    const onSelect = vi.fn()
+    renderTable(onSelect)
+    const link = screen.getByRole('link', { name: '신고자닉' })
+    link.focus()
+
+    await userEvent.keyboard('{Enter}')
+
+    expect(onSelect).not.toHaveBeenCalled()   // 행의 모달이 대신 열리면 안 된다
+  })
+
   /** 행 클릭은 상세 모달을 여는 동작이라, 링크 클릭이 그걸 함께 발동시키면 안 된다. */
   it('신고자를 눌러도 행의 상세 모달은 열리지 않는다', async () => {
     const onSelect = vi.fn()

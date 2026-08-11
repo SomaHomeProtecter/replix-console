@@ -41,8 +41,13 @@ export function blindMessage(episodeId: number, msgId: string): Promise<{ blinde
  * 그 회차에서 그 작성자가 남긴 글 모아 보기(HP-298) — 일괄 가림의 재료.
  * 가림 자체는 이 목록으로 고른 뒤 {@link blindMessage}를 건별로 부른다(감사 1건 1행 유지).
  */
-export function listAuthorMessages(episodeId: number, userId: number): Promise<AuthorMessages> {
-  return apiFetch(`/api/v1/admin/messages/${episodeId}/by-author/${userId}`)
+export function listAuthorMessages(
+  episodeId: number, userId: number, keep?: string,
+): Promise<AuthorMessages> {
+  // keep = 신고된 msgId. 상한(200)에 잘릴 때 그 줄이 창 밖으로 밀리면 목록에 없어
+  // 미리 체크도 안 되고 운영자가 신고받은 바로 그 메시지를 가릴 수 없다.
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/by-author/${userId}`
+    + qs({ keep: keep ?? '' }))
 }
 
 export function unblindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {

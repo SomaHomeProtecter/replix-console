@@ -11,6 +11,7 @@ const listAuthorMessages = vi.mocked(admin.listAuthorMessages)
 const blindMessage = vi.mocked(admin.blindMessage)
 
 const onActionDone = vi.fn()
+const onWorkingChange = vi.fn()
 
 /** 신고된 줄 + 같은 사람이 그 회차에 남긴 다른 줄들. */
 function threeRows() {
@@ -25,8 +26,17 @@ function threeRows() {
   }
 }
 
-function renderPanel(report = makeReportItem()) {
-  return render(<AuthorMessages report={report} busy={false} onActionDone={onActionDone} />)
+function renderPanel(report = makeReportItem(), extra: { reloadKey?: number } = {}) {
+  const view = render(<AuthorMessages
+      report={report} busy={false} reloadKey={extra.reloadKey ?? 0}
+      onWorkingChange={onWorkingChange} onActionDone={onActionDone} />)
+  return {
+    ...view,
+    rerenderWith: (next: ReturnType<typeof makeReportItem>, reloadKey = 0) => view.rerender(
+        <AuthorMessages
+            report={next} busy={false} reloadKey={reloadKey}
+            onWorkingChange={onWorkingChange} onActionDone={onActionDone} />),
+  }
 }
 
 const checkboxes = () => screen.getAllByRole('checkbox')
@@ -43,7 +53,8 @@ describe('작성자 글 일괄 보기·가림(HP-298)', () => {
     renderPanel()
     expect(await screen.findByText('도배 첫째')).toBeInTheDocument()
     expect(screen.getByText('도배 셋째')).toBeInTheDocument()
-    expect(listAuthorMessages).toHaveBeenCalledWith(42, 9)
+    // keep = 신고된 msgId — 상한에 잘려도 그 줄이 목록에 남게 한다
+    expect(listAuthorMessages).toHaveBeenCalledWith(42, 9, '01FIXTUREMSG0000000000000A')
   })
 
   /**
@@ -137,5 +148,107 @@ describe('작성자 글 일괄 보기·가림(HP-298)', () => {
     renderPanel()
 
     expect(await screen.findByText(/남긴 글이 없습니다/)).toBeInTheDocument()
+  })
+})
+
+describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
+  /** 늦게 도착한 이전 신고의 응답이 지금 신고의 목록을 덮으면, 운영자가 본 적 없는 남의 글이 가려진다. */
+  it('늦게 온 이전 응답이 현재 신고의 목록을 덮지 않는다', async () => {
+    let resolveA!: (v: { rows: never[]; total: number }) => void
+    listAuthorMessages
+        .mockImplementationOnce(() => new Promise((r) => { resolveA = r as never }))
+        .mockResolvedValueOnce({
+          rows: [makeAuthorMessage({ msgId: 'B-1', message: 'B의 글' })], total: 1,
+        })
+    const { rerenderWith } = renderPanel(makeReportItem({ id: 1, msgId: 'A-MSG' }))
+    rerenderWith(makeReportItem({ id: 2, msgId: 'B-1' }))
+    await screen.findByText('B의 글')
+
+    // A의 응답이 이제야 도착한다
+    resolveA({ rows: [makeAuthorMessage({ msgId: 'A-MSG', message: 'A의 글' })] as never, total: 1 })
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(screen.queryByText('A의 글')).not.toBeInTheDocument()
+    expect(screen.getByText('B의 글')).toBeInTheDocument()
+  })
+
+  /** 새 응답이 오기 전까지 이전 신고의 글이 체크된 채 남으면 그 상태로 가림이 나갈 수 있다. */
+  it('신고가 바뀌면 새 목록이 오기 전에 이전 목록을 비운다', async () => {
+    listAuthorMessages.mockResolvedValueOnce(threeRows())
+        .mockImplementationOnce(() => new Promise(() => {}))   // 두 번째는 영영 안 온다
+    const { rerenderWith } = renderPanel(makeReportItem({ id: 1 }))
+    await screen.findByText('도배 첫째')
+
+    rerenderWith(makeReportItem({ id: 2, msgId: 'OTHER' }))
+
+    expect(screen.queryByText('도배 첫째')).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  /** 재조회가 커밋되기 전에 버튼이 풀리면 같은 선택으로 또 눌려 중복 감사 행이 쌓인다. */
+  it('재조회가 끝나기 전에는 가림 버튼이 다시 열리지 않는다', async () => {
+    renderPanel()
+    await screen.findByText('신고된 줄')
+    let resolveReload!: (v: unknown) => void
+    listAuthorMessages.mockImplementationOnce(() => new Promise((r) => { resolveReload = r as never }))
+
+    await userEvent.click(blindButton())
+
+    expect(blindButton()).toBeDisabled()
+    resolveReload({ rows: [], total: 0 })
+  })
+
+  /** 부모가 가림·해제를 하면 이 목록도 낡는다 — 같은 화면이 한 메시지에 두 상태를 말하면 안 된다. */
+  it('부모 조치 뒤에는 목록을 다시 읽는다', async () => {
+    const { rerenderWith } = renderPanel()
+    await screen.findByText('도배 첫째')
+    expect(listAuthorMessages).toHaveBeenCalledTimes(1)
+
+    rerenderWith(makeReportItem(), 1)   // 부모가 조치를 끝내 reloadKey를 올렸다
+
+    expect(listAuthorMessages).toHaveBeenCalledTimes(2)
+  })
+
+  /** 실패 배너가 다음 신고로 따라가면, 아무 조치도 안 한 신고에 실패 문구가 뜬다. */
+  it('신고가 바뀌면 이전의 실패 배너를 지운다', async () => {
+    blindMessage.mockRejectedValue(new Error('실패'))
+    const { rerenderWith } = renderPanel(makeReportItem({ id: 1 }))
+    await screen.findByText('신고된 줄')
+    await userEvent.click(blindButton())
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+
+    listAuthorMessages.mockResolvedValue({ rows: [], total: 0 })
+    rerenderWith(makeReportItem({ id: 2, msgId: 'OTHER' }))
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  /**
+   * Redis status는 visible / blocked_profanity / blocked_hate / blinded 네 값이다(ChatService).
+   * blinded만 보면 클린봇이 이미 막은 줄이 손 안 댄 글처럼 보여, 운영자가 다시 골라 가리면
+   * 뜻 없는 감사 행만 쌓인다.
+   */
+  it('클린봇이 막은 줄도 고를 수 없고 그렇게 표시된다', async () => {
+    listAuthorMessages.mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: 'M-P', message: '욕설 줄', status: 'blocked_profanity' })],
+      total: 1,
+    })
+    renderPanel()
+    await screen.findByText('욕설 줄')
+
+    expect(screen.getByRole('checkbox', { name: /욕설 줄/ })).toBeDisabled()
+    const row = screen.getByText('욕설 줄').closest('li')!
+    expect(within(row).getByText('클린봇')).toBeInTheDocument()
+  })
+
+  /** 작업 중임을 부모가 알아야 조치 버튼을 함께 잠근다(부모의 '한 번에 한 조치' 가드). */
+  it('일괄 가림 시작·종료를 부모에게 알린다', async () => {
+    renderPanel()
+    await screen.findByText('신고된 줄')
+
+    await userEvent.click(blindButton())
+
+    expect(onWorkingChange).toHaveBeenCalledWith(true)
+    expect(onWorkingChange).toHaveBeenLastCalledWith(false)
   })
 })

@@ -86,7 +86,6 @@ export function makeAuthorMessage(overrides: Partial<AuthorMessage> = {}): Autho
     message: '범인은 집사다',
     playbackTime: 100,
     status: 'visible',
-    spoilerScore: 8,
     ...overrides,
   }
 }

@@ -144,9 +144,11 @@ export interface AuthorMessage {
   msgId: string
   message: string
   playbackTime: number
-  /** Redis 실황 — 'visible' | 'blinded'. 이미 가린 것을 다시 고르지 않게 화면이 쓴다. */
+  /**
+   * Redis 실황 — visible / blocked_profanity / blocked_hate / blinded(ChatService).
+   * 이미 안 보이는 줄을 다시 고르지 않게 화면이 쓴다.
+   */
   status: string
-  spoilerScore: number | null
 }
 
 /** @property total 상한 적용 전 전체 수 — rows.length와 다르면 잘린 것이다(화면이 알려야 한다). */

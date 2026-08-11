@@ -145,6 +145,14 @@ describe('reporterTrustLine — 신고자 신뢰도 한 줄(HP-270)', () => {
         .toBe('보낸 신고 5건 · 기각 0건 (판정 5건 중 0%)')
   })
 
+  /**
+   * admin-ui는 BE와 따로 배포되고 main.tsx에 에러 경계가 없다 — 구버전 BE 응답에 이 칸이
+   * 없으면 TypeError가 사용자 상세 화면을 통째로 날린다(2026-08-11 자체 리뷰).
+   */
+  it('집계가 아예 없어도 화면을 죽이지 않는다', () => {
+    expect(reporterTrustLine(undefined)).toBe('보낸 신고 —')
+  })
+
   it('나누어떨어지지 않으면 반올림한다', () => {
     expect(reporterTrustLine({ total: 3, judged: 3, rejected: 1 }))
         .toBe('보낸 신고 3건 · 기각 1건 (판정 3건 중 33%)')

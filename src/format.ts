@@ -186,7 +186,10 @@ export function elapsedSince(
  * <p>분모를 문구에 함께 적는 이유: 같은 "기각 3건"이 판정 3건 중이면 100%, 30건 중이면 10%라
  * 뜻이 정반대인데, 비율만 보이면 읽는 사람이 그걸 알 수 없다.
  */
-export function reporterTrustLine(sent: ReportsSent): string {
+export function reporterTrustLine(sent: ReportsSent | undefined): string {
+  // 칸 자체가 없으면 모르는 것이다. admin-ui는 BE와 따로 배포되고 에러 경계가 없어,
+  // 여기서 던지면 사용자 상세 화면이 통째로 빈다 — 값 하나 때문에 화면을 잃지 않는다.
+  if (!sent) return '보낸 신고 —'
   if (sent.total === 0) return '보낸 신고 없음'
   if (sent.judged === 0) return `보낸 신고 ${sent.total}건 · 판정 전`
   const rate = Math.round((sent.rejected / sent.judged) * 100)

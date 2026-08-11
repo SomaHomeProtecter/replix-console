@@ -79,6 +79,9 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                 aria-current={selectedId === item.id ? 'true' : undefined}
                 onClick={() => onSelect(item.id)}
                 onKeyDown={(e) => {
+                  // 행 안의 링크·버튼에서 난 키까지 삼키면 그것들이 키보드로 닿지 않는다 —
+                  // 신고자 링크가 그 경우였다(2026-08-11 자체 리뷰). 행 자신에서 난 키만 처리한다.
+                  if (e.target !== e.currentTarget) return
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
                     onSelect(item.id)
