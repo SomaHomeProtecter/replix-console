@@ -17,6 +17,27 @@ export default function ReportQueuePage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * 상세 모달에서 쓰기가 도는 중 — 그동안 모달을 닫지 않는다(HP-298).
+   *
+   * <p>닫으면 패널이 언마운트돼 <b>결과를 알릴 곳이 사라진다</b>. 일괄 가림이 40건 중 3건
+   * 실패했는데 그 사실이 조용히 없어지면 운영자는 전부 가려진 줄 알고 넘어간다. 백드롭 클릭은
+   * 특히 잘못 눌리기 쉬워 "실수로 닫힘"이 흔하다.
+   *
+   * <p>갇히지 않는 근거는 <b>자동 상한이 아니라 취소 버튼</b>이다. 요청 하나는
+   * {@code API_TIMEOUT_MS}에 끊기지만 일괄 가림은 여러 물결로 나뉘어 나가므로 전체는 그 배수가
+   * 될 수 있다 — 그럴 때는 운영자가 일괄 가림 옆의 [취소]로 직접 끊는다.
+   */
+  const [writing, setWriting] = useState(false)
+  /**
+   * 상세 모달이 올린 조치 결과 문구(HP-298 일괄 가림의 일부 실패·취소).
+   *
+   * <p>모달 안에만 두면 <b>신고가 큐에서 빠지는 순간 함께 사라진다</b> — 다른 운영자가 그 신고를
+   * 종결했거나 필터가 바뀌면 패널이 언마운트되고, "40건 중 3건 실패"가 아무 데도 남지 않는다.
+   * 그 3건은 여전히 사용자에게 보이는데 화면 어디에도 그 사실이 없다. 그래서 <b>페이지가</b>
+   * 들고 있는다. 다음 조치가 끝나면 그때 결과로 덮인다.
+   */
+  const [notice, setNotice] = useState<string | null>(null)
   const loadSeq = useRef(0)
   /** 조치 뒤 재조회에서 되돌릴 스크롤 위치. null = 되돌리지 않음(필터 변경·최초 로드). */
   const restoreScroll = useRef<number | null>(null)
@@ -110,11 +131,11 @@ export default function ReportQueuePage() {
   useEffect(() => {
     if (selectedId === null) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedId(null)
+      if (e.key === 'Escape' && !writing) setSelectedId(null)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [selectedId])
+  }, [selectedId, writing])
 
   return (
     <section className="queue-layout" aria-label="신고 큐">
@@ -122,9 +143,13 @@ export default function ReportQueuePage() {
           filters={filters}
           onChange={(next) => {
             setSelectedId(null) // 필터가 바뀌면 목록이 리셋되므로 선택도 함께 비운다
+            // 조치 결과 문구도 함께 내린다 — 다른 목록을 보는데 이전 목록에서 난 "3건 실패"가
+            // 그대로 떠 있으면, 지금 보는 신고들에서 난 일로 읽힌다.
+            setNotice(null)
             setFilters(next)
           }} />
       {error && <div className="error-box queue-error" role="alert">{error}</div>}
+      {notice && <div className="notice-box queue-error" role="status">{notice}</div>}
       <ReportTable items={items} selectedId={selectedId} onSelect={setSelectedId} />
       {nextCursor && (
         <button
@@ -136,16 +161,26 @@ export default function ReportQueuePage() {
       {loading && items.length === 0 && <div className="page-status">불러오는 중…</div>}
 
       {selected && (
-        <div className="modal-backdrop" onClick={() => setSelectedId(null)}>
+        <div
+            className="modal-backdrop"
+            onClick={() => { if (!writing) setSelectedId(null) }}>
           <div
               className="modal-card" role="dialog" aria-modal="true" aria-label="신고 상세"
               onClick={(e) => e.stopPropagation()}>
             <button
                 type="button" className="modal-close" aria-label="닫기"
+                disabled={writing}
+                title={writing ? '조치를 처리하는 중입니다 — 끝나면 닫을 수 있습니다' : undefined}
                 onClick={() => setSelectedId(null)}>
               ✕
             </button>
-            <ReportDetailPanel report={selected} onActionDone={() => void reloadKeepingPlace()} />
+            <ReportDetailPanel
+                report={selected}
+                onActionDone={(next) => {
+                  setNotice(next ?? null)
+                  void reloadKeepingPlace()
+                }}
+                onBusyChange={setWriting} />
           </div>
         </div>
       )}

@@ -222,3 +222,20 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     expect(await screen.findByText(/사용자를 찾을 수 없습니다/)).toBeInTheDocument()
   })
 })
+
+describe('신고자 신뢰도(HP-270) — 정지 판단의 근거', () => {
+  it('그 사용자가 보낸 신고의 집계와 기각률을 보여준다', async () => {
+    getUserDetail.mockResolvedValue(
+        makeUserDetail({ reportsSent: { total: 12, judged: 10, rejected: 3 } }))
+    renderPage()
+    expect(await screen.findByText('보낸 신고 12건 · 기각 3건 (판정 10건 중 30%)'))
+        .toBeInTheDocument()
+  })
+
+  /** 받은 신고와 반대 축이라 라벨이 없으면 어느 쪽 수인지 알 수 없다. */
+  it('보낸 신고가 없어도 자리를 비우지 않는다', async () => {
+    getUserDetail.mockResolvedValue(makeUserDetail())
+    renderPage()
+    expect(await screen.findByText('보낸 신고 없음')).toBeInTheDocument()
+  })
+})

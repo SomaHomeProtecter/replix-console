@@ -112,7 +112,15 @@ button { font: inherit; }
   background: none; border: none; cursor: pointer;
   color: var(--muted); font-size: 14px; padding: 4px 6px; border-radius: 6px;
 }
-.modal-close:hover { color: var(--ink); background: var(--line-2); }
+.modal-close:hover:not(:disabled) { color: var(--ink); background: var(--line-2); }
+/* 조치를 처리하는 동안은 닫을 수 없다(HP-298) — 눌리지 않는데 눌릴 것처럼 보이면 고장으로 읽힌다.
+   hover 반응까지 함께 꺼야 "누를 수 있다"는 신호가 남지 않는다. */
+.modal-close:disabled { opacity: .35; cursor: progress; }
+
+/* 진행 중 목록 — 잠긴 동안 흐리게 두어 지금 손댈 수 없다는 것이 한눈에 보인다 */
+.author-msgs[aria-busy='true'] .msg-picks { opacity: .55; }
+/* [선택 N건 가림] 옆의 [취소] — 도는 동안만 나타난다(HP-298) */
+.msg-picks-acts { display: flex; align-items: center; gap: 10px; }
 
 /* 필터 툴바 (cm-toolbar — pill 칩) */
 .filter-bar {
@@ -245,6 +253,14 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .hist { border-top: 1px solid var(--line-2); padding-top: 10px; font-size: 11.5px; color: var(--muted-2); }
 .hist b { color: var(--ink); }
 .error-box { background: var(--red-soft); color: var(--red); border-radius: 6px; padding: 8px 11px; font-size: 12px; }
+/* 조치 결과 문구(HP-298 일부 실패·취소). <b>오류가 아니라 주의</b>다 — 빨강은 이 콘솔에서
+   파괴적 조치(정지) 전용이고(HP-223 확정 제약), 일부 실패는 "다시 손봐야 할 일"이지 고장이
+   아니다. 오류와 같은 외피를 입히면 운영자가 둘을 구분하지 못한다. */
+.notice-box {
+  background: var(--warn-bg); color: var(--amber-ink);
+  border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 8px 11px; font-size: 12px;
+}
 .hint { color: var(--muted); font-size: 12px; }
 
 /* ── 정지 다이얼로그 (cm-dlg) ── */
@@ -293,6 +309,13 @@ table.report-table { width: 100%; border-collapse: collapse; }
 }
 .user-header h1 { margin: 0; font-size: 16px; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .user-header .uid { font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-weight: 400; }
+/* 보낸 신고 집계(HP-270) — uid 줄 아래 보조 정보. 숫자가 나란히 읽히도록 tabular-nums.
+   색을 따로 주지 않는다: 이건 경고가 아니라 판단 재료이고, 색으로 미리 판정하면
+   "인상에 기대지 말라"는 이 지표의 목적과 어긋난다. */
+.user-header .sent-trust {
+  margin-top: 2px; font-size: 11.5px; color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
 .user-header .top-act { margin-left: auto; display: flex; gap: 8px; }
 /* 기본 정보 가로 스트립(HP-268) — 좌측 240px 칸에선 이메일이 두 줄로 접혔고, 칸을 넓히면
    조치 이력이 좁아져 돌려막기가 됐다. 한 줄로 펴서 탭이 전체 폭을 쓰게 한다. */
@@ -385,3 +408,22 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .score-chip input { position: absolute; opacity: 0; pointer-events: none; }
 .btn-score { padding: 4px 10px; font-size: 11.5px; margin-left: auto; }
 
+/* 작성자 글 일괄 보기·가림(HP-298) — 상세 모달 안, 조치 그리드 위(판단 재료). */
+.author-msgs { margin-top: 4px; }
+.author-msgs .hint { font-weight: 400; }
+.msg-picks { list-style: none; margin: 0 0 8px; padding: 0; max-height: 168px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.msg-picks li + li { border-top: 1px solid var(--line-2); }
+.msg-picks label { display: flex; align-items: center; gap: 8px; padding: 5px 9px;
+  font-size: 12px; cursor: pointer; }
+.msg-picks li.blinded label { cursor: default; }
+/* 재생 시각 — 도배는 시간 순서로 읽어야 판단이 서므로 눈금처럼 고정폭으로 세운다 */
+.msg-picks .pt { flex: none; width: 46px; font-family: var(--mono); font-size: 10.5px;
+  color: var(--muted); font-variant-numeric: tabular-nums; }
+.msg-picks .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--body); }
+.msg-picks li.blinded .txt { color: var(--muted); text-decoration: line-through; }
+/* 표식은 계측이 아니라 상태라 사유 pill과 형태가 겹치지 않게 외곽선으로 둔다(HP-296 원칙) */
+.msg-picks .mark { flex: none; font-size: 10px; padding: 0 4px; border-radius: 4px;
+  border: 1px solid var(--line-strong); color: var(--muted-2); white-space: nowrap; }
+.msg-picks .mark.rep { border-color: var(--amber); color: var(--amber-ink); }

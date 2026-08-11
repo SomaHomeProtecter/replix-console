@@ -116,10 +116,43 @@ export interface AdminActionRow {
   outcome: ResolveOutcome | null
 }
 
+/**
+ * 그 사용자가 <b>보낸</b> 신고의 집계(HP-270) — 받은 신고와 반대 축이다.
+ * 비율이 아니라 원수치가 내려온다: 분모를 무엇으로 잡느냐가 뜻을 뒤집기 때문이다.
+ */
+export interface ReportsSent {
+  /** 보낸 신고 전체 */
+  total: number
+  /** 그중 판정이 끝난 것(RESOLVED + REJECTED) — 기각률의 분모 */
+  judged: number
+  /** 그중 기각된 것 */
+  rejected: number
+}
+
 export interface UserDetail {
   profile: UserProfile
   reportsReceived: ReceivedReport[]
   actions: AdminActionRow[]
   /** 정지·해제만 담는 별도 축 — actions의 상한(50)과 경합하지 않는다(리뷰 m9). */
   suspensions: AdminActionRow[]
+  /** 그 사용자가 <b>보낸</b> 신고 집계(HP-270) — reportsReceived와 반대 축이다. */
+  reportsSent: ReportsSent
+}
+
+/** 한 회차에서 한 작성자가 남긴 글 한 줄(HP-298) — 운영자용이라 가려진 글도 원문이 온다. */
+export interface AuthorMessage {
+  msgId: string
+  message: string
+  playbackTime: number
+  /**
+   * Redis 실황 — visible / blocked_profanity / blocked_hate / blinded(ChatService).
+   * 이미 안 보이는 줄을 다시 고르지 않게 화면이 쓴다.
+   */
+  status: string
+}
+
+/** @property total 상한 적용 전 전체 수 — rows.length와 다르면 잘린 것이다(화면이 알려야 한다). */
+export interface AuthorMessages {
+  rows: AuthorMessage[]
+  total: number
 }

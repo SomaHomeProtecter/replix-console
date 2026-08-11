@@ -1,10 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import { ApiHttpError } from '../api/client'
-import { makeReportItem } from '../test/fixtures'
+import { makeAuthorMessage, makeReportItem } from '../test/fixtures'
 import ReportDetailPanel from './ReportDetailPanel'
 
 vi.mock('../api/admin')
@@ -17,27 +17,33 @@ const suspendUser = vi.mocked(admin.suspendUser)
 const fixSpoilerScore = vi.mocked(admin.fixSpoilerScore)
 
 const onActionDone = vi.fn()
+const onBusyChange = vi.fn()
 
 function renderPanel(report = makeReportItem()) {
   const view = render(
       <MemoryRouter>
-        <ReportDetailPanel report={report} onActionDone={onActionDone} />
+        <ReportDetailPanel
+          report={report} onActionDone={onActionDone} onBusyChange={onBusyChange} />
       </MemoryRouter>)
   return {
     ...view,
     /** 재조회가 같은 신고를 새 값으로 들고 온 상황 — 부모가 새 report 객체를 내려준다. */
     reload: (next: ReturnType<typeof makeReportItem>) => view.rerender(
         <MemoryRouter>
-          <ReportDetailPanel report={next} onActionDone={onActionDone} />
+          <ReportDetailPanel
+            report={next} onActionDone={onActionDone} onBusyChange={onBusyChange} />
         </MemoryRouter>),
   }
 }
 
 beforeEach(() => {
+  // 상세 패널은 이제 작성자 글 목록(HP-298)을 자식으로 품는다 — 그 조회를 스텁하지 않으면
+  // 자식이 오류 배너를 띄워 이 파일의 role="alert" 단언들이 엉뚱한 것을 잡는다.
   // clearAllMocks는 <b>호출 기록만</b> 지우고 구현은 남긴다 — 앞선 테스트가 심어 둔
   // mockReturnValue(영영 resolve 안 되는 promise)나 mockRejectedValue가 뒤 테스트로 새어,
   // 원인과 무관한 실패가 줄줄이 난다(4차 리뷰). reset은 구현까지 지운다.
   vi.resetAllMocks()
+  vi.mocked(admin.listAuthorMessages).mockResolvedValue({ rows: [], total: 0 })
 })
 
 describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 카드', () => {
@@ -75,10 +81,19 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
     expect(screen.getByText(/사라짐/)).toBeInTheDocument()
   })
 
-  it('대상 사용자 카드는 사용자 상세로 이어진다', () => {
+  /** 작성자 카드에만 있던 상세 진입을 신고자 카드에도 연다(HP-270) — 남용자에게 닿는 길. */
+  it('신고자 카드도 사용자 상세로 이어진다', () => {
     renderPanel()
-    const link = screen.getByRole('link', { name: /사용자 상세/ })
-    expect(link).toHaveAttribute('href', '/users/9')
+    const links = screen.getAllByRole('link', { name: /사용자 상세/ })
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/users/9', '/users/7'])
+  })
+
+  it('대상 사용자 카드는 사용자 상세로 이어진다', () => {
+    const { container } = renderPanel()
+    // 신고자 카드에도 같은 링크가 생겼으므로(HP-270) 대상 카드로 좁혀 찾는다
+    const targetCard = container.querySelector('.target-card:not(.reporter-card)')!
+    expect(within(targetCard as HTMLElement).getByRole('link', { name: /사용자 상세/ }))
+        .toHaveAttribute('href', '/users/9')
   })
 
   it('종결된 신고는 무슨 조치였는지와 함께 처리 정보를 보여준다', () => {
@@ -430,4 +445,141 @@ describe('2026-08-11 리뷰 반영 — 겹 경계·중복 조치·초안 보존'
     expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
   })
 
+})
+
+describe('작성자 글 일괄 가림과의 잠금(HP-298)', () => {
+  /** 신고된 줄이 미리 체크된 상태로 열리게 하는 목록. */
+  function withAuthorRows() {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: '01FIXTUREMSG0000000000000A', message: '신고된 줄' })],
+      total: 1,
+    })
+  }
+
+  /**
+   * 일괄 가림이 도는 동안 [기각]이 눌리면 한 신고에 <b>"타당해서 가리는 중"과 "부당해서 기각"이
+   * 동시에</b> 기록된다. 게다가 기각은 신고를 큐에서 빼 이 패널을 언마운트하므로 가림의 성패를
+   * 알릴 화면까지 사라져, 40건 중 3건이 실패해도 운영자는 전부 가려진 줄 안다.
+   * HP-270의 신고자 기각률은 되돌릴 수 없어 잘못 쌓인 기각 한 건이 지표를 영구히 오염시킨다.
+   */
+  it('일괄 가림이 도는 동안 조치 버튼을 전부 막는다', async () => {
+    withAuthorRows()
+    vi.mocked(admin.blindMessage).mockImplementation(() => new Promise(() => {}))
+    renderPanel()
+    const bulk = await screen.findByRole('button', { name: /선택 1건 가림/ })
+
+    await userEvent.click(bulk)
+
+    expect(screen.getByRole('button', { name: '기각' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '가림' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '조치 없이 종결' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /계정 정지/ })).toBeDisabled()
+    expect(resolveReport).not.toHaveBeenCalled()
+  })
+
+  /** 잠금이 안 풀리면 패널이 죽은 것과 같다 — 끝나면 반드시 되돌아와야 한다. */
+  it('일괄 가림이 끝나면 조치 버튼이 다시 열린다', async () => {
+    withAuthorRows()
+    renderPanel()
+    const bulk = await screen.findByRole('button', { name: /선택 1건 가림/ })
+
+    await userEvent.click(bulk)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '기각' })).toBeEnabled())
+  })
+
+  /**
+   * 쓰기 도중 패널이 사라지면 <b>반드시 잠금을 놓아야</b> 한다. 모달 닫기는 막혀 있지만
+   * 신고가 큐에서 빠지거나(필터 변경 등) 목록이 갈리면 패널은 언마운트된다. 그때 페이지의
+   * "쓰기 중"이 참으로 남으면 <b>다음에 연 모달이 영영 안 닫힌다</b> — 잠금의 주인이 이미
+   * 사라졌으니 풀어 줄 사람도 없다.
+   */
+  it('쓰기 도중 사라져도 페이지의 잠금을 놓는다 — 다음 모달이 갇히지 않게', async () => {
+    onBusyChange.mockClear()
+    resolveReport.mockImplementation(() => new Promise(() => {}))
+    const { unmount } = renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+    expect(onBusyChange).toHaveBeenLastCalledWith(true)
+
+    unmount()
+
+    expect(onBusyChange).toHaveBeenLastCalledWith(false)
+  })
+
+  /** 패널이 쓰기 중이라는 사실은 페이지도 알아야 한다 — 모달이 도중에 닫히지 않게. */
+  it('쓰기 중임을 페이지에 알리고 끝나면 푼다', async () => {
+    onBusyChange.mockClear()
+    const gate: { resolve: () => void } = { resolve: () => {} }
+    resolveReport.mockImplementation(() => new Promise((r) => {
+      gate.resolve = () => r({ id: 101, status: 'REJECTED' } as never)
+    }))
+    renderPanel()
+
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+    expect(onBusyChange).toHaveBeenLastCalledWith(true)
+
+    await act(async () => { gate.resolve() })
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false))
+  })
+})
+
+describe('신고 전환 시 자식을 새로 마운트한다(key={report.id})', () => {
+  /**
+   * 자식(작성자 글 목록)은 신고마다 <b>새로 마운트</b>돼야 한다. 안 그러면 이전 신고에서 남은
+   * 선택·실패 배너·진행 상태가 다음 신고로 따라가, 아무 조치도 안 한 신고에 "1건 실패"가
+   * 떠 있거나 운영자가 본 적 없는 글이 골라진 채로 남는다.
+   *
+   * <p>이 단언이 <b>부모 쪽에</b> 있어야 하는 이유: 자식 테스트의 하네스는 스스로 key를 주므로
+   * 검증 대상을 테스트가 직접 공급해 버린다 — 부모가 실제로 key를 거는지는 증명하지 못한다.
+   */
+  it('이전 신고의 실패 배너가 다음 신고로 따라가지 않는다', async () => {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: '01FIXTUREMSG0000000000000A', message: '신고된 줄' })],
+      total: 1,
+    })
+    vi.mocked(admin.blindMessage).mockRejectedValue(new Error('일시 오류'))
+    const { reload } = renderPanel(makeReportItem({ id: 101 }))
+    await userEvent.click(await screen.findByRole('button', { name: /선택 1건 가림/ }))
+    expect(screen.getByText(/1건 실패/)).toBeInTheDocument()
+
+    reload(makeReportItem({ id: 102 }))   // 같은 메시지의 다른 신고(묶음 ×N)
+
+    expect(screen.queryByText(/1건 실패/)).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * 한 모달 안에서 같은 사실을 두 어휘로 말하면 안 된다(이 패널이 스스로 정한 규칙). 폴백이
+ * 원문을 그대로 찍던 동안 메타 줄은 `blocked_profanity`, 바로 아래 작성자 글 목록은 `클린봇`
+ * 이었다 — currentStatus는 Redis에서 온 제약 없는 문자열이라 실제로 도달한다.
+ */
+it('클린봇 차단 실황을 원문이 아니라 이름으로 적는다', () => {
+  renderPanel(makeReportItem({ currentStatus: 'blocked_profanity' }))
+
+  expect(screen.getByText(/현재 상태 클린봇 차단/)).toBeInTheDocument()
+  expect(screen.queryByText(/blocked_profanity/)).not.toBeInTheDocument()
+})
+
+describe('잠금 사슬 — 패널 쓰기가 자식을 막는가', () => {
+  /**
+   * `busy={busy}`를 `busy={false}`로 바꾸는 변이가 모든 테스트를 통과했다(2026-08-12 독립 리뷰).
+   * 그 회귀가 나가면 <b>[기각]이 도는 중에 일괄 가림을 시작</b>할 수 있다 — 한 신고에
+   * "부당해서 기각"과 "타당해서 가리는 중"이 동시에 기록되고, HP-270의 신고자 기각률은
+   * 되돌릴 수 없어 그 신고자의 지표가 영구히 오염된다.
+   */
+  it('패널이 조치 중이면 자식의 일괄 가림도 막힌다', async () => {
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({
+      rows: [makeAuthorMessage({ msgId: '01FIXTUREMSG0000000000000A', message: '신고된 줄' })],
+      total: 1,
+    })
+    resolveReport.mockImplementation(() => new Promise(() => {}))
+    renderPanel()
+    await screen.findByRole('button', { name: /선택 1건 가림/ })
+
+    await userEvent.click(screen.getByRole('button', { name: '기각' }))
+
+    expect(screen.getByRole('button', { name: /선택 1건 가림/ })).toBeDisabled()
+    expect(screen.getAllByRole('checkbox').every((c) => (c as HTMLInputElement).disabled)).toBe(true)
+    expect(admin.blindMessage).not.toHaveBeenCalled()
+  })
 })

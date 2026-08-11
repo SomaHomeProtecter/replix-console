@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import type { ReportItem } from '../api/types'
 import { elapsedSince, formatKst, formatKstTime } from '../format'
 import Pill from './Pill'
@@ -78,6 +79,9 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                 aria-current={selectedId === item.id ? 'true' : undefined}
                 onClick={() => onSelect(item.id)}
                 onKeyDown={(e) => {
+                  // 행 안의 링크·버튼에서 난 키까지 삼키면 그것들이 키보드로 닿지 않는다 —
+                  // 신고자 링크가 그 경우였다(2026-08-11 자체 리뷰). 행 자신에서 난 키만 처리한다.
+                  if (e.target !== e.currentTarget) return
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
                     onSelect(item.id)
@@ -109,7 +113,19 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                   )}
                 </div>
               </td>
-              <td className="party reporter">{item.reporter?.displayName ?? '—'}</td>
+              {/* 신고자 이름이 그 사용자 상세로 가는 문이다(HP-270). 종전엔 상세로 가는 길이
+                  <b>작성자 경유뿐</b>이라, 신고 남용을 보려 해도 남용자에게 닿을 수 없었다.
+                  행 클릭은 상세 모달을 여는 동작이므로 전파를 끊는다 — 안 끊으면 링크를 눌러도
+                  모달이 함께 떠서 어디로 가려던 것인지 알 수 없어진다. */}
+              <td className="party reporter">
+                {item.reporter ? (
+                  <Link
+                      className="btn-link" to={`/users/${item.reporter.id}`}
+                      onClick={(e) => e.stopPropagation()}>
+                    {item.reporter.displayName ?? `#${item.reporter.id}`}
+                  </Link>
+                ) : '—'}
+              </td>
               <td><StatusBadge status={item.status} resolvedAction={item.resolvedAction} /></td>
             </tr>
           ))}

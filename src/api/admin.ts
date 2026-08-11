@@ -1,7 +1,7 @@
 import { apiFetch, qs } from './client'
 import type {
-  ReportPage, ReportReason, ReportStatus, ResolutionAction, ResolveResult, SuspendDuration,
-  SuspensionResult, UserDetail,
+  AuthorMessages, ReportPage, ReportReason, ReportStatus, ResolutionAction, ResolveResult,
+  SuspendDuration, SuspensionResult, UserDetail,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -33,8 +33,28 @@ export function reopenReport(reportId: number): Promise<ResolveResult> {
   return apiFetch(`/api/v1/admin/reports/${reportId}/reopen`, { method: 'POST' })
 }
 
-export function blindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {
-  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST' })
+/**
+ * @param signal 일괄 가림이 <b>취소</b>를 걸 수 있게 받는다(HP-298). 취소해도 이미 서버에 닿은
+ *   건은 처리될 수 있으므로, 취소 뒤에는 목록을 다시 읽어 실제 상태로 맞춘다 — 취소는 "안 나간
+ *   것으로 친다"가 아니라 "더 보내지 않고 기다리기를 멈춘다"이다.
+ */
+export function blindMessage(
+  episodeId: number, msgId: string, signal?: AbortSignal,
+): Promise<{ blinded: boolean }> {
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST', signal })
+}
+
+/**
+ * 그 회차에서 그 작성자가 남긴 글 모아 보기(HP-298) — 일괄 가림의 재료.
+ * 가림 자체는 이 목록으로 고른 뒤 {@link blindMessage}를 건별로 부른다(감사 1건 1행 유지).
+ */
+export function listAuthorMessages(
+  episodeId: number, userId: number, keep?: string,
+): Promise<AuthorMessages> {
+  // keep = 신고된 msgId. 상한(200)에 잘릴 때 그 줄이 창 밖으로 밀리면 목록에 없어
+  // 미리 체크도 안 되고 운영자가 신고받은 바로 그 메시지를 가릴 수 없다.
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/by-author/${userId}`
+    + qs({ keep: keep ?? '' }))
 }
 
 export function unblindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {
