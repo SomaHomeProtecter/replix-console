@@ -11,7 +11,6 @@ const listAuthorMessages = vi.mocked(admin.listAuthorMessages)
 const blindMessage = vi.mocked(admin.blindMessage)
 
 const onActionDone = vi.fn()
-const onWorkingChange = vi.fn()
 
 /** 신고된 줄 + 같은 사람이 그 회차에 남긴 다른 줄들. */
 function threeRows() {
@@ -26,16 +25,14 @@ function threeRows() {
   }
 }
 
-function renderPanel(report = makeReportItem(), extra: { reloadKey?: number } = {}) {
-  const view = render(<AuthorMessages
-      report={report} busy={false} reloadKey={extra.reloadKey ?? 0}
-      onWorkingChange={onWorkingChange} onActionDone={onActionDone} />)
+/** 부모는 key={report.id}로 신고마다 새로 마운트한다 — 여기서도 같은 방식으로 그린다. */
+function renderPanel(report = makeReportItem()) {
+  const view = render(
+      <AuthorMessages key={report.id} report={report} busy={false} onActionDone={onActionDone} />)
   return {
     ...view,
-    rerenderWith: (next: ReturnType<typeof makeReportItem>, reloadKey = 0) => view.rerender(
-        <AuthorMessages
-            report={next} busy={false} reloadKey={reloadKey}
-            onWorkingChange={onWorkingChange} onActionDone={onActionDone} />),
+    rerenderWith: (next: ReturnType<typeof makeReportItem>) => view.rerender(
+        <AuthorMessages key={next.id} report={next} busy={false} onActionDone={onActionDone} />),
   }
 }
 
@@ -185,28 +182,51 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   })
 
-  /** 재조회가 커밋되기 전에 버튼이 풀리면 같은 선택으로 또 눌려 중복 감사 행이 쌓인다. */
-  it('재조회가 끝나기 전에는 가림 버튼이 다시 열리지 않는다', async () => {
+  /**
+   * 보내고 나면 <b>선택을 비워</b> 같은 건이 두 번 나가지 않는다. 잠금을 재조회까지 끌지
+   * 않는 이유: 그러면 조회가 멎었을 때 화면이 무기한 잠긴다(2라운드 지적 — HP-294에서 이미
+   * 같은 실패를 겪고 되돌렸던 구조다). 점수 정정 버튼과 같은 해법이다.
+   */
+  it('보내고 나면 선택이 풀려 같은 건이 두 번 나가지 않는다', async () => {
     renderPanel()
     await screen.findByText('신고된 줄')
-    let resolveReload!: (v: unknown) => void
-    listAuthorMessages.mockImplementationOnce(() => new Promise((r) => { resolveReload = r as never }))
+    // 재조회는 영영 안 온다 — 그래도 버튼은 잠겨 있어야 한다
+    listAuthorMessages.mockImplementationOnce(() => new Promise(() => {}))
 
     await userEvent.click(blindButton())
 
     expect(blindButton()).toBeDisabled()
-    resolveReload({ rows: [], total: 0 })
+    expect(blindButton()).toHaveTextContent('선택 0건 가림')
   })
 
-  /** 부모가 가림·해제를 하면 이 목록도 낡는다 — 같은 화면이 한 메시지에 두 상태를 말하면 안 된다. */
-  it('부모 조치 뒤에는 목록을 다시 읽는다', async () => {
-    const { rerenderWith } = renderPanel()
+  /**
+   * 부모가 가림·해제를 하면 재조회로 report.currentStatus가 바뀐다 — 그걸 축으로 다시 읽는다.
+   * 별도 신호(reloadKey)를 두지 않는 이유: 그건 <b>모든</b> 부모 조치에 재조회를 걸어,
+   * 점수 정정처럼 이 목록과 무관한 조치까지 운영자가 골라 둔 선택을 지웠다(2라운드 지적).
+   */
+  it('신고 메시지의 실황이 바뀌면 목록을 다시 읽는다', async () => {
+    const { rerenderWith } = renderPanel(makeReportItem({ currentStatus: 'visible' }))
     await screen.findByText('도배 첫째')
     expect(listAuthorMessages).toHaveBeenCalledTimes(1)
 
-    rerenderWith(makeReportItem(), 1)   // 부모가 조치를 끝내 reloadKey를 올렸다
+    rerenderWith(makeReportItem({ currentStatus: 'blinded' }))
 
     expect(listAuthorMessages).toHaveBeenCalledTimes(2)
+  })
+
+  /**
+   * 같은 <b>메시지</b>에 신고가 둘이면(묶음 ×N — 큐가 가장 급하다고 강조하는 경우) 두 신고의
+   * episodeId·msgId·작성자가 모두 같다. 신고 전환을 상태 초기화로 처리하면 목록만 비고
+   * 재조회 축이 하나도 안 바뀌어 <b>영영 빈 채로 남는다</b>(2라운드 지적). key로 새로 마운트해
+   * 그 경우를 구조적으로 없앤다.
+   */
+  it('같은 메시지의 다른 신고로 옮겨도 목록이 채워진다', async () => {
+    const { rerenderWith } = renderPanel(makeReportItem({ id: 101 }))
+    await screen.findByText('도배 첫째')
+
+    rerenderWith(makeReportItem({ id: 102 }))   // msgId·episodeId·작성자 동일
+
+    expect(await screen.findByText('도배 첫째')).toBeInTheDocument()
   })
 
   /** 실패 배너가 다음 신고로 따라가면, 아무 조치도 안 한 신고에 실패 문구가 뜬다. */
@@ -228,7 +248,7 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
    * blinded만 보면 클린봇이 이미 막은 줄이 손 안 댄 글처럼 보여, 운영자가 다시 골라 가리면
    * 뜻 없는 감사 행만 쌓인다.
    */
-  it('클린봇이 막은 줄도 고를 수 없고 그렇게 표시된다', async () => {
+  it('클린봇이 막은 줄은 표시하되 고를 수 있다 — 사용자가 필터를 끄면 보인다', async () => {
     listAuthorMessages.mockResolvedValue({
       rows: [makeAuthorMessage({ msgId: 'M-P', message: '욕설 줄', status: 'blocked_profanity' })],
       total: 1,
@@ -236,19 +256,11 @@ describe('경합·상태 정합(2026-08-11 자체 리뷰)', () => {
     renderPanel()
     await screen.findByText('욕설 줄')
 
-    expect(screen.getByRole('checkbox', { name: /욕설 줄/ })).toBeDisabled()
+    // ChatHistoryService: 본문을 지우는 것은 blinded뿐이고 blocked_*는 본문이 그대로 내려가
+    // FE 클린봇 토글에 달렸다 — 즉 사용자가 끄면 보이므로 운영자가 가려야 할 대상이다.
+    expect(screen.getByRole('checkbox', { name: /욕설 줄/ })).toBeEnabled()
     const row = screen.getByText('욕설 줄').closest('li')!
     expect(within(row).getByText('클린봇')).toBeInTheDocument()
   })
 
-  /** 작업 중임을 부모가 알아야 조치 버튼을 함께 잠근다(부모의 '한 번에 한 조치' 가드). */
-  it('일괄 가림 시작·종료를 부모에게 알린다', async () => {
-    renderPanel()
-    await screen.findByText('신고된 줄')
-
-    await userEvent.click(blindButton())
-
-    expect(onWorkingChange).toHaveBeenCalledWith(true)
-    expect(onWorkingChange).toHaveBeenLastCalledWith(false)
-  })
 })

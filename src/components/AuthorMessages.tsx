@@ -3,15 +3,25 @@ import { blindMessage, listAuthorMessages } from '../api/admin'
 import type { AuthorMessage, ReportItem } from '../api/types'
 
 /**
- * 이미 사용자에게 안 보이는 상태와 그 이유(HP-298). Redis {@code status}는 네 값이다 —
- * {@code visible} · {@code blocked_profanity} · {@code blocked_hate}(클린봇 차단, ChatService) ·
- * {@code blinded}(운영자 가림). <b>blinded만 보면 클린봇이 막은 줄이 손 안 댄 글처럼 보여</b>
- * 운영자가 다시 골라 가리게 되고, 뜻 없는 감사 행만 쌓인다.
+ * 상태 표식(HP-298). Redis {@code status}는 네 값이다 — {@code visible} ·
+ * {@code blocked_profanity} · {@code blocked_hate}(클린봇 차단) · {@code blinded}(운영자 가림).
  */
-const HIDDEN_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<string, string> = {
   blinded: '가림',
   blocked_profanity: '클린봇',
   blocked_hate: '클린봇',
+}
+
+/**
+ * 다시 가려도 뜻이 없는 것은 <b>운영자 가림뿐</b>이다.
+ *
+ * <p>클린봇 차단({@code blocked_*})은 <b>사용자에게 숨겨지지 않는다</b> — 서버가 본문을 지우는
+ * 것은 {@code blinded}뿐이고, {@code blocked_*}는 본문을 그대로 내려보내 FE가 클린봇 토글에
+ * 따라 가린다(ChatHistoryService). 즉 <b>사용자가 필터를 끄면 보이므로</b> 운영자가 가려야 할
+ * 대상이다. 한때 이것도 선택 불가로 막았는데, 표식만 보고 "이미 안 보인다"고 단정한 탓이었다.
+ */
+function alreadyBlinded(status: string): boolean {
+  return status === 'blinded'
 }
 
 /**
@@ -28,19 +38,16 @@ const HIDDEN_LABELS: Record<string, string> = {
  * 뭉쳐지는데, "모든 2xx 쓰기 조치가 1행씩 남긴다"는 {@code AdminAction} 원칙은 3인이 같은
  * admin 권한을 공유하는 한 되돌림 판단의 유일한 근거다.
  */
-export default function AuthorMessages({
-  report, busy, reloadKey, onWorkingChange, onActionDone,
-}: {
+export default function AuthorMessages({ report, busy, onActionDone }: {
+  /**
+   * ⚠️ 부모는 이 컴포넌트를 {@code key={report.id}}로 그린다 — 신고가 바뀌면 <b>새로 마운트</b>된다.
+   * 상태 초기화 효과로 처리하지 않는 이유: 같은 메시지에 신고가 둘이면(묶음 ×N) 두 신고의
+   * episodeId·msgId·작성자가 모두 같아, 목록만 비고 재조회 축이 하나도 안 바뀌어 영영 빈 채로
+   * 남았다(2026-08-11 2라운드 지적). 리마운트는 그 경우를 구조적으로 없앤다.
+   */
   report: ReportItem
   /** 부모(상세 패널)가 다른 조치를 진행 중 — 그동안 여기서도 새 조치를 받지 않는다. */
   busy: boolean
-  /**
-   * 부모가 조치를 끝낼 때마다 올리는 값 — 이 목록도 함께 낡기 때문이다. 부모가 가림·해제를
-   * 하면 같은 화면이 한 메시지에 대해 두 상태를 말하게 된다(메타 줄은 '표시 중', 목록은 '가림').
-   */
-  reloadKey: number
-  /** 일괄 가림 중임을 부모에게 알린다 — 부모의 "한 번에 한 조치" 잠금에 합류하기 위함. */
-  onWorkingChange: (working: boolean) => void
   onActionDone: () => void
 }) {
   const authorId = report.targetUser?.id ?? null
@@ -91,23 +98,20 @@ export default function AuthorMessages({
     } finally {
       if (alive.current && mine === seq.current) setLoading(false)
     }
-  }, [report.episodeId, report.msgId, authorId])
+    // currentStatus를 축에 넣는다 — 부모가 신고된 메시지를 가리거나 풀면 이 목록도 낡는다.
+    // 별도 신호(reloadKey)를 두지 않는 이유: 그건 <b>모든</b> 부모 조치에 재조회를 걸어,
+    // 점수 정정처럼 이 목록과 무관한 조치까지 운영자가 골라 둔 선택을 지웠다(2라운드 지적).
+  }, [report.episodeId, report.msgId, report.currentStatus, authorId])
 
   /**
-   * 다른 신고로 옮기면 <b>새 응답을 기다리지 않고 즉시</b> 비운다. 남겨 두면 새 목록이 올
-   * 때까지(조회가 실패하면 영영) 이전 작성자의 글이 체크된 채 떠 있고, 그 상태에서 누른
-   * 가림은 지금 신고와 무관한 메시지로 나간다. 실패 배너도 함께 지운다 — 아무 조치도 하지
-   * 않은 신고에 앞 신고의 실패 문구가 남으면 안 된다.
+   * 언제나 <b>최신</b> load를 가리킨다. 아래 일괄 가림의 콜백이 클릭 시점 클로저를 그대로
+   * await 하면, 그 낡은 load가 {@code ++seq}를 해 오히려 최신이 되어 <b>자기 경합 가드를
+   * 통과</b>하고 이전 신고의 목록을 덮어썼다(2라운드 지적 — 가드를 넣으면서 우회로를 함께 만든 셈).
    */
-  useEffect(() => {
-    setRows([])
-    setTotal(0)
-    setPicked(new Set())
-    setActionError(null)
-  }, [report.id])
+  const loadRef = useRef(load)
+  useEffect(() => { loadRef.current = load }, [load])
 
-  // reloadKey는 부모 조치 후 재조회 신호다(위 prop 주석 참조).
-  useEffect(() => { void load() }, [load, reloadKey])
+  useEffect(() => { void load() }, [load])
 
   const toggle = (msgId: string) => setPicked((prev) => {
     const next = new Set(prev)
@@ -126,20 +130,22 @@ export default function AuthorMessages({
   const blindPicked = () => {
     if (picked.size === 0) return
     setWorking(true)
-    onWorkingChange(true)
     setActionError(null)
     const targets = [...picked]
+    // 보내는 즉시 선택을 비운다 — 이걸로 "같은 건이 두 번 나가는" 창이 닫힌다. 잠금을
+    // 재조회까지 끌지 않는 이유: 그러면 조회가 멎었을 때 화면이 무기한 잠긴다(HP-294에서
+    // 이미 같은 실패를 겪고 되돌렸던 구조를 2라운드에서 다시 지적받았다).
+    setPicked(new Set())
     void Promise.allSettled(targets.map((msgId) => blindMessage(report.episodeId, msgId)))
-        .then(async (results) => {
+        .then((results) => {
           const failed = results.filter((r) => r.status === 'rejected').length
           // 언마운트(모달 닫힘) 뒤에는 알릴 화면이 없다 — 상태를 건드리지 않고 조용히 끝낸다.
-          if (alive.current && failed > 0) {
-            setActionError(`${targets.length}건 중 ${failed}건 실패했습니다`)
-          }
-          // 성공분을 화면에 반영하려면 다시 읽어야 한다 — 낙관적으로 고쳐 쓰면 실패분과 어긋난다.
-          await load()
-          if (alive.current) setWorking(false)
-          onWorkingChange(false)
+          if (!alive.current) return
+          if (failed > 0) setActionError(`${targets.length}건 중 ${failed}건 실패했습니다`)
+          setWorking(false)
+          // 성공분을 화면에 반영하려면 다시 읽어야 한다(낙관적으로 고쳐 쓰면 실패분과 어긋난다).
+          // 반드시 최신 load여야 한다 — 이유는 loadRef 주석 참조.
+          void loadRef.current()
           onActionDone()
         })
   }
@@ -166,19 +172,21 @@ export default function AuthorMessages({
       {rows.length > 0 && (
         <ul className="msg-picks">
           {rows.map((row) => {
-            const hiddenLabel = HIDDEN_LABELS[row.status]
+            const label = STATUS_LABELS[row.status]
+            const blinded = alreadyBlinded(row.status)
             return (
-              <li key={row.msgId} className={hiddenLabel ? 'blinded' : undefined}>
+              <li key={row.msgId} className={blinded ? 'blinded' : undefined}>
                 <label>
                   <input
                       type="checkbox"
                       checked={picked.has(row.msgId)}
-                      // 이미 안 보이는 글은 고를 것이 없다(재가림은 감사에 뜻 없는 행만 남긴다)
-                      disabled={hiddenLabel !== undefined || busy || working}
+                      // 이미 운영자가 가린 글만 고를 것이 없다(재가림은 감사에 뜻 없는 행만
+                      // 남긴다). 클린봇 차단은 사용자가 필터를 끄면 보이므로 고를 수 있다.
+                      disabled={blinded || busy || working}
                       onChange={() => toggle(row.msgId)} />
                   <span className="pt">{Math.floor(row.playbackTime)}초</span>
                   <span className="txt">{row.message}</span>
-                  {hiddenLabel && <span className="mark">{hiddenLabel}</span>}
+                  {label && <span className="mark">{label}</span>}
                   {row.msgId === report.msgId && <span className="mark rep">신고됨</span>}
                 </label>
               </li>
