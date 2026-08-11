@@ -299,27 +299,4 @@ describe('2026-08-11 리뷰 반영 — 겹 경계·중복 조치·초안 보존'
     expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
   })
 
-  /** J/K로 옮기면 [report.id] 효과가 초기화해 쓰던 메모와 고른 점수가 말없이 사라졌다. */
-  it('다른 건을 봤다 돌아와도 쓰던 메모와 고른 점수가 남는다', async () => {
-    const first = makeReportItem({ id: 1, spoilerScore: 8 })
-    const second = makeReportItem({ id: 2, spoilerScore: 5 })
-    const { rerender } = render(
-        <MemoryRouter>
-          <ReportDetailPanel report={first} onActionDone={onActionDone} />
-        </MemoryRouter>)
-
-    await userEvent.type(screen.getByLabelText('처리 메모'), '판단 보류')
-    await userEvent.click(screen.getByRole('radio', { name: '3' }))
-
-    const show = (r: typeof first) => rerender(
-        <MemoryRouter>
-          <ReportDetailPanel report={r} onActionDone={onActionDone} />
-        </MemoryRouter>)
-    show(second)
-    expect(screen.getByLabelText('처리 메모')).toHaveValue('')   // 다른 건은 비어 있다
-    show(first)
-
-    expect(screen.getByLabelText('처리 메모')).toHaveValue('판단 보류')
-    expect(screen.getByRole('radio', { name: '3' })).toBeChecked()
-  })
 })

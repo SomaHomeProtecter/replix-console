@@ -24,6 +24,7 @@ export function makeReportItem(overrides: Partial<ReportItem> = {}): ReportItem 
     currentStatus: 'visible',
     spoilerScore: 8,
     sameMessageReportCount: 1,
+    openReportCount: 1,
     ...overrides,
   }
 }

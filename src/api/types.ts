@@ -42,7 +42,10 @@ export interface ReportItem {
   /** Redis 실황 — null이면 이미 사라진 메시지(TTL 등). */
   currentStatus: string | null
   spoilerScore: number | null
+  /** 같은 메시지 신고 <b>누계</b>(종결분 포함) — 상세의 중립적 사실. */
   sameMessageReportCount: number
+  /** 그중 <b>지금 열려 있는</b> 수 — 큐의 우선순위 칩은 이것을 쓴다. */
+  openReportCount: number
 }
 
 export interface ReportPage {

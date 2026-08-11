@@ -93,12 +93,14 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                 {item.targetUser?.displayName ?? item.snapshotDisplayName ?? '—'}
               </td>
               {/* 여러 사람이 동시에 신고한 건이 가장 급하다 — 그 수가 상세를 열어야만 보였다.
-                  1건은 모든 행에 붙어 정보가 되지 않으므로 감춘다(HP-296). */}
+                  1건은 모든 행에 붙어 정보가 되지 않으므로 감춘다(HP-296).
+                  ⚠️ 누계가 아니라 <b>열린 신고 수</b>다 — 지난주에 3번 신고돼 2건이 이미 종결된
+                  메시지가, 실제로 2건이 열려 있는 메시지보다 급해 보이면 안 된다. */}
               <td className="excerpt">
                 <div className="excerpt-row">
                   <span className="msg">{item.snapshotMessage}</span>
-                  {item.sameMessageReportCount > 1 && (
-                    <span className="cnt">묶음 ×{item.sameMessageReportCount}</span>
+                  {item.openReportCount > 1 && (
+                    <span className="cnt">묶음 ×{item.openReportCount}</span>
                   )}
                 </div>
               </td>
