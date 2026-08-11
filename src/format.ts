@@ -9,30 +9,45 @@ const KST_FULL = new Intl.DateTimeFormat('ko-KR', {
   hour: '2-digit', minute: '2-digit', hour12: false,
 })
 
-function kstParts(iso: string): Record<string, string> {
+/**
+ * 읽을 수 있는 시각이면 Date, 아니면 null.
+ *
+ * <p>Intl.DateTimeFormat은 Invalid Date에 <b>RangeError를 던진다</b> — 아래 함수들은 큐 행·이력
+ * 행 렌더 안에서 불리므로, 깨진 신고 <b>한 건이 그 화면 전체를 날린다</b>. 값 하나가 이상한 것과
+ * 화면이 안 뜨는 것은 심각도가 다르다(4차 리뷰).
+ */
+function kstDate(iso: string | null): Date | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function kstParts(d: Date): Record<string, string> {
   const parts: Record<string, string> = {}
-  for (const p of KST_FULL.formatToParts(new Date(iso))) {
+  for (const p of KST_FULL.formatToParts(d)) {
     parts[p.type] = p.value
   }
   return parts
 }
 
 export function formatKst(iso: string | null): string {
-  if (!iso) return '—'
-  return KST_FULL.format(new Date(iso))
+  const d = kstDate(iso)
+  return d === null ? '—' : KST_FULL.format(d)
 }
 
 /** 시안 큐 행 표기 — "13:42". 전체 시각은 title 속성으로 보완한다. */
 export function formatKstTime(iso: string | null): string {
-  if (!iso) return '—'
-  const p = kstParts(iso)
+  const d = kstDate(iso)
+  if (d === null) return '—'
+  const p = kstParts(d)
   return `${p.hour}:${p.minute}`
 }
 
 /** 시안 이력 행·메타 표기 — "08-04 13:42". */
 export function formatKstShort(iso: string | null): string {
-  if (!iso) return '—'
-  const p = kstParts(iso)
+  const d = kstDate(iso)
+  if (d === null) return '—'
+  const p = kstParts(d)
   return `${p.month}-${p.day} ${p.hour}:${p.minute}`
 }
 

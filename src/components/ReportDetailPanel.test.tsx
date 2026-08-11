@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,7 +34,10 @@ function renderPanel(report = makeReportItem()) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  // clearAllMocks는 <b>호출 기록만</b> 지우고 구현은 남긴다 — 앞선 테스트가 심어 둔
+  // mockReturnValue(영영 resolve 안 되는 promise)나 mockRejectedValue가 뒤 테스트로 새어,
+  // 원인과 무관한 실패가 줄줄이 난다(4차 리뷰). reset은 구현까지 지운다.
+  vi.resetAllMocks()
 })
 
 describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 카드', () => {
@@ -338,6 +341,21 @@ describe('스포일러 점수 정정(HP-294) — 판단 재료와 조치를 같�
     expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
   })
 
+  /**
+   * 메시지가 사라지면 고르던 값도 무효다(4차 리뷰). 초기화가 [id, spoilerScore]에만 걸려 있어,
+   * <b>아직 채점되지 않은</b> 메시지가 사라지는 경우 양쪽 다 null이라 효과가 돌지 않았다 —
+   * 이미 없는 메시지에 대해 고른 점수가 선택된 채 남아, 화면이 존재하지 않는 대상을 가리킨다.
+   */
+  it('미채점 메시지가 사라지면 고르던 값도 버린다', async () => {
+    const { reload } = renderPanel(makeReportItem({ spoilerScore: null, currentStatus: 'visible' }))
+    await userEvent.click(screen.getByRole('radio', { name: '7' }))
+    expect(screen.getByRole('radio', { name: '7' })).toBeChecked()
+
+    reload(makeReportItem({ spoilerScore: null, currentStatus: null }))
+
+    expect(screen.getByRole('radio', { name: '7' })).not.toBeChecked()
+  })
+
   it('정정 실패는 메시지를 표면화한다', async () => {
     fixSpoilerScore.mockRejectedValue(
         new ApiHttpError(404, 'MESSAGE_NOT_FOUND', '이미 사라진 메시지입니다'))
@@ -365,28 +383,37 @@ describe('2026-08-11 리뷰 반영 — 겹 경계·중복 조치·초안 보존'
   })
 
   /**
-   * 왕복이 끝나도 <b>재조회가 도착할 때까지</b> 버튼은 잠겨 있다(2026-08-11 재설계).
+   * 보내고 나면 <b>선택이 풀려</b> 같은 값이 두 번 나가지 않는다(2026-08-11 4차 리뷰).
    *
-   * <p>종전에는 busy가 PATCH 응답에서 바로 풀렸다. 그런데 그 시점의 화면은 아직 <b>옛 점수</b>를
-   * 들고 있어, 버튼이 "고른 값 ≠ 지금 값"으로 읽고 다시 활성이 된다 — 한 번 더 누르면 감사에
-   * score=3→3이 남는다. 종전 수정은 "방금 보낸 값"을 따로 기억해 그 창만 덮었지만, 그 기억이
-   * 지워지지 않아 다른 버그를 낳았다. 여기서는 <b>busy를 재조회까지 늘려</b> 창 자체를 없앤다 —
-   * 점수뿐 아니라 가림·기각 등 모든 조치에 같은 창이 있었으므로 한 곳에서 다 닫힌다.
+   * <p>PATCH 응답과 목록 재조회 사이에는 화면이 아직 옛 점수를 들고 있는 창이 있다. 그 창을
+   * 한때 "busy를 재조회까지 늘려" 닫으려 했는데, 재조회가 펼친 페이지 수만큼 순차 왕복이라
+   * 패널 전체가 그 사슬 내내 얼었고(한 요청이 멈추면 무기한) 재조회가 실패하면 창이 그대로
+   * 다시 열렸다. 화면을 얼리는 대신 선택을 푼다 — 아무것도 막지 않으면서 창이 닫힌다.
+   *
+   * <p>이 테스트는 재조회가 <b>아직 안 온 상태</b>(report.spoilerScore=8 그대로)를 그대로 둔다.
+   * 그 상태에서 버튼이 잠겨 있어야 이 방식이 재조회에 기대지 않는다는 뜻이다.
    */
-  it('재조회가 끝날 때까지 버튼이 잠겨 있다', async () => {
-    let finishReload!: () => void
-    onActionDone.mockReturnValue(new Promise<void>((r) => { finishReload = r }))
+  it('정정을 보내고 나면 재조회 전에도 같은 값으로 다시 누를 수 없다', async () => {
     fixSpoilerScore.mockResolvedValue({ spoilerScore: 3 })
     renderPanel(makeReportItem({ spoilerScore: 8 }))
     await userEvent.click(screen.getByRole('radio', { name: '3' }))
 
     await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
 
-    // PATCH는 끝났지만 목록 재조회가 아직 진행 중이다
     expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
     expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
+  })
 
-    await act(async () => { finishReload() })
+  /** 재조회가 실패해 새 값이 안 와도 마찬가지다 — 창이 다시 열리면 안 된다. */
+  it('재조회가 실패해도 같은 값이 두 번 나가지 않는다', async () => {
+    fixSpoilerScore.mockResolvedValue({ spoilerScore: 3 })
+    onActionDone.mockImplementation(() => { /* 부모 재조회가 실패해 아무 갱신도 없다 */ })
+    renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+    await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
+
+    expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
+    expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
   })
 
   /** 재조회가 새 값을 들고 오면 고르던 값이 곧 지금 값이 되어 다시 누를 것이 없다. */

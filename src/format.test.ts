@@ -4,6 +4,18 @@ import {
 } from './format'
 
 describe('formatKst 계열', () => {
+  /**
+   * 읽을 수 없는 시각도 던지지 않고 대시로 눕는다(2026-08-11 4차 리뷰). Intl.DateTimeFormat은
+   * Invalid Date에 RangeError를 던지는데, 이 함수들은 큐 행 렌더 안에서 불리므로 <b>깨진 신고
+   * 한 건이 큐 화면 전체를 날린다</b>. 같은 칸의 경과 뱃지에 넣어 둔 '모르면 —' 가드도 이것
+   * 때문에 한 번도 실행되지 않았다 — formatKst가 먼저 평가돼 터진다.
+   */
+  it('읽을 수 없는 시각도 던지지 않고 대시로 눕는다', () => {
+    expect(formatKst('깨진값')).toBe('—')
+    expect(formatKstTime('깨진값')).toBe('—')
+    expect(formatKstShort('깨진값')).toBe('—')
+  })
+
   it('null은 대시로', () => {
     expect(formatKst(null)).toBe('—')
     expect(formatKstTime(null)).toBe('—')

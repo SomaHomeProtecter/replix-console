@@ -31,11 +31,8 @@ function liveStatusLabel(currentStatus: string | null): string {
  */
 export default function ReportDetailPanel({ report, onActionDone }: {
   report: ReportItem
-  /**
-   * 조치 후 부모가 목록을 다시 읽는다. <b>Promise를 돌려주면 그것이 끝날 때까지 busy가 유지된다</b> —
-   * 재조회 전에 버튼이 풀리면 화면이 아직 옛 값을 들고 있는 채로 같은 조치를 한 번 더 받는다.
-   */
-  onActionDone: () => void | Promise<void>
+  /** 조치 후 부모가 목록을 다시 읽는다. */
+  onActionDone: () => void
 }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -70,7 +67,10 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     // 믿지만 실제로는 5→3을 고치게 된다. 근거가 바뀌면 그 근거로 만든 선택도 무효다.
     // 메모는 여기서 건드리지 않는다 — 점수와 무관한 글이라, 채점 한 번에 날아가면 안 된다.
     setPicked(null)
-  }, [report.id, report.spoilerScore])
+    // currentStatus도 축에 넣는다 — 메시지가 사라지면 고르던 점수의 <b>대상</b>이 없어진 것이다.
+    // 점수만 보면 미채점 메시지가 사라지는 경우 null → null이라 아무 일도 안 일어나, 이미 없는
+    // 메시지에 대한 선택이 화면에 남는다(4차 리뷰).
+  }, [report.id, report.spoilerScore, report.currentStatus])
 
   const noteOrNull = () => {
     const trimmed = note.trim()
@@ -149,6 +149,15 @@ export default function ReportDetailPanel({ report, onActionDone }: {
     if (picked === null) return
     run(async () => {
       await fixSpoilerScore(report.episodeId, report.msgId, picked)
+      // 보냈으면 선택을 푼다 — 이걸로 "왕복 직후 같은 값으로 한 번 더 눌리는" 창이 닫힌다.
+      // 화면의 report.spoilerScore는 재조회가 와야 갱신되지만, 선택이 없으면 버튼은 어차피
+      // 비활성이므로 <b>재조회를 기다리지 않아도</b> 중복이 나가지 않는다.
+      //
+      // 한때 이 창을 busy가 재조회까지 이어지게 해서 닫으려 했는데, 재조회가 펼친 페이지 수만큼
+      // 순차 왕복이라 조치 한 번에 패널 전체가 그 사슬 내내 얼었고(한 요청이 멈추면 무기한),
+      // 재조회가 실패하면 창이 그대로 다시 열렸다. 화면을 얼리는 대신 선택을 푸는 편이,
+      // 성공·실패 어느 쪽에서도 같은 값이 두 번 나가지 않게 하면서 아무것도 막지 않는다.
+      setPicked(null)
     })
   }
 
@@ -261,7 +270,8 @@ export default function ReportDetailPanel({ report, onActionDone }: {
             둘이 다른 수를 말하면서 어느 쪽이 무엇인지 화면에 없으면, 같은 신고에서 2와 5를 본
             운영자가 무엇을 믿을지 알 수 없다 — 다를 때만 둘을 함께 밝힌다(같으면 군더더기). */}
         <span>같은 메시지 신고 <b>{report.sameMessageReportCount}건</b>
-          {report.openReportCount !== report.sameMessageReportCount
+          {typeof report.openReportCount === 'number'
+            && report.openReportCount !== report.sameMessageReportCount
             && ` (열림 ${report.openReportCount}건)`}</span>
         {report.currentStatus === 'blinded' && (
           <> · <button type="button" className="btn-link" disabled={busy} onClick={unblind}>가림 해제</button></>
