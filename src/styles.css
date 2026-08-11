@@ -149,24 +149,39 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .excerpt-row .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .excerpt-row .cnt { flex: none; }
 
-/* 같은 메시지에 몰린 신고 수 — 도배 판별의 첫 단서라 발췌 옆에 붙인다. */
+/* ── 계측 표식(대기 시간·묶음 수)은 <b>외곽선·중립</b>으로 그린다 ────────────────────────
+   원칙(2026-08-11 재설계): 한 행 안에서 <b>분류는 채움, 계측은 외곽선/중립</b>이다.
+   사유 pill(욕설=빨강·스포일러=호박·도배=보라·기타=회색)이 이미 '채워진 색'이라는 어휘를
+   독점하고 있는데, 계측 표식이 같은 어휘를 빌려 쓰면서 hex까지 겹쳐 있었다 —
+   .agebadge.warm = .p-spoiler, .cnt = .p-spam, .agebadge.fresh = .p-other 로 <b>세 쌍이
+   바이트 단위로 같은 색</b>이었다. 그 결과 같은 행에서 같은 모양·같은 색이 어떤 자리에선
+   '스포일러 신고'를, 다른 자리에선 '하루 지남'을 뜻해 색이 뜻을 잃었다.
+   형태로 갈라 두면 색이 겹쳐도 역할이 섞이지 않는다. */
+
+/* 같은 메시지에 몰린 신고 수 — 도배 판별의 첫 단서라 발췌 옆에 붙인다.
+   수량은 분류가 아니므로 사유 색을 빌리지 않는다(중립 외곽선). */
 .cnt {
   font-family: var(--mono); font-size: 10px; font-weight: 700;
-  border-radius: 4px; padding: 1px 5px; white-space: nowrap;
-  background: var(--purple-soft); color: var(--purple);
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: transparent; color: var(--muted-2); border: 1px solid var(--line-strong);
 }
 
 /* 대기 시간 뱃지(HP-296) — 24시간 넘김 = warm, 48시간 넘김 = hot.
    ⚠️ hot에 빨강(--red)을 쓰지 않는다: 콘솔에서 빨강은 파괴적 조치(정지) 전용이고
-   (HP-223 확정 제약), 오래 기다린 신고는 급할 뿐 파괴적이지 않다. 대신 호박을
-   소프트 → 솔리드 반전으로 올려 단계를 만든다. */
+   (HP-223 확정 제약), 오래 기다린 신고는 급할 뿐 파괴적이지 않다.
+   단계는 <b>형태</b>로 올린다 — 없음(fresh) → 외곽선(warm) → 솔리드(hot). 솔리드는 어떤
+   사유 pill도 쓰지 않는 형태라, 가장 급한 것만 행에서 유일하게 튄다. */
 .agebadge {
   margin-left: 6px; font-family: var(--mono); font-size: 10px; font-weight: 700;
-  border-radius: 4px; padding: 1px 5px; white-space: nowrap;
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: transparent; border: 1px solid transparent;
 }
-.agebadge.fresh { background: #e9eef2; color: #5b6875; }
-.agebadge.warm { background: var(--amber-soft); color: var(--amber-ink); }
-.agebadge.hot { background: var(--amber-ink); color: #fff; }
+/* 하루 안쪽은 급하지 않다 — 테두리도 주지 않아 훑는 눈에 걸리지 않게 한다. */
+.agebadge.fresh { color: var(--muted); }
+.agebadge.warm { color: var(--amber-ink); border-color: var(--amber); }
+.agebadge.hot { background: var(--amber-ink); border-color: var(--amber-ink); color: #fff; }
 /* 작성자·신고자 칸(HP-268) — 이름은 줄바꿈 없이, 신고자는 한 톤 낮춰 본문 경쟁을 피한다. */
 .report-table .party { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-table .party.reporter { color: var(--muted); }

@@ -19,10 +19,18 @@ const fixSpoilerScore = vi.mocked(admin.fixSpoilerScore)
 const onActionDone = vi.fn()
 
 function renderPanel(report = makeReportItem()) {
-  return render(
+  const view = render(
       <MemoryRouter>
         <ReportDetailPanel report={report} onActionDone={onActionDone} />
       </MemoryRouter>)
+  return {
+    ...view,
+    /** 재조회가 같은 신고를 새 값으로 들고 온 상황 — 부모가 새 report 객체를 내려준다. */
+    reload: (next: ReturnType<typeof makeReportItem>) => view.rerender(
+        <MemoryRouter>
+          <ReportDetailPanel report={next} onActionDone={onActionDone} />
+        </MemoryRouter>),
+  }
 }
 
 beforeEach(() => {
@@ -41,9 +49,22 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
     expect(screen.getByText(/결말을 그대로 말해요/)).toBeInTheDocument() // 신고 상세 사유
   })
 
-  it('같은 메시지 다중 신고는 집계로 강조한다', () => {
-    renderPanel(makeReportItem({ sameMessageReportCount: 3 }))
+  /**
+   * 누계와 열린 수를 <b>함께</b> 밝힌다(2026-08-11 재설계). 목록의 "묶음 ×2" 칩은 열린 수를 세고
+   * 상세의 "신고 N건"은 누계를 세는데, 둘이 서로 다른 수를 말하면서 <b>어느 쪽이 무엇인지</b>
+   * 화면에 없었다 — 운영자는 같은 신고에서 2와 5를 보고 무엇을 믿을지 알 수 없었다.
+   */
+  it('같은 메시지 다중 신고는 누계와 열린 수를 함께 밝힌다', () => {
+    renderPanel(makeReportItem({ sameMessageReportCount: 5, openReportCount: 2 }))
+    expect(screen.getByText(/같은 메시지 신고/))
+        .toHaveTextContent('같은 메시지 신고 5건 (열림 2건)')
+  })
+
+  /** 열린 것이 곧 전부면 괄호가 군더더기다 — 같은 수를 두 번 읽히지 않는다. */
+  it('누계와 열린 수가 같으면 한 번만 말한다', () => {
+    renderPanel(makeReportItem({ sameMessageReportCount: 3, openReportCount: 3 }))
     expect(screen.getByText(/같은 메시지 신고/)).toHaveTextContent('같은 메시지 신고 3건')
+    expect(screen.queryByText(/열림/)).not.toBeInTheDocument()
   })
 
   it('사라진 메시지(실황 null)는 그렇게 말한다', () => {
@@ -249,6 +270,69 @@ describe('스포일러 점수 정정(HP-294) — 판단 재료와 조치를 같�
     expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
   })
 
+  /**
+   * 서버 점수가 바뀌면 <b>고르던 값을 버린다</b>(2026-08-11 재설계).
+   *
+   * <p>종전에는 "선택은 화면의 상태지 서버의 상태가 아니다"라며 재조회가 와도 고르던 값을 지켰다.
+   * 그런데 그 사이 채점 배치나 다른 운영자가 점수를 바꿨으면, 화면은 <b>이미 낡은 판단 근거</b>를
+   * 계속 들고 있게 된다. 그 상태로 누르면 운영자는 8→3을 고친다고 믿지만 실제로는 5→3을 고친다.
+   * 근거가 바뀌면 그 근거로 만든 선택도 무효다 — 새 사실을 보여주고 다시 고르게 하는 편이 옳다.
+   */
+  it('서버 점수가 바뀌면 고르던 값을 버리고 새 사실을 보여준다', async () => {
+    const { reload } = renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+
+    reload(makeReportItem({ spoilerScore: 5 }))   // 배치·다른 운영자가 바꾼 값이 재조회로 도착
+
+    expect(screen.getByRole('radio', { name: '5' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '3' })).not.toBeChecked()
+    expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
+  })
+
+  /**
+   * <b>방금 보냈던 값으로도 다시 정정할 수 있어야 한다</b>(2026-08-11 재설계).
+   *
+   * <p>종전에는 "방금 보낸 값"을 따로 기억해 그 값으로 다시 못 누르게 막았다. 그런데 그 기억은
+   * 서버가 그 뒤에 다른 값이 돼도 지워지지 않아, 3으로 고친 뒤 배치가 6으로 덮은 상황에서
+   * <b>3으로 되돌리는 길이 영영 막힌다</b> — 버튼은 회색인데 이유는 화면 어디에도 없다.
+   * 기준은 하나면 된다: <b>지금 서버가 아는 값과 다르면</b> 보낼 수 있다.
+   */
+  it('다른 곳에서 점수가 바뀐 뒤에는 방금 보냈던 값으로도 다시 정정할 수 있다', async () => {
+    const { reload } = renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+    await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
+
+    reload(makeReportItem({ spoilerScore: 6 }))   // 채점 배치가 그 뒤 6으로 바꿔 놓았다
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+
+    expect(screen.getByRole('button', { name: '점수 정정' })).toBeEnabled()
+  })
+
+  /**
+   * 점수가 바뀌어도 <b>쓰던 메모는 지우지 않는다</b>. 점수는 조치의 판단 근거라 바뀌면 선택을
+   * 무효로 두는 것이 맞지만, 처리 메모는 운영자가 손으로 쓴 글이고 점수와 아무 관계가 없다 —
+   * 재조회 한 번에 날아가면 긴 메모를 쓰는 동안 배치가 채점만 해도 글이 사라진다.
+   * (입력을 비우는 기준은 "다른 신고로 옮겼는가"이지 "이 신고의 어떤 값이 바뀌었는가"가 아니다.)
+   */
+  it('서버 점수가 바뀌어도 쓰던 처리 메모는 남는다', async () => {
+    const { reload } = renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.type(screen.getByLabelText('처리 메모'), '반복 신고자 확인 중')
+
+    reload(makeReportItem({ spoilerScore: 5 }))
+
+    expect(screen.getByLabelText('처리 메모')).toHaveValue('반복 신고자 확인 중')
+  })
+
+  /** 다른 신고로 옮기면 이전 신고의 입력이므로 비운다 — 이쪽이 비우는 기준이다. */
+  it('다른 신고를 열면 쓰던 메모를 비운다', async () => {
+    const { reload } = renderPanel(makeReportItem({ id: 101 }))
+    await userEvent.type(screen.getByLabelText('처리 메모'), '이전 건 메모')
+
+    reload(makeReportItem({ id: 202 }))
+
+    expect(screen.getByLabelText('처리 메모')).toHaveValue('')
+  })
+
   it('사라진 메시지(실황 null)에는 정정 자체를 막는다 — BE가 404로 되돌려 보낸다', () => {
     renderPanel(makeReportItem({ currentStatus: null, spoilerScore: null }))
     expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
@@ -281,20 +365,40 @@ describe('2026-08-11 리뷰 반영 — 겹 경계·중복 조치·초안 보존'
   })
 
   /**
-   * busy는 왕복이 끝나면 바로 풀리는데 report.spoilerScore는 재조회가 와야 갱신된다 —
-   * 그 사이 버튼이 다시 활성이라 두 번째 누름이 score=3→3 감사 행을 남긴다.
+   * 왕복이 끝나도 <b>재조회가 도착할 때까지</b> 버튼은 잠겨 있다(2026-08-11 재설계).
+   *
+   * <p>종전에는 busy가 PATCH 응답에서 바로 풀렸다. 그런데 그 시점의 화면은 아직 <b>옛 점수</b>를
+   * 들고 있어, 버튼이 "고른 값 ≠ 지금 값"으로 읽고 다시 활성이 된다 — 한 번 더 누르면 감사에
+   * score=3→3이 남는다. 종전 수정은 "방금 보낸 값"을 따로 기억해 그 창만 덮었지만, 그 기억이
+   * 지워지지 않아 다른 버그를 낳았다. 여기서는 <b>busy를 재조회까지 늘려</b> 창 자체를 없앤다 —
+   * 점수뿐 아니라 가림·기각 등 모든 조치에 같은 창이 있었으므로 한 곳에서 다 닫힌다.
    */
-  it('정정 요청 뒤 같은 값으로 다시 누를 수 없다', async () => {
-    let release!: () => void
-    fixSpoilerScore.mockReturnValue(new Promise((r) => {
-      release = () => r({ spoilerScore: 3 })
-    }))
+  it('재조회가 끝날 때까지 버튼이 잠겨 있다', async () => {
+    let finishReload!: () => void
+    onActionDone.mockReturnValue(new Promise<void>((r) => { finishReload = r }))
+    fixSpoilerScore.mockResolvedValue({ spoilerScore: 3 })
     renderPanel(makeReportItem({ spoilerScore: 8 }))
+    await userEvent.click(screen.getByRole('radio', { name: '3' }))
+
+    await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
+
+    // PATCH는 끝났지만 목록 재조회가 아직 진행 중이다
+    expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
+    expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
+
+    await act(async () => { finishReload() })
+  })
+
+  /** 재조회가 새 값을 들고 오면 고르던 값이 곧 지금 값이 되어 다시 누를 것이 없다. */
+  it('재조회가 도착하면 같은 값으로 다시 누를 수 없다', async () => {
+    fixSpoilerScore.mockResolvedValue({ spoilerScore: 3 })
+    const { reload } = renderPanel(makeReportItem({ spoilerScore: 8 }))
     await userEvent.click(screen.getByRole('radio', { name: '3' }))
     await userEvent.click(screen.getByRole('button', { name: '점수 정정' }))
 
-    await act(async () => { release() })
+    reload(makeReportItem({ spoilerScore: 3 }))
 
+    expect(screen.getByRole('radio', { name: '3' })).toBeChecked()
     expect(screen.getByRole('button', { name: '점수 정정' })).toBeDisabled()
     expect(fixSpoilerScore).toHaveBeenCalledTimes(1)
   })

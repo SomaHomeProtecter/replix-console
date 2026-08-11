@@ -31,31 +31,46 @@ function liveStatusLabel(currentStatus: string | null): string {
  */
 export default function ReportDetailPanel({ report, onActionDone }: {
   report: ReportItem
-  onActionDone: () => void
+  /**
+   * 조치 후 부모가 목록을 다시 읽는다. <b>Promise를 돌려주면 그것이 끝날 때까지 busy가 유지된다</b> —
+   * 재조회 전에 버튼이 풀리면 화면이 아직 옛 값을 들고 있는 채로 같은 조치를 한 번 더 받는다.
+   */
+  onActionDone: () => void | Promise<void>
 }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [score, setScore] = useState<number | null>(report.spoilerScore)
   /**
-   * 방금 정정해 보낸 값. {@code busy}는 왕복이 끝나면 바로 풀리는데 {@code report.spoilerScore}는
-   * 재조회가 와야 갱신되므로, 그 사이 버튼이 다시 활성이 되어 같은 값으로 한 번 더 눌리면
-   * 감사에 <b>{@code score=3→3}</b>이 남는다 — 그 창을 이 값으로 덮는다(2026-08-11 리뷰).
+   * 운영자가 고른 점수. <b>null = 아직 안 골랐다</b>(화면엔 서버 값이 그대로 보인다).
+   *
+   * <p>서버 값을 복사해 두지 않는다(2026-08-11 재설계). 종전에는 서버 값을 상태로 복사하고,
+   * 거기에 "방금 보낸 값"까지 따로 기억했다. 사실 하나를 세 곳(서버·복사본·보낸 값)에 두니
+   * 셋이 어긋나는 조합마다 버그가 났다 — 낡은 복사본이 새 서버 값을 덮거나, 지워지지 않는
+   * "보낸 값" 때문에 그 점수로 되돌리는 길이 영영 막히거나. 정본은 {@code report.spoilerScore}
+   * 하나이고, 이 상태는 <b>거기서 얼마나 벗어났는가</b>만 들고 있는다.
    */
-  const [sentScore, setSentScore] = useState<number | null>(null)
+  const [picked, setPicked] = useState<number | null>(null)
+  /** 화면에 선택으로 보이는 값 — 고른 것이 있으면 그것, 없으면 서버가 아는 값. */
+  const score = picked ?? report.spoilerScore
+
+  // 비우는 기준이 둘로 갈린다 — 무엇이 바뀌었느냐가 아니라 <b>무엇이 무효가 됐느냐</b>가 기준이다.
 
   useEffect(() => {
-    // 다른 행을 선택하면 입력·오류는 이전 신고의 것이므로 비운다
+    // 다른 신고로 옮기면 입력·오류·열린 겹은 전부 이전 신고의 것이다.
+    // 손으로 쓴 메모가 여기 있는 이유: 메모를 무효로 만드는 것은 '다른 신고'뿐이다.
     setNote('')
     setError(null)
     setDialogOpen(false)
-    setScore(report.spoilerScore)
-    setSentScore(null)
-    // report.spoilerScore는 의도적으로 의존성에서 뺀다 — 재조회로 같은 신고가 새 객체로 와도
-    // 운영자가 고르던 점수를 되돌리지 않는다(선택은 화면의 상태지 서버의 상태가 아니다).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report.id])
+
+  useEffect(() => {
+    // 서버 점수가 바뀌면 고르던 값을 버린다. 점수는 조치의 <b>판단 근거</b>인데, 그 사이
+    // 채점 배치나 다른 운영자가 바꿨다면 근거가 달라진 것이다 — 운영자는 8→3을 고친다고
+    // 믿지만 실제로는 5→3을 고치게 된다. 근거가 바뀌면 그 근거로 만든 선택도 무효다.
+    // 메모는 여기서 건드리지 않는다 — 점수와 무관한 글이라, 채점 한 번에 날아가면 안 된다.
+    setPicked(null)
+  }, [report.id, report.spoilerScore])
 
   const noteOrNull = () => {
     const trimmed = note.trim()
@@ -131,10 +146,9 @@ export default function ReportDetailPanel({ report, onActionDone }: {
    * 가린다</b>. 신고를 종결하지는 않는다 — 점수를 고친 것과 신고를 어떻게 닫을지는 별개 판단이다.
    */
   const fixScore = () => {
-    if (score === null) return
+    if (picked === null) return
     run(async () => {
-      await fixSpoilerScore(report.episodeId, report.msgId, score)
-      setSentScore(score)
+      await fixSpoilerScore(report.episodeId, report.msgId, picked)
     })
   }
 
@@ -199,17 +213,18 @@ export default function ReportDetailPanel({ report, onActionDone }: {
                   checked={score === n}
                   // 사라진 메시지는 BE가 404로 되돌려 보낸다 — 눌러 보고 실패하지 않게 미리 막는다
                   disabled={busy || report.currentStatus === null}
-                  onChange={() => setScore(n)} />
+                  onChange={() => setPicked(n)} />
               <span>{n}</span>
             </label>
           ))}
         </div>
         <button
             type="button" className="btn btn-score"
-            // 같은 값으로 정정하면 감사에 `score=8→8` 한 줄만 쌓인다 — 기록을 흐린다
-            // 서버가 아는 값 = 방금 보낸 값(재조회 전) ?? 마지막으로 읽어 온 값
-            disabled={busy || report.currentStatus === null || score === null
-              || score === (sentScore ?? report.spoilerScore)}
+            // 기준은 하나다 — <b>지금 서버가 아는 값과 다르면</b> 보낼 수 있다. 같은 값이면
+            // 감사에 `score=8→8` 한 줄만 쌓여 기록을 흐린다. 조치 중(busy)은 재조회가 끝날
+            // 때까지 이어지므로, 왕복 직후 같은 값으로 한 번 더 눌리는 창도 여기서 닫힌다.
+            disabled={busy || report.currentStatus === null || picked === null
+              || picked === report.spoilerScore}
             onClick={fixScore}>
           점수 정정
         </button>
@@ -242,7 +257,12 @@ export default function ReportDetailPanel({ report, onActionDone }: {
       </label>
 
       <div className="hist">
-        <span>같은 메시지 신고 <b>{report.sameMessageReportCount}건</b></span>
+        {/* 목록의 "묶음 ×N" 칩은 <b>열린</b> 신고를, 여기 "신고 N건"은 <b>누계</b>를 센다.
+            둘이 다른 수를 말하면서 어느 쪽이 무엇인지 화면에 없으면, 같은 신고에서 2와 5를 본
+            운영자가 무엇을 믿을지 알 수 없다 — 다를 때만 둘을 함께 밝힌다(같으면 군더더기). */}
+        <span>같은 메시지 신고 <b>{report.sameMessageReportCount}건</b>
+          {report.openReportCount !== report.sameMessageReportCount
+            && ` (열림 ${report.openReportCount}건)`}</span>
         {report.currentStatus === 'blinded' && (
           <> · <button type="button" className="btn-link" disabled={busy} onClick={unblind}>가림 해제</button></>
         )}

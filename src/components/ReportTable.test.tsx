@@ -25,4 +25,21 @@ describe('경과 뱃지는 시간을 따라간다', () => {
 
     expect(screen.getByText('1일')).toBeInTheDocument()
   })
+
+  /**
+   * 내려갈 때 타이머를 놓는지 <b>직접</b> 확인한다. 위 테스트는 타이머가 도는 것만 보므로,
+   * 정리를 지워도 초록으로 남는다 — 그리고 이 화면은 필터·재조회로 자주 다시 그려지는 데다
+   * 콘솔을 온종일 열어 두는 사용이라, 새면 인터벌이 조용히 쌓여 1분마다 죽은 컴포넌트를
+   * 깨운다. 언마운트를 테스트 안에서 명시적으로 부르므로 afterEach 순서에 기대지 않는다.
+   */
+  it('화면에서 내려가면 타이머를 놓는다', () => {
+    vi.useFakeTimers()
+    const { unmount } = render(
+        <ReportTable items={[makeReportItem()]} selectedId={null} onSelect={() => {}} />)
+    expect(vi.getTimerCount()).toBe(1)
+
+    unmount()
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })

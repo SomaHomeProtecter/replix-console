@@ -247,8 +247,8 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     await waitFor(() => expect(listReports.mock.calls.length).toBe(before + 2))
     expect(listReports.mock.calls[before]).toEqual([{ status: 'OPEN', reason: '' }, null])
     expect(listReports.mock.calls[before + 1]).toEqual([{ status: 'OPEN', reason: '' }, '101'])
-    // 2페이지 내용이 목록에 남아 있다 — 조치 뒤 모달이 다음 열림 건(그게 이 건이다)으로
-    // 이어지므로 같은 문구가 모달에도 뜬다. 이 테스트의 관심사는 목록이라 표로 좁힌다.
+    // 2페이지 내용이 목록에 남아 있다. 같은 문구가 열려 있는 상세 모달에도 떠 있으므로,
+    // 이 테스트의 관심사(목록이 다시 채워졌는가)에 맞게 표 안으로 좁혀 찾는다.
     expect(await within(screen.getByRole('table')).findByText('두번째 페이지 메시지', { exact: false }))
         .toBeInTheDocument()
   })
@@ -295,5 +295,31 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
 
     await userEvent.keyboard('{Escape}') // 이번엔 모달이 닫힌다
     expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * 2026-08-11 실브라우저에서 발견 — 정지 다이얼로그를 띄운 뒤 <b>그 안의 빈 곳</b>(제목 등)을
+   * 클릭하면 포커스가 body로 떨어지고, 그 상태의 Esc는 다이얼로그의 onKeyDown을 거치지 않고
+   * 문서로 직행해 <b>확인 겹과 상세 모달이 함께 닫힌다</b>. 파괴적 조치 앞에 확인 한 겹을 둔
+   * 의미가 사라진다. 고침은 다이얼로그 컨테이너의 {@code tabIndex={-1}}이다.
+   *
+   * <p>위 테스트와 다른 것을 지킨다 — 위는 <b>포커스가 겹 안에 있을 때</b>의 순서고, 이것은
+   * <b>포커스가 빠져나갔을 때</b>도 순서가 지켜지는지다. 마우스만 쓰는 흔한 경로가 후자다.
+   * (HP-295로 이 겹을 여는 단축키가 빠지면서 원래 테스트가 함께 지워졌는데, 고침은 남아 있어
+   * 지키는 테스트가 없는 상태였다 — 클릭으로 여는 경로로 되살린다.)
+   */
+  it('다이얼로그 안 빈 곳을 눌러도 Esc는 위 겹만 닫는다', async () => {
+    renderPage()
+    await screen.findByText('범인은 집사다', { exact: false })
+    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(screen.getByRole('button', { name: /계정 정지/ }))
+    expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
+
+    // 겹 안의 포커스 안 받는 영역(제목)을 클릭 → tabIndex가 없으면 포커스가 body로 떨어진다
+    await userEvent.click(screen.getByRole('heading', { name: /계정 정지/ }))
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog', { name: '계정 정지' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
   })
 })

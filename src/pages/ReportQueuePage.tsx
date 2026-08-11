@@ -145,7 +145,7 @@ export default function ReportQueuePage() {
                 onClick={() => setSelectedId(null)}>
               ✕
             </button>
-            <ReportDetailPanel report={selected} onActionDone={() => void reloadKeepingPlace()} />
+            <ReportDetailPanel report={selected} onActionDone={() => reloadKeepingPlace()} />
           </div>
         </div>
       )}

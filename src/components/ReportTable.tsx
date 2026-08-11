@@ -100,7 +100,12 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                 <div className="excerpt-row">
                   <span className="msg">{item.snapshotMessage}</span>
                   {item.openReportCount > 1 && (
-                    <span className="cnt">묶음 ×{item.openReportCount}</span>
+                    <span
+                        className="cnt"
+                        title={`이 메시지에 지금 열려 있는 신고 ${item.openReportCount}건`
+                          + ` (누계 ${item.sameMessageReportCount}건)`}>
+                      묶음 ×{item.openReportCount}
+                    </span>
                   )}
                 </div>
               </td>

@@ -95,4 +95,14 @@ describe('elapsedSince — 큐 행의 대기 시간 뱃지(HP-296)', () => {
   it('미래 시각(시계 어긋남)도 음수로 새지 않는다 — 방금으로 둔다', () => {
     expect(elapsedSince('2026-08-11T12:30:00Z', now)).toEqual({ label: '방금', tone: 'fresh' })
   })
+
+  /**
+   * 읽을 수 없는 시각은 <b>모른다고 말한다</b>. NaN은 모든 비교가 false라 조용히 '방금'으로
+   * 떨어지는데, 그건 "방금 들어온 급하지 않은 건"이라는 <b>틀린 사실을 단언</b>하는 것이다 —
+   * 하필 데이터가 깨진 그 행이 큐에서 가장 안전해 보이게 된다. 모르면 모른다고 적는다.
+   */
+  it('읽을 수 없는 시각은 모른다고 말한다 — 방금이라고 하지 않는다', () => {
+    expect(elapsedSince('깨진값', now)).toEqual({ label: '—', tone: 'fresh' })
+    expect(elapsedSince('', now)).toEqual({ label: '—', tone: 'fresh' })
+  })
 })

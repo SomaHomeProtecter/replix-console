@@ -140,11 +140,18 @@ const DAY_MS = 24 * HOUR_MS
  *
  * <p>미래 시각은 0으로 눕힌다 — 서버·클라 시계가 어긋나면 음수가 나오는데, "-1시간"은
  * 화면이 거짓말하는 것이고 그 상태에서도 급하지 않다는 사실은 맞다.
+ *
+ * <p><b>읽을 수 없는 시각은 모른다고 적는다</b>(—). NaN은 모든 비교가 false라 그냥 두면 조용히
+ * "방금"으로 떨어지는데, 그건 모르는 것을 <b>급하지 않다고 단언</b>하는 것이라 하필 데이터가
+ * 깨진 그 행이 큐에서 가장 안전해 보이게 된다. 톤은 fresh로 둔다 — 모른다는 사실이 급하다는
+ * 근거는 아니므로, 없는 급함을 만들어 내지 않는다.
  */
 export function elapsedSince(
   iso: string, now: Date = new Date(),
 ): { label: string; tone: ElapsedTone } {
-  const ms = Math.max(0, now.getTime() - new Date(iso).getTime())
+  const elapsed = now.getTime() - new Date(iso).getTime()
+  if (!Number.isFinite(elapsed)) return { label: '—', tone: 'fresh' }
+  const ms = Math.max(0, elapsed)
   const tone: ElapsedTone = ms >= 2 * DAY_MS ? 'hot' : ms >= DAY_MS ? 'warm' : 'fresh'
   if (ms >= DAY_MS) return { label: `${Math.floor(ms / DAY_MS)}일`, tone }
   if (ms >= HOUR_MS) return { label: `${Math.floor(ms / HOUR_MS)}시간`, tone }
