@@ -74,6 +74,12 @@ button { font: inherit; }
 }
 .topnav a:hover { color: var(--top-ink); }
 .topnav a[aria-current="page"] { background: var(--top-on); color: #fff; }
+/* 쓰기 중 잠긴 링크(HP-300) — 버튼의 :disabled와 같은 결로 보인다. 링크는 disabled 속성이
+   없어 aria-disabled로 막는데, 그것만으로는 <b>모습이 그대로다</b> — 평소와 똑같이 생긴 것을
+   눌렀는데 아무 일도 안 일어나면 막힌 게 아니라 고장 난 것으로 읽힌다. */
+.topnav a[aria-disabled="true"], .brand[aria-disabled="true"] {
+  opacity: 0.45; cursor: not-allowed;
+}
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--top-muted); font-size: 12px; }
 .btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; }
 .btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
@@ -96,6 +102,8 @@ button { font: inherit; }
   color: var(--blue); text-decoration: none; font-weight: 600; font-size: 12px;
 }
 .btn-link:hover { text-decoration: underline; }
+.btn-link[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; text-decoration: none; }
+.btn-link[aria-disabled="true"]:hover { text-decoration: none; }
 
 /* ── 신고 큐 레이아웃 — 전폭 테이블 + 상세 모달(2026-08-05 E2E 피드백) ── */
 .queue-layout {
