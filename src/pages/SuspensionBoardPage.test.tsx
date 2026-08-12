@@ -1,9 +1,11 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import { makeSuspendedRow } from '../test/fixtures'
+import { useWriting, WritingProvider } from '../writing'
 import SuspensionBoardPage from './SuspensionBoardPage'
 
 vi.mock('../api/admin')
@@ -19,7 +21,10 @@ const LONG_PAST = '2020-01-01T00:00:00Z'   // 반드시 만료됨
 const FAR_FUTURE = '2999-01-01T00:00:00Z'  // 반드시 진행 중
 
 function renderPage() {
-  return render(<MemoryRouter><SuspensionBoardPage /></MemoryRouter>)
+  return render(
+      <MemoryRouter>
+        <WritingProvider><SuspensionBoardPage /></WritingProvider>
+      </MemoryRouter>)
 }
 
 /** 머리글 행을 뺀 데이터 행. */
@@ -231,6 +236,25 @@ describe('정지 현황판 — 행에서 바로 해제', () => {
     await waitFor(() => expect(listSuspendedUsers).toHaveBeenCalledTimes(2))
   })
 
+  it('해제와 재조회가 모두 실패하면 두 사실을 나눠 알리고 낡은 행을 잠근다', async () => {
+    const user = userEvent.setup()
+    unsuspendUser.mockRejectedValue(new Error('403 권한이 없습니다'))
+    listSuspendedUsers
+        .mockResolvedValueOnce({ rows: [makeSuspendedRow({ userId: 9 })], total: 1 })
+        .mockRejectedValueOnce(new Error('네트워크 오류'))
+    renderPage()
+
+    await unsuspendRow(user)
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText('정지 해제 실패 — 403 권한이 없습니다')).toBeInTheDocument()
+    expect(within(alert).getByText(
+        '목록 갱신 실패 — 화면이 최신이 아닙니다. 네트워크 오류')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '해제 확인' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '정지 해제' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '새로고침' })).toBeEnabled()
+  })
+
   /**
    * 해제 자체는 성공했는데 재조회가 실패하면 화면은 <b>조치 전 목록</b>이다 — 방금 푼 계정이
    * 그대로 남아 있어, 아무 일도 없었던 것처럼 보인다. 그 상태를 화면이 밝혀야 다시 누르지 않는다.
@@ -245,6 +269,116 @@ describe('정지 현황판 — 행에서 바로 해제', () => {
     await unsuspendRow(user)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/최신이 아닙니다/)
+  })
+
+  it('해제 뒤 재조회가 실패하면 중복 해제를 막고, 새로고침 성공 뒤에만 다시 푼다', async () => {
+    const user = userEvent.setup()
+    const oldPage = { rows: [makeSuspendedRow({ userId: 9 })], total: 1 }
+    listSuspendedUsers
+        .mockResolvedValueOnce(oldPage)
+        .mockRejectedValueOnce(new Error('네트워크 오류'))
+        .mockResolvedValueOnce(oldPage)
+    renderPage()
+
+    await unsuspendRow(user)
+
+    expect(await screen.findByRole('button', { name: '정지 해제' })).toBeDisabled()
+    const refresh = screen.getByRole('button', { name: '새로고침' })
+    expect(refresh).toBeEnabled()
+
+    await user.click(refresh)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '정지 해제' })).toBeEnabled())
+  })
+
+  /**
+   * <b>실제로 이동이 막히는지</b>를 본다. {@code aria-disabled}는 보조기술에 알리는 표시일 뿐
+   * 링크를 막지 않는다 — 막는 것은 {@code preventDefault}다. 표시만 검사하면 그 preventDefault를
+   * 통째로 빼도 테스트가 통과한다(2026-08-12 변이 테스트에서 실제로 생존했다).
+   */
+  it('해제가 도는 동안 사용자 링크를 눌러도 이동하지 않고, 끝나면 다시 열린다', async () => {
+    const user = userEvent.setup()
+    let release!: () => void
+    unsuspendUser.mockImplementation(() => new Promise((ok) => {
+      release = () => ok({ userId: 9, status: 'ACTIVE', suspendedUntil: null, suspendReason: null })
+    }))
+    render(
+        <MemoryRouter initialEntries={['/suspensions']}>
+          <WritingProvider>
+            <Routes>
+              <Route path="/suspensions" element={<SuspensionBoardPage />} />
+              <Route path="/users/:userId" element={<div>사용자 상세 자리</div>} />
+            </Routes>
+          </WritingProvider>
+        </MemoryRouter>)
+
+    const nameLink = await screen.findByRole('link', { name: '스포일러꾼' })
+    await unsuspendRow(user)
+    await waitFor(() => expect(nameLink).toHaveAttribute('aria-disabled', 'true'))
+
+    await user.click(nameLink)
+
+    expect(screen.queryByText('사용자 상세 자리')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '정지 현황판' })).toBeInTheDocument()
+
+    release()
+    await waitFor(() => expect(nameLink).not.toHaveAttribute('aria-disabled'))
+    // 막던 것이 풀렸는지까지 확인한다 — 안 그러면 "영영 막힘"도 통과한다
+    await user.click(screen.getByRole('link', { name: '스포일러꾼' }))
+    expect(await screen.findByText('사용자 상세 자리')).toBeInTheDocument()
+  })
+
+  /**
+   * 쓰기 중 이탈은 화면 안 수단(링크·버튼)으로는 막았지만 <b>브라우저 뒤로가기는 못 막는다</b>
+   * (BrowserRouter라 useBlocker가 없다). 그 경로로 페이지가 사라졌을 때 톱바 잠금이 남으면,
+   * 이후 모든 화면에서 이동이 막힌 채 풀 방법이 새로고침뿐이다 — 갇힘을 막으려던 장치가
+   * 갇힘을 만든다. 그래서 언마운트가 잠금을 반드시 되돌린다.
+   */
+  it('페이지가 사라지면 톱바 잠금도 함께 풀린다', async () => {
+    const user = userEvent.setup()
+    unsuspendUser.mockImplementation(() => new Promise(() => {}))   // 끝나지 않는 쓰기
+
+    function Harness() {
+      const [mounted, setMounted] = useState(true)
+      const { writing } = useWriting()
+      return (
+        <>
+          <span data-testid="writing">{String(writing)}</span>
+          {/* 뒤로가기로 페이지만 사라지는 상황을 세운다 */}
+          <button type="button" onClick={() => setMounted(false)}>보드 내리기</button>
+          {mounted && <SuspensionBoardPage />}
+        </>
+      )
+    }
+    render(<MemoryRouter><WritingProvider><Harness /></WritingProvider></MemoryRouter>)
+
+    await unsuspendRow(user)
+    await waitFor(() => expect(screen.getByTestId('writing')).toHaveTextContent('true'))
+
+    await user.click(screen.getByRole('button', { name: '보드 내리기' }))
+
+    expect(screen.getByTestId('writing')).toHaveTextContent('false')
+  })
+
+  /**
+   * 확인을 열어 둔 채 읽기가 실패하면 {@code confirming}은 그대로 남는다(실패 경로는 확인을 닫지
+   * 않는다). 그때 [해제 확인]이 살아 있으면 <b>낡은 행에 대고</b> 조치가 나가 감사 로그에 중복
+   * 해제가 남는다 — 서버는 이미 ACTIVE여도 UNSUSPEND 행을 항상 쓴다.
+   */
+  it('낡은 화면에서는 열어 둔 [해제 확인]도 잠긴다', async () => {
+    const user = userEvent.setup()
+    listSuspendedUsers
+        .mockResolvedValueOnce({ rows: [makeSuspendedRow({ userId: 9 })], total: 1 })
+        .mockRejectedValueOnce(new Error('네트워크 오류'))
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '정지 해제' }))
+    await user.click(screen.getByRole('button', { name: '새로고침' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '해제 확인' })).toBeDisabled())
+    expect(screen.getByRole('button', { name: '새로고침' })).toBeEnabled()
+    expect(unsuspendUser).not.toHaveBeenCalled()
   })
 
   /**

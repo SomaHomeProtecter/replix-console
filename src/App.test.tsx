@@ -1,8 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from './api/admin'
 import App from './App'
+import * as auth from './auth'
+import { makeSuspendedRow } from './test/fixtures'
 
 // env는 모듈 평가 시점에 굳으므로(부트스트랩 검증) 테스트마다 바꾸려면 가변 객체를 물린다.
 const envMock = vi.hoisted(() => ({
@@ -55,6 +58,43 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
 
     expect(await screen.findByRole('region', { name: '정지 현황판' })).toBeInTheDocument()
     expect(admin.listSuspendedUsers).toHaveBeenCalled()
+  })
+
+  it('정지 해제가 도는 동안 톱바의 이탈 수단을 막고, 끝나면 다시 연다', async () => {
+    const user = userEvent.setup()
+    let release!: () => void
+    vi.mocked(admin.listSuspendedUsers).mockResolvedValue({
+      rows: [makeSuspendedRow({ userId: 9 })], total: 1,
+    })
+    vi.mocked(admin.unsuspendUser).mockImplementation(() => new Promise((ok) => {
+      release = () => ok({ userId: 9, status: 'ACTIVE', suspendedUntil: null, suspendReason: null })
+    }))
+    render(<MemoryRouter initialEntries={['/suspensions']}><App /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: '정지 해제' }))
+    await user.click(screen.getByRole('button', { name: '해제 확인' }))
+
+    const topbarLinks = [
+      screen.getByRole('link', { name: /Re\s*plix Admin/ }),
+      screen.getByRole('link', { name: '신고 큐' }),
+      screen.getByRole('link', { name: '정지 현황' }),
+    ]
+    await waitFor(() => {
+      for (const link of topbarLinks) expect(link).toHaveAttribute('aria-disabled', 'true')
+    })
+    const logout = screen.getByRole('button', { name: '로그아웃' })
+    expect(logout).toBeDisabled()
+
+    await user.click(topbarLinks[0])
+    await user.click(logout)
+    expect(auth.logout).not.toHaveBeenCalled()
+    expect(screen.getByRole('region', { name: '정지 현황판' })).toBeInTheDocument()
+
+    release()
+    await waitFor(() => {
+      for (const link of topbarLinks) expect(link).not.toHaveAttribute('aria-disabled')
+      expect(logout).toBeEnabled()
+    })
   })
 })
 
