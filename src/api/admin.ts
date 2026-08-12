@@ -1,7 +1,7 @@
 import { apiFetch, qs } from './client'
 import type {
   AuthorMessages, ReportPage, ReportReason, ReportStatus, ResolutionAction, ResolveResult,
-  SuspendDuration, SuspensionResult, UserDetail,
+  SuspendDuration, SuspendedUsers, SuspensionResult, UserDetail,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -84,6 +84,14 @@ export function suspendUser(
 
 export function unsuspendUser(userId: number): Promise<SuspensionResult> {
   return apiFetch(`/api/v1/admin/users/${userId}/suspend`, { method: 'DELETE' })
+}
+
+/**
+ * 정지 현황판(HP-300) — status가 SUSPENDED인 계정 목록(만료 임박순, 무기한은 뒤).
+ * 만료 지난 정지도 함께 온다: 만료가 lazy라 "만료됨·자동 해제 대기"가 현황판의 한 갈래다.
+ */
+export function listSuspendedUsers(): Promise<SuspendedUsers> {
+  return apiFetch('/api/v1/admin/users/suspended')
 }
 
 export function getUserDetail(userId: number): Promise<UserDetail> {

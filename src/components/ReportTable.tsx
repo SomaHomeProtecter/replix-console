@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import type { ReportItem } from '../api/types'
 import { elapsedSince, formatKst, formatKstTime } from '../format'
+import { useMinuteTick } from '../useMinuteTick'
 import Pill from './Pill'
 import StatusBadge from './StatusBadge'
 
@@ -20,22 +20,6 @@ function authorTitle(item: ReportItem): string | undefined {
     return undefined
   }
   return `신고 시점 이름: ${item.snapshotDisplayName}`
-}
-
-/**
- * 1분마다 지금 시각을 새로 준다.
- *
- * <p>없으면 경과 뱃지가 <b>렌더 시점에 굳는다</b> — 콘솔을 열어 둔 채 두는 흔한 사용(벽에 띄운
- * 큐 화면)에서 24h·48h 경계를 넘긴 신고가 계속 옛 톤으로 남아, 나이가 유일한 신호인 바로 그
- * 상황에서 이 기능이 무의미해진다. 분 단위면 충분하다 — 경계가 시간·일 단위다.
- */
-function useMinuteTick(): Date {
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-  return now
 }
 
 /**

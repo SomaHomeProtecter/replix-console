@@ -156,3 +156,24 @@ export interface AuthorMessages {
   rows: AuthorMessage[]
   total: number
 }
+
+/**
+ * 정지 현황판 한 행(HP-300). <b>갈래(진행 중·무기한·만료됨)는 서버가 정하지 않는다</b> —
+ * 만료 판정은 시각에 달려 있어, 서버와 화면이 각자 시계를 보면 같은 계정을 다르게 부른다.
+ * 원수치만 받고 갈래는 {@link suspensionState} 하나가 센다.
+ */
+export interface SuspendedUserRow {
+  userId: number
+  displayName: string | null
+  profileImageUrl: string | null
+  status: UserStatus
+  /** null = 무기한. 지난 시각이면 만료됨(자동 해제 대기) — 만료 배치가 없어 행만 남은 상태다. */
+  suspendedUntil: string | null
+  suspendReason: string | null
+}
+
+/** @property total 상한 적용 전 전체 수 — rows.length와 다르면 잘린 것이다(화면이 알려야 한다). */
+export interface SuspendedUsers {
+  rows: SuspendedUserRow[]
+  total: number
+}

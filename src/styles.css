@@ -65,7 +65,15 @@ button { font: inherit; }
   border-radius: 4px; padding: 1px 7px; color: var(--top-chip-ink);
 }
 .topnav { display: flex; gap: 4px; margin-left: 10px; }
-.topnav .on { padding: 4px 10px; border-radius: 6px; background: var(--top-on); color: #fff; font-weight: 700; }
+/* 탭은 화면이 둘 이상이 되면서 <b>링크</b>가 됐다(HP-300) — 종전엔 글자였다.
+   켜짐 표시는 클래스가 아니라 aria-current로 건다: 스크린리더가 읽는 그 표시와 눈에 보이는
+   표시가 <b>같은 근거</b>를 쓰게 해, 한쪽만 켜지는 일이 생기지 않는다. */
+.topnav a {
+  padding: 4px 10px; border-radius: 6px; color: var(--top-muted);
+  text-decoration: none; font-weight: 700;
+}
+.topnav a:hover { color: var(--top-ink); }
+.topnav a[aria-current="page"] { background: var(--top-on); color: #fff; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--top-muted); font-size: 12px; }
 .btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; }
 .btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
@@ -427,3 +435,66 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .msg-picks .mark { flex: none; font-size: 10px; padding: 0 4px; border-radius: 4px;
   border: 1px solid var(--line-strong); color: var(--muted-2); white-space: nowrap; }
 .msg-picks .mark.rep { border-color: var(--amber); color: var(--amber-ink); }
+
+/* ── 정지 현황판 (HP-300) — 지금 누가 정지 상태인가 ── */
+.susp-board { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.board-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.board-head h1 { margin: 0; font-size: 16px; color: var(--ink); }
+.susp-chips { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.board-head .refresh { margin-left: auto; padding: 5px 11px; }
+/* 칩은 세는 자리이지 누르는 자리가 아니다 — 필터 칩(.chip-f)과 형태를 다르게 둬(둥근 알약,
+   테두리 없는 채움) 눌러 보고 아무 일도 안 일어나는 오해를 만들지 않는다. */
+.susp-chip {
+  font-size: 12px; border-radius: 999px; padding: 4px 12px;
+  background: var(--panel); border: 1px solid var(--line-strong); color: var(--muted-2);
+}
+.susp-chip .n { font-weight: 800; font-variant-numeric: tabular-nums; }
+/* 진행 중·무기한은 실제로 걸려 있는 정지라 빨강(파괴적 조치 전용 색). 만료됨은 이미 풀린
+   상태의 잔재라 "손볼 일"인 amber로 둔다 — 고장이 아니므로 빨강을 쓰지 않는다. */
+.susp-chip.active, .susp-chip.indefinite {
+  background: var(--red-soft); border-color: var(--red-border); color: var(--red);
+}
+.susp-chip.indefinite { font-weight: 700; }
+.susp-chip.expired {
+  background: var(--amber-bg); border-color: var(--amber-soft); color: var(--amber-ink);
+}
+/* 칸 너비를 고정한다(table-layout: fixed) — 행에서 [정지 해제]가 [해제 확인][취소] 둘로 바뀌면
+   조치 칸이 넓어지고, 자동 레이아웃에서는 그때마다 <b>표 전체가 가로로 밀린다</b>. 확인을 열었을
+   뿐인데 옆 줄들이 움직이면 어느 줄을 누르려던 것인지 놓친다 — 오조작을 막으려고 넣은 확인 단계가
+   오히려 오조작을 부르는 꼴이다(2026-08-12 실브라우저 확인). */
+table.susp-table {
+  width: 100%; border-collapse: collapse; background: var(--panel); table-layout: fixed;
+}
+.susp-table th:nth-child(1), .susp-table td:nth-child(1) { width: 220px; }
+.susp-table th:nth-child(2), .susp-table td:nth-child(2) { width: 190px; }
+.susp-table th:nth-child(3), .susp-table td:nth-child(3) { width: 130px; }
+/* 확인 두 버튼이 들어가고도 남는 폭 — 여기가 좁으면 고정 레이아웃에서 버튼이 잘린다 */
+.susp-table th:nth-child(5), .susp-table td:nth-child(5) { width: 200px; }
+.susp-table th {
+  text-align: left; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--panel);
+}
+.susp-table td {
+  padding: 10px 16px; border-bottom: 1px solid var(--line-2);
+  vertical-align: middle; font-size: 12.5px;
+}
+.susp-table .party { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.susp-table .party a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.susp-table .party .ua {
+  width: 24px; height: 24px; border-radius: 50%; background: #e9b06c; color: #fff;
+  font-weight: 800; font-size: 11px;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.susp-table .time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+.susp-table .why { color: var(--body); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.susp-table .act { white-space: nowrap; text-align: right; }
+.susp-table .act .btn { padding: 5px 11px; }
+.susp-table .act .btn + .btn { margin-left: 6px; }
+.sstate {
+  font-size: 11px; font-weight: 800; border-radius: 4px; padding: 2px 8px; white-space: nowrap;
+}
+.sstate.active, .sstate.indefinite { background: var(--red-soft); color: var(--red); }
+.sstate.expired { background: var(--amber-soft); color: var(--amber-ink); }

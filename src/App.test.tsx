@@ -17,6 +17,45 @@ beforeEach(() => {
   vi.clearAllMocks()
   envMock.grafanaUrl = null
   vi.mocked(admin.listReports).mockResolvedValue({ items: [], nextCursor: null })
+  vi.mocked(admin.listSuspendedUsers).mockResolvedValue({ rows: [], total: 0 })
+})
+
+/**
+ * 화면이 둘 이상이 된 순간(HP-300 정지 현황판) 톱바가 <b>길</b>이 된다. 종전 톱바의 "신고 큐"는
+ * 링크가 아닌 글자였다 — 화면이 하나뿐일 때는 맞았지만, 지금은 그대로 두면 새 화면에 갈 길이 없다.
+ */
+describe('톱바 탭 — 화면 사이를 오간다', () => {
+  it('두 화면이 각자의 경로로 걸려 있다', () => {
+    render(<MemoryRouter><App /></MemoryRouter>)
+
+    expect(screen.getByRole('link', { name: '신고 큐' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: '정지 현황' })).toHaveAttribute('href', '/suspensions')
+  })
+
+  it('지금 보는 화면을 탭이 표시한다', () => {
+    render(<MemoryRouter initialEntries={['/suspensions']}><App /></MemoryRouter>)
+
+    expect(screen.getByRole('link', { name: '정지 현황' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: '신고 큐' })).not.toHaveAttribute('aria-current')
+  })
+
+  /**
+   * 신고 큐는 <code>/</code>라 다른 <b>모든</b> 경로의 접두사다 — 두 탭이 함께 켜지면 지금 어디
+   * 있는지가 화면에서 사라진다. 무엇이 그걸 막는지(NavLink의 end냐 라우터의 경로 경계 검사냐)는
+   * 라우터 사정이므로 여기서 고정하지 않는다 — <b>결과</b>만 못박는다.
+   */
+  it('사용자 상세에서는 신고 큐 탭이 켜지지 않는다', () => {
+    render(<MemoryRouter initialEntries={['/users/9']}><App /></MemoryRouter>)
+
+    expect(screen.getByRole('link', { name: '신고 큐' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('/suspensions는 정지 현황판을 연다', async () => {
+    render(<MemoryRouter initialEntries={['/suspensions']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('region', { name: '정지 현황판' })).toBeInTheDocument()
+    expect(admin.listSuspendedUsers).toHaveBeenCalled()
+  })
 })
 
 /**

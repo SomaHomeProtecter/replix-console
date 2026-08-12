@@ -108,18 +108,52 @@ export function actionLabel(action: AdminActionType, outcome: ResolveOutcome | n
 }
 
 /**
+ * 정지가 지금 어느 갈래인가 — <b>정지 상태를 판정하는 이 파일의 유일한 자리</b>(HP-300).
+ *
+ * <p>칩 문구·유효 여부·현황판의 세 칩이 각자 판정하면 셋이 어긋난다. 특히 만료 경계는 시각에
+ * 달려 있어, 두 곳이 각자 {@code new Date()}를 부르면 같은 계정을 한 줄에서는 "진행 중",
+ * 다른 줄에서는 "만료됨"으로 부르는 순간이 생긴다. 판정을 하나로 모으고 쓰는 쪽은 이것만 부른다.
+ *
+ * <ul>
+ *   <li>{@code none} — 정지가 아님</li>
+ *   <li>{@code indefinite} — 무기한(만료 시각 없음)</li>
+ *   <li>{@code expired} — 기간이 지났다. <b>실제로는 이미 풀렸는데 행만 남은</b> 상태다 —
+ *       만료 배치가 없어 DB status는 SUSPENDED로 남고 해제 감사 행도 안 생긴다.</li>
+ *   <li>{@code active} — 기간이 남아 지금 걸려 있음</li>
+ * </ul>
+ */
+export type SuspensionState = 'none' | 'active' | 'indefinite' | 'expired'
+
+export function suspensionState(
+  status: UserStatus, suspendedUntil: string | null, now: Date = new Date(),
+): SuspensionState {
+  if (status !== 'SUSPENDED') return 'none'
+  if (!suspendedUntil) return 'indefinite'
+  return new Date(suspendedUntil).getTime() <= now.getTime() ? 'expired' : 'active'
+}
+
+/** 현황판의 칩 순서 겸 이름 — 세는 순서가 화면 순서와 같아야 눈이 따라간다. */
+export const SUSPENSION_STATE_LABELS: Record<
+  Exclude<SuspensionState, 'none'>, string
+> = {
+  active: '진행 중',
+  indefinite: '무기한',
+  expired: '만료됨 · 자동 해제 대기',
+}
+
+/**
  * 사용자 상태 칩 문구(시안 — "SUSPENDED · ~08-07 13:45"). 만료 배치가 없는 lazy 설계라
  * DB status는 만료 후에도 SUSPENDED로 남는다 — 화면이 만료를 계산해 정직하게 표기한다.
  */
 export function suspensionChip(
   status: UserStatus, suspendedUntil: string | null, now: Date = new Date(),
 ): string {
-  if (status !== 'SUSPENDED') return status
-  if (!suspendedUntil) return 'SUSPENDED · 무기한'
-  if (new Date(suspendedUntil).getTime() <= now.getTime()) {
-    return 'SUSPENDED · 만료됨(자동 해제 대기)'
+  switch (suspensionState(status, suspendedUntil, now)) {
+    case 'none': return status
+    case 'indefinite': return 'SUSPENDED · 무기한'
+    case 'expired': return 'SUSPENDED · 만료됨(자동 해제 대기)'
+    default: return `SUSPENDED · ~${formatKstShort(suspendedUntil)}`
   }
-  return `SUSPENDED · ~${formatKstShort(suspendedUntil)}`
 }
 
 /**
@@ -132,8 +166,8 @@ export function suspensionChip(
 export function isSuspensionActive(
   status: UserStatus, suspendedUntil: string | null, now: Date = new Date(),
 ): boolean {
-  if (status !== 'SUSPENDED') return false
-  return suspendedUntil === null || new Date(suspendedUntil).getTime() > now.getTime()
+  const state = suspensionState(status, suspendedUntil, now)
+  return state === 'active' || state === 'indefinite'
 }
 
 /**

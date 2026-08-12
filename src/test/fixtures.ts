@@ -1,5 +1,5 @@
 import type {
-  AdminActionRow, AuthorMessage, ReceivedReport, ReportItem, UserDetail,
+  AdminActionRow, AuthorMessage, ReceivedReport, ReportItem, SuspendedUserRow, UserDetail,
 } from '../api/types'
 
 /** 테스트 픽스처 — BE 계약(api/types.ts) 형태의 대표값. 필요한 칸만 overrides로 바꾼다. */
@@ -86,6 +86,22 @@ export function makeAuthorMessage(overrides: Partial<AuthorMessage> = {}): Autho
     message: '범인은 집사다',
     playbackTime: 100,
     status: 'visible',
+    ...overrides,
+  }
+}
+
+/**
+ * 정지 현황판 한 행(HP-300). 기본값은 <b>무기한</b>이다 — 만료 시각이 든 기본값을 두면 실제
+ * 시각이 그 값을 지나는 순간 픽스처의 갈래가 바뀌어, 어제 통과한 테스트가 오늘 깨진다.
+ */
+export function makeSuspendedRow(overrides: Partial<SuspendedUserRow> = {}): SuspendedUserRow {
+  return {
+    userId: 9,
+    displayName: '스포일러꾼',
+    profileImageUrl: null,
+    status: 'SUSPENDED',
+    suspendedUntil: null,
+    suspendReason: '반복 스포일러',
     ...overrides,
   }
 }

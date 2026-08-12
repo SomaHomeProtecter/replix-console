@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, reporterTrustLine,
-  suspensionChip,
+  actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, isSuspensionActive,
+  reporterTrustLine, suspensionChip, suspensionState,
 } from './format'
 
 describe('formatKst 계열', () => {
@@ -156,5 +156,44 @@ describe('reporterTrustLine — 신고자 신뢰도 한 줄(HP-270)', () => {
   it('나누어떨어지지 않으면 반올림한다', () => {
     expect(reporterTrustLine({ total: 3, judged: 3, rejected: 1 }))
         .toBe('보낸 신고 3건 · 기각 1건 (판정 3건 중 33%)')
+  })
+})
+
+describe('suspensionState — 정지 갈래 판정을 한 곳으로 모은다(HP-300)', () => {
+  const now = new Date('2026-08-05T12:00:00Z')
+
+  it('정지가 아니면 none', () => {
+    expect(suspensionState('ACTIVE', null, now)).toBe('none')
+    expect(suspensionState('WITHDRAWN', '2026-08-06T00:00:00Z', now)).toBe('none')
+  })
+
+  it('만료 시각이 없으면 무기한', () => {
+    expect(suspensionState('SUSPENDED', null, now)).toBe('indefinite')
+  })
+
+  it('기간이 남았으면 진행 중', () => {
+    expect(suspensionState('SUSPENDED', '2026-08-05T12:00:01Z', now)).toBe('active')
+  })
+
+  /**
+   * 경계는 <b>같은 시각이면 만료</b>다. BE {@code User.isSuspensionActive}가
+   * {@code suspendedUntil.isAfter(now)} — 즉 같은 시각을 유효로 치지 않는다. 화면이 반대로
+   * 잡으면 그 1틱 동안 콘솔은 "정지 중"이라 하고 서버는 전송을 허용한다.
+   */
+  it('만료 시각과 같으면 만료로 친다 — BE isAfter와 같은 경계', () => {
+    expect(suspensionState('SUSPENDED', '2026-08-05T12:00:00Z', now)).toBe('expired')
+  })
+
+  it('기간이 지났으면 만료', () => {
+    expect(suspensionState('SUSPENDED', '2026-08-05T11:59:59Z', now)).toBe('expired')
+  })
+
+  /** 칩 문구·유효 여부가 같은 판정을 쓰는지 — 어긋나면 한 화면이 두 말을 한다. */
+  it('칩 문구와 유효 여부가 같은 판정을 쓴다', () => {
+    expect(isSuspensionActive('SUSPENDED', '2026-08-05T11:59:59Z', now)).toBe(false)
+    expect(suspensionChip('SUSPENDED', '2026-08-05T11:59:59Z', now))
+        .toBe('SUSPENDED · 만료됨(자동 해제 대기)')
+    expect(isSuspensionActive('SUSPENDED', null, now)).toBe(true)
+    expect(suspensionChip('SUSPENDED', null, now)).toBe('SUSPENDED · 무기한')
   })
 })
