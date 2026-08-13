@@ -28,6 +28,13 @@ function targetText(row: AdminActionLogRow) {
   return row.targetSummary ?? row.targetId
 }
 
+
+/**
+ * 상세로 오는 길이 셋이라(신고 큐·정지 현황판·조치 로그) 상세의 "돌아가기"가 하나로 굳어 있으면
+ * 온 곳이 아닌 데로 되돌려보낸다. 어디서 보냈는지를 링크에 실어 상세가 그리로 돌리게 한다.
+ */
+const BACK_TO_LOG = { from: '/actions', label: '조치 로그' }
+
 /** 전역 운영 조치 스트림(HP-299) — 읽기 전용이며 서버가 준 순서를 화면에서 다시 정렬하지 않는다. */
 export default function ActionLogPage() {
   const [inputs, setInputs] = useState<FilterInputs>(EMPTY_FILTERS)
@@ -135,21 +142,35 @@ export default function ActionLogPage() {
               <tr><th>시각</th><th>처리자</th><th>조치</th><th>대상</th><th>사유</th></tr>
             </thead>
             <tbody>
-              {items.map((row) => (
-                <tr key={row.id}>
-                  <td className="time">{formatKstShort(row.createdAt)}</td>
-                  <td className="admin">{row.adminName ?? `#${row.adminId}`}</td>
-                  <td className="action">{actionLabel(row.action, row.outcome)}</td>
-                  <td className="target">
-                    {row.targetUserName && row.targetUserId !== null
-                      ? <Link className="btn-link" to={`/users/${row.targetUserId}`}>
-                          {row.targetUserName}
-                        </Link>
-                      : targetText(row)}
-                  </td>
-                  <td className="why" title={row.reason ?? undefined}>{row.reason ?? '—'}</td>
-                </tr>
-              ))}
+              {items.map((row) => {
+                // 대상 사용자를 아는 행만 상세로 건다 — MESSAGE나 사라진 신고는 걸 곳이 없다.
+                const linked = row.targetUserName !== null && row.targetUserId !== null
+                // 이름만으로는 어느 신고인지 못 가린다 — 같은 사람의 정지와 신고 종결이 대상
+                // 칸에서 똑같아진다. 사용자 상세와 같은 발췌·따옴표를 함께 싣는다.
+                const excerpt = linked && row.targetSummary ? `“${row.targetSummary}”` : null
+                // 열은 폭이 고정이라 넘치면 잘린다(styles.css) — 감사 로그에서 대상 식별자가
+                // 잘린 채 확인할 방법이 없으면 그 행은 읽을 수 없으므로 전문을 title로 남긴다.
+                const title = [linked ? row.targetUserName : targetText(row), excerpt]
+                    .filter((part): part is string => part !== null).join(' · ')
+                return (
+                  <tr key={row.id}>
+                    <td className="time">{formatKstShort(row.createdAt)}</td>
+                    <td className="admin">{row.adminName ?? `#${row.adminId}`}</td>
+                    <td className="action">{actionLabel(row.action, row.outcome)}</td>
+                    <td className="target" title={title}>
+                      {linked
+                        ? <Link
+                              className="btn-link" to={`/users/${row.targetUserId}`}
+                              state={BACK_TO_LOG}>
+                            {row.targetUserName}
+                          </Link>
+                        : targetText(row)}
+                      {excerpt && <span className="target-excerpt">{excerpt}</span>}
+                    </td>
+                    <td className="why" title={row.reason ?? undefined}>{row.reason ?? '—'}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

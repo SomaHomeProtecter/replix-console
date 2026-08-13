@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import { makeSuspendedRow } from '../test/fixtures'
@@ -45,6 +45,40 @@ beforeEach(() => {
   listSuspendedUsers.mockImplementation(async () => ({ rows: [makeSuspendedRow()], total: 1 }))
   unsuspendUser.mockResolvedValue({
     userId: 9, status: 'ACTIVE', suspendedUntil: null, suspendReason: null,
+  })
+})
+
+/** 상세가 실제로 받은 출처를 드러내는 대역 — 링크의 state가 도착했는지 결과로 본다. */
+function OriginProbe() {
+  const state = useLocation().state as { from?: string; label?: string } | null
+  return (
+    <div>
+      <span data-testid="from">{state?.from}</span>
+      <span data-testid="label">{state?.label}</span>
+    </div>
+  )
+}
+
+/** 상세는 온 곳으로 되돌려야 한다 — 출처를 안 실으면 현황판에서 들어와도 신고 큐로 나간다. */
+describe('상세로 보낼 때 출처를 함께 싣는다', () => {
+  it('이름 링크가 정지 현황을 출처로 알린다', async () => {
+    vi.mocked(admin.listSuspendedUsers).mockResolvedValue({
+      rows: [makeSuspendedRow({ userId: 9 })], total: 1,
+    })
+    render(
+        <MemoryRouter initialEntries={['/suspensions']}>
+          <WritingProvider>
+            <Routes>
+              <Route path="/suspensions" element={<SuspensionBoardPage />} />
+              <Route path="/users/:userId" element={<OriginProbe />} />
+            </Routes>
+          </WritingProvider>
+        </MemoryRouter>)
+
+    await userEvent.setup().click(await screen.findByRole('link', { name: '스포일러꾼' }))
+
+    expect(await screen.findByTestId('from')).toHaveTextContent('/suspensions')
+    expect(screen.getByTestId('label')).toHaveTextContent('정지 현황')
   })
 })
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, isSuspensionActive,
-  reporterTrustLine, suspensionChip, suspensionState,
+  reporterTrustLine, suspensionChip, suspensionState, withRo,
 } from './format'
 
 describe('formatKst 계열', () => {
@@ -195,5 +195,31 @@ describe('suspensionState — 정지 갈래 판정을 한 곳으로 모은다(HP
         .toBe('SUSPENDED · 만료됨(자동 해제 대기)')
     expect(isSuspensionActive('SUSPENDED', null, now)).toBe(true)
     expect(suspensionChip('SUSPENDED', null, now)).toBe('SUSPENDED · 무기한')
+  })
+})
+
+/**
+ * 화면 이름을 문장에 넣을 때 조사가 어긋나면 눈에 띈다("정지 현황로"). 받침 유무로 갈리는
+ * 한국어 규칙이라 문구를 손으로 적어 두면 화면 이름이 바뀔 때마다 함께 틀린다.
+ */
+describe('withRo — 로/으로를 받침에 맞춰 붙인다', () => {
+  it('받침이 없으면 "로"', () => {
+    expect(withRo('신고 큐')).toBe('신고 큐로')
+    expect(withRo('조치 로그')).toBe('조치 로그로')
+  })
+
+  it('받침이 있으면 "으로"', () => {
+    expect(withRo('정지 현황')).toBe('정지 현황으로')
+    expect(withRo('목록')).toBe('목록으로')
+  })
+
+  /** ㄹ 받침은 예외로 "로"를 쓴다 — "서울으로"라고 하지 않는다. */
+  it('ㄹ 받침은 "로"', () => {
+    expect(withRo('서울')).toBe('서울로')
+  })
+
+  /** 한글이 아닌 끝 글자는 규칙을 적용할 근거가 없으므로 "로"로 둔다. */
+  it('한글이 아닌 끝 글자는 "로"', () => {
+    expect(withRo('Grafana')).toBe('Grafana로')
   })
 })

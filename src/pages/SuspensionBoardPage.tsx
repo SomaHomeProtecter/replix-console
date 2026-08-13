@@ -27,6 +27,12 @@ function ErrorBox({ messages }: { messages: string[] }) {
 }
 
 /**
+ * 상세로 오는 길이 셋이라(신고 큐·정지 현황판·조치 로그) 상세의 "돌아가기"가 하나로 굳어 있으면
+ * 온 곳이 아닌 데로 되돌려보낸다. 어디서 보냈는지를 링크에 실어 상세가 그리로 돌리게 한다.
+ */
+const BACK_TO_BOARD = { from: '/suspensions', label: '정지 현황' }
+
+/**
  * 정지 현황판(HP-300) — <b>지금 누가 정지 상태인가</b>를 한 화면에서 본다.
  *
  * <p>종전에는 정지된 계정에 닿는 길이 신고 큐 경유뿐이었다. 그래서 "지금 몇 명이 정지 중인지",
@@ -226,7 +232,7 @@ export default function SuspensionBoardPage() {
                         <Avatar url={row.profileImageUrl} name={name} />
                         <Link
                             className="btn-link" to={`/users/${row.userId}`}
-                            aria-disabled={writing || undefined}
+                            state={BACK_TO_BOARD} aria-disabled={writing || undefined}
                             title={writing
                               ? '정지 해제를 처리하는 중입니다 — 끝나면 이동할 수 있습니다'
                               : undefined}

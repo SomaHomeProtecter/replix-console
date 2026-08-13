@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useLocation, useParams } from 'react-router'
 import { effectiveActions, mergeSuspendResolve } from '../actionHistory'
 import { getUserDetail, suspendUser, unsuspendUser } from '../api/admin'
 import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
@@ -7,7 +7,7 @@ import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import {
-  actionLabel, formatKstShort, isSuspensionActive, reporterTrustLine, suspensionChip,
+  actionLabel, formatKstShort, isSuspensionActive, reporterTrustLine, suspensionChip, withRo,
 } from '../format'
 
 const CHIP_CLASSES: Record<UserStatus, string> = {
@@ -25,6 +25,7 @@ type Tab = 'reports' | 'actions' | 'suspensions'
  */
 export default function UserDetailPage() {
   const { userId } = useParams()
+  const location = useLocation()
   const id = Number(userId)
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -63,10 +64,17 @@ export default function UserDetailPage() {
         .finally(() => setBusy(false))
   }
 
+  // 상세로 오는 길이 셋이라(신고 큐·정지 현황판·조치 로그) 돌아가는 길을 하나로 굳히면
+  // 온 곳이 아닌 데로 되돌려보낸다. 보낸 화면이 state로 알려 주면 그리로 돌린다.
+  const origin = location.state as { from?: string; label?: string } | null
+  const back = origin?.from && origin.label
+      ? { to: origin.from, label: origin.label }
+      : { to: '/', label: '신고 큐' }
+
   if (error && !detail) {
     return (
       <section className="user-detail" aria-label="사용자 상세">
-        <div className="back-row"><Link className="btn-link" to="/">← 신고 큐로</Link></div>
+        <div className="back-row"><Link className="btn-link" to={back.to}>← {withRo(back.label)}</Link></div>
         <div className="detail-panel"><div className="error-box" role="alert">{error}</div></div>
       </section>
     )
@@ -85,7 +93,7 @@ export default function UserDetailPage() {
 
   return (
     <section className="user-detail" aria-label="사용자 상세">
-      <div className="back-row"><Link className="btn-link" to="/">← 신고 큐로</Link></div>
+      <div className="back-row"><Link className="btn-link" to={back.to}>← {withRo(back.label)}</Link></div>
       <div className="user-header">
         <Avatar url={profile.profileImageUrl} name={name} />
         <div>

@@ -230,3 +230,21 @@ export function reporterTrustLine(sent: ReportsSent | undefined): string {
   return `보낸 신고 ${sent.total}건 · 기각 ${sent.rejected}건`
     + ` (판정 ${sent.judged}건 중 ${rate}%)`
 }
+
+/**
+ * 화면 이름 뒤에 "로/으로"를 받침에 맞춰 붙인다 — "정지 현황로"처럼 어긋나면 눈에 띄고,
+ * 문구를 손으로 적어 두면 화면 이름이 바뀔 때 조사만 남아 틀린다.
+ *
+ * <p>규칙: 받침이 없거나 ㄹ 받침이면 "로", 그 밖의 받침이면 "으로". 한글이 아닌 끝 글자는
+ * 종성을 셀 근거가 없으므로 "로"로 둔다.
+ */
+export function withRo(noun: string): string {
+  const last = noun.codePointAt(noun.length - 1) ?? 0
+  const isHangulSyllable = last >= 0xac00 && last <= 0xd7a3
+  if (!isHangulSyllable) {
+    return `${noun}로`
+  }
+  const finalConsonant = (last - 0xac00) % 28
+  const RIEUL = 8
+  return finalConsonant === 0 || finalConsonant === RIEUL ? `${noun}로` : `${noun}으로`
+}

@@ -26,6 +26,44 @@ beforeEach(() => {
   getUserDetail.mockResolvedValue(makeUserDetail())
 })
 
+/**
+ * 상세로 오는 길이 셋이 됐다(신고 큐 · 정지 현황판 · 조치 로그) — 돌아가는 길이 하나로 굳어
+ * 있으면 <b>온 곳이 아닌 데로</b> 되돌려보낸다. 보낸 화면이 <code>state.from</code>으로 알려
+ * 주면 그리로, 아니면 종전대로 신고 큐로 간다(직접 URL 진입·북마크).
+ */
+describe('돌아가는 길 — 온 곳으로 되돌린다', () => {
+  function renderFrom(state?: { from: string; label: string }) {
+    return render(
+        <MemoryRouter initialEntries={[{ pathname: '/users/9', state }]}>
+          <Routes>
+            <Route path="/users/:userId" element={<UserDetailPage />} />
+          </Routes>
+        </MemoryRouter>)
+  }
+
+  it('보낸 화면이 알려주면 그 화면으로 돌아간다', async () => {
+    renderFrom({ from: '/actions', label: '조치 로그' })
+
+    const back = await screen.findByRole('link', { name: '← 조치 로그로' })
+    expect(back).toHaveAttribute('href', '/actions')
+  })
+
+  /** 받침이 있는 유일한 출처 — 조사를 손으로 적으면 여기서 "정지 현황로"가 된다. */
+  it('받침 있는 화면 이름에는 "으로"를 붙인다', async () => {
+    renderFrom({ from: '/suspensions', label: '정지 현황' })
+
+    const back = await screen.findByRole('link', { name: '← 정지 현황으로' })
+    expect(back).toHaveAttribute('href', '/suspensions')
+  })
+
+  it('출처를 모르면 종전대로 신고 큐로 간다', async () => {
+    renderFrom()
+
+    const back = await screen.findByRole('link', { name: '← 신고 큐로' })
+    expect(back).toHaveAttribute('href', '/')
+  })
+})
+
 describe('지금 적용 중인 조치만 보기(HP-268)', () => {
   /**
    * 종결 → 재오픈으로 상쇄된 쌍(신고 55) + 되돌려지지 않은 종결 1건(신고 77).

@@ -239,6 +239,13 @@ table.report-table { width: 100%; border-collapse: collapse; }
   white-space: pre-wrap; word-break: break-word;
 }
 .meta-line { font-size: 11.5px; color: var(--muted); }
+/* 조치 로그 대상 칸의 신고 발췌 — 이름 옆에 붙어 "어느 신고인지"를 말한다(HP-299). */
+.action-table .target-excerpt {
+  margin-left: 6px;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
 .target-card {
   border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px;
   font-size: 12px; display: flex; align-items: center; gap: 8px;
