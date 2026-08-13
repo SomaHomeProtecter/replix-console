@@ -364,6 +364,29 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .dialog-actions .btn { text-align: center; }
 
+/* HP-303 경고는 파괴적 제재가 아니므로 빨강을 쓰지 않는다. 기존 판단 재료의 호박색 토큰을
+   재사용하되, 버튼 대비를 위해 글자는 짙은 잉크로 둔다. */
+.btn-warn {
+  background: var(--warn-bg); border-color: var(--amber-soft); color: var(--amber-ink);
+  font-weight: 750;
+}
+.btn-warn:hover:not(:disabled) { background: var(--amber-soft); color: var(--ink); }
+.warning-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.warning-presets label {
+  font-size: 12px; font-weight: 700; border: 1px solid var(--line-strong);
+  border-radius: 999px; padding: 4px 12px; color: var(--label); cursor: pointer;
+}
+.warning-presets label:has(input:checked) {
+  background: var(--warn-bg); border-color: var(--amber-soft); color: var(--amber-ink);
+}
+.warning-presets input { position: absolute; opacity: 0; pointer-events: none; }
+.warning-copy {
+  background: var(--warn-bg); border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 9px 11px; color: var(--amber-ink); font-size: 12px; line-height: 1.45;
+}
+.warning-copy p { margin: 4px 0 0; }
+.warning-review dt, .warning-review dd { color: var(--amber-ink); }
+
 /* ── 사용자 상세 (cm2) ── */
 .user-detail {
   display: flex; flex-direction: column; flex: 1; min-height: 0;

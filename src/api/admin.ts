@@ -3,6 +3,7 @@ import type {
   AdminActionLogResponse, AdminActionType, AuthorMessages, ReportPage, ReportReason, ReportStatus,
   ModerationDecisionResult, ModerationReviewDecision, ModerationReviewPage, ResolutionAction,
   ResolveResult, SuspendDuration, SuspendedUsers, SuspensionResult, UserDetail, UserSearchResult,
+  WarningReason, WarningResult,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -106,6 +107,14 @@ export function suspendUser(
 
 export function unsuspendUser(userId: number): Promise<SuspensionResult> {
   return apiFetch(`/api/v1/admin/users/${userId}/suspend`, { method: 'DELETE' })
+}
+
+export function warnUser(
+  userId: number, reason: WarningReason, note: string | null,
+): Promise<WarningResult> {
+  return apiFetch(`/api/v1/admin/users/${userId}/warnings`, {
+    method: 'POST', body: JSON.stringify({ reason, note }),
+  })
 }
 
 /**

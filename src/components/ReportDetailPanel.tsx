@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import {
-  blindMessage, fixSpoilerScore, reopenReport, resolveReport, suspendUser, unblindMessage,
+  blindMessage, fixSpoilerScore, reopenReport, resolveReport, suspendUser, unblindMessage, warnUser,
 } from '../api/admin'
-import type { ReportItem, SuspendDuration } from '../api/types'
+import type { ReportItem, SuspendDuration, WarningReason } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
 import AuthorMessages from './AuthorMessages'
 import Avatar from './Avatar'
 import SuspendDialog from './SuspendDialog'
+import WarningDialog from './WarningDialog'
 
 /** 채점 스키마(HP-109)와 같은 범위 — BE가 `@Min(0) @Max(10)`으로 되돌려 보내므로 화면이 먼저 막는다. */
 const SCORE_CHOICES = Array.from({ length: 11 }, (_, i) => i)
@@ -77,6 +78,7 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
 
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [warningOpen, setWarningOpen] = useState(false)
   /**
    * 운영자가 고른 점수. <b>null = 아직 안 골랐다</b>(화면엔 서버 값이 그대로 보인다).
    *
@@ -98,6 +100,7 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
     setNote('')
     setError(null)
     setDialogOpen(false)
+    setWarningOpen(false)
   }, [report.id])
 
   useEffect(() => {
@@ -311,6 +314,13 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
       <div className="acts">
         <button type="button" className="btn btn-blind" disabled={locked} onClick={blind}>가림</button>
         <button
+            type="button" className="btn btn-warn"
+            disabled={locked || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
+            title={report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
+            onClick={() => setWarningOpen(true)}>
+          경고…
+        </button>
+        <button
             type="button" className="btn btn-susp"
             // WITHDRAWN은 BE가 409로 거부한다 — 다이얼로그까지 갔다 실패하지 않게 미리 막는다(리뷰 m6)
             disabled={locked || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
@@ -365,6 +375,16 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
             busy={locked}
             onConfirm={suspend}
             onCancel={() => setDialogOpen(false)} />
+      )}
+      {warningOpen && report.targetUser && (
+        <WarningDialog
+            targetName={report.targetUser.displayName ?? `#${report.targetUser.id}`}
+            busy={locked}
+            onConfirm={(reason: WarningReason, warningNote: string | null) => {
+              setWarningOpen(false)
+              run(async () => { await warnUser(report.targetUser!.id, reason, warningNote) })
+            }}
+            onCancel={() => setWarningOpen(false)} />
       )}
     </div>
   )

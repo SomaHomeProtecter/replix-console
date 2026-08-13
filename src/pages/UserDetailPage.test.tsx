@@ -11,6 +11,7 @@ vi.mock('../api/admin')
 const getUserDetail = vi.mocked(admin.getUserDetail)
 const unsuspendUser = vi.mocked(admin.unsuspendUser)
 const suspendUser = vi.mocked(admin.suspendUser)
+const warnUser = vi.mocked(admin.warnUser)
 
 function renderPage() {
   return render(
@@ -136,6 +137,21 @@ describe('지금 적용 중인 조치만 보기(HP-268)', () => {
 })
 
 describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () => {
+  it('누적 3회부터 정지 검토를 표시하고 경고 후 상세를 다시 읽는다', async () => {
+    getUserDetail.mockResolvedValue(makeUserDetail({
+      warnings: { total: 3, suspensionReviewRecommended: true },
+    }))
+    renderPage()
+
+    expect(await screen.findByText('3회 · 정지 검토')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /경고/ }))
+    await userEvent.click(screen.getByRole('radio', { name: '스포일러' }))
+    await userEvent.click(screen.getByRole('button', { name: '경고 발송' }))
+
+    await waitFor(() => expect(warnUser).toHaveBeenCalledWith(9, 'SPOILER', null))
+    await waitFor(() => expect(getUserDetail).toHaveBeenCalledTimes(2))
+  })
+
   it('헤더(상태 칩·userId·provider)와 기본 정보 블록(읽기 전용)을 보여준다', async () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: /스포일러꾼/ })).toBeInTheDocument()

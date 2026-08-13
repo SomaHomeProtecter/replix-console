@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { effectiveActions, mergeSuspendResolve } from '../actionHistory'
-import { getUserDetail, suspendUser, unsuspendUser } from '../api/admin'
-import type { SuspendDuration, UserDetail, UserStatus } from '../api/types'
+import { getUserDetail, suspendUser, unsuspendUser, warnUser } from '../api/admin'
+import type { SuspendDuration, UserDetail, UserStatus, WarningReason } from '../api/types'
 import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
+import WarningDialog from '../components/WarningDialog'
 import {
   actionLabel, formatKstShort, isSuspensionActive, reporterTrustLine, suspensionChip, withRo,
 } from '../format'
@@ -31,6 +32,7 @@ export default function UserDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [warningOpen, setWarningOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('reports')
   // 기본은 끔(전량) — 조치 이력은 감사 기록이라 "무엇이 있었나"가 정본이고,
   // 숨김은 "지금 뭐가 걸려 있나"를 볼 때의 보조 뷰다(HP-268).
@@ -85,6 +87,9 @@ export default function UserDetailPage() {
 
   const { profile } = detail
   const name = profile.displayName ?? `#${profile.id}`
+  // admin-ui와 BE가 따로 배포될 수 있다. 구버전 BE 응답에는 이 집계가 없으므로
+  // 전환 구간에도 상세 화면 전체가 TypeError로 사라지지 않게 0회로 눕힌다.
+  const warnings = detail.warnings ?? { total: 0, suspensionReviewRecommended: false }
   const tabLabels: Record<Tab, string> = {
     reports: `받은 신고 ${detail.reportsReceived.length}`,
     actions: `조치 이력 ${detail.actions.length}`,
@@ -109,6 +114,12 @@ export default function UserDetailPage() {
           <div className="sent-trust">{reporterTrustLine(detail.reportsSent)}</div>
         </div>
         <div className="top-act">
+          {profile.status !== 'WITHDRAWN' && (
+            <button type="button" className="btn btn-warn" disabled={busy}
+                onClick={() => setWarningOpen(true)}>
+              경고…
+            </button>
+          )}
           {profile.status === 'SUSPENDED' && (
             <button type="button" className="btn" disabled={busy}
                 onClick={() => run(async () => { await unsuspendUser(id) })}>
@@ -137,6 +148,10 @@ export default function UserDetailPage() {
         )}
         <div><dt>마지막 변경</dt><dd>{formatKstShort(profile.updatedAt)}</dd></div>
         <div><dt>이메일</dt><dd>{profile.email ?? '—'}</dd></div>
+        <div className={warnings.suspensionReviewRecommended ? 'warning-review' : undefined}>
+          <dt>누적 경고</dt>
+          <dd>{warnings.total}회{warnings.suspensionReviewRecommended ? ' · 정지 검토' : ''}</dd>
+        </div>
       </dl>
 
       <div className="user-columns">
@@ -245,6 +260,15 @@ export default function UserDetailPage() {
               run(async () => { await suspendUser(id, duration, reason) })
             }}
             onCancel={() => setDialogOpen(false)} />
+      )}
+      {warningOpen && (
+        <WarningDialog
+            targetName={name} busy={busy}
+            onConfirm={(reason: WarningReason, note: string | null) => {
+              setWarningOpen(false)
+              run(async () => { await warnUser(id, reason, note) })
+            }}
+            onCancel={() => setWarningOpen(false)} />
       )}
     </section>
   )

@@ -80,6 +80,7 @@ export const ACTION_LABELS: Record<AdminActionType, string> = {
   BLIND: '가림', UNBLIND: '가림 해제', SCORE_FIX: '점수 정정',
   // 이력 안에서는 대상이 이미 그 사용자라 "계정"은 군더더기다(HP-268 라벨 통일)
   SUSPEND: '정지', UNSUSPEND: '정지 해제',
+  WARN: '경고',
   RESOLVE_REPORT: '신고 종결', REOPEN_REPORT: '신고 재오픈',
 }
 

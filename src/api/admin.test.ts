@@ -7,8 +7,34 @@ vi.mock('../env', () => ({
 
 import {
   blindMessage, decideModerationReview, fixSpoilerScore, listActions, listAuthorMessages,
-  listModerationReviews, searchUsers,
+  listModerationReviews, searchUsers, warnUser,
 } from './admin'
+
+describe('warnUser — 사용자 경고 쓰기 계약(HP-303)', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('고정 사유와 사용자 비노출 운영 메모만 POST한다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      warning: { id: 81, reason: 'SPAM' }, totalWarnings: 2,
+      suspensionReviewRecommended: false,
+    }), { status: 200 }))
+
+    await warnUser(9, 'SPAM', '반복 도배 확인')
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('http://api.test/api/v1/admin/users/9/warnings')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({
+      reason: 'SPAM', note: '반복 도배 확인',
+    })
+  })
+})
 
 describe('moderation reviews — bounded 표본 조회·판정 계약(HP-302)', () => {
   const fetchMock = vi.fn()

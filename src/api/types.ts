@@ -8,7 +8,22 @@ export type ReportStatus = 'OPEN' | 'RESOLVED' | 'REJECTED'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'WITHDRAWN'
 export type SuspendDuration = 'H24' | 'H72' | 'D7' | 'PERMANENT'
 export type AdminActionType =
-  | 'BLIND' | 'UNBLIND' | 'SCORE_FIX' | 'SUSPEND' | 'UNSUSPEND' | 'RESOLVE_REPORT' | 'REOPEN_REPORT'
+  | 'BLIND' | 'UNBLIND' | 'SCORE_FIX' | 'SUSPEND' | 'UNSUSPEND' | 'WARN'
+  | 'RESOLVE_REPORT' | 'REOPEN_REPORT'
+
+export type WarningReason = 'ABUSE' | 'SPOILER' | 'SPAM' | 'OTHER'
+
+export interface WarningResult {
+  warning: {
+    id: number
+    reason: WarningReason
+    reasonLabel: string
+    message: string
+    createdAt: string
+  }
+  totalWarnings: number
+  suspensionReviewRecommended: boolean
+}
 
 export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT'
 
@@ -165,6 +180,8 @@ export interface UserDetail {
   suspensions: AdminActionRow[]
   /** 그 사용자가 <b>보낸</b> 신고 집계(HP-270) — reportsReceived와 반대 축이다. */
   reportsSent: ReportsSent
+  /** 누적 3회는 자동 정지가 아니라 운영자의 정지 검토 신호다. */
+  warnings: { total: number; suspensionReviewRecommended: boolean }
 }
 
 /** 한 회차에서 한 작성자가 남긴 글 한 줄(HP-298) — 운영자용이라 가려진 글도 원문이 온다. */

@@ -74,6 +74,7 @@ describe('actionLabel — 신고 종결의 결과까지 드러낸다(HP-268)', (
     expect(actionLabel('BLIND', null)).toBe('가림')
     expect(actionLabel('SUSPEND', null)).toBe('정지') // 이력 안에선 대상이 이미 그 사용자
     expect(actionLabel('UNSUSPEND', null)).toBe('정지 해제')
+    expect(actionLabel('WARN', null)).toBe('경고')
     expect(actionLabel('REOPEN_REPORT', null)).toBe('신고 재오픈')
   })
 })

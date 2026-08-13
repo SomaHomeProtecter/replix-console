@@ -14,6 +14,7 @@ const unblindMessage = vi.mocked(admin.unblindMessage)
 const resolveReport = vi.mocked(admin.resolveReport)
 const reopenReport = vi.mocked(admin.reopenReport)
 const suspendUser = vi.mocked(admin.suspendUser)
+const warnUser = vi.mocked(admin.warnUser)
 const fixSpoilerScore = vi.mocked(admin.fixSpoilerScore)
 
 const onActionDone = vi.fn()
@@ -110,6 +111,32 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
 })
 
 describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보조)', () => {
+  it('경고는 고정 사유·별도 운영 메모로 보내고 신고 판정은 자동 종결하지 않는다', async () => {
+    renderPanel()
+    await userEvent.click(screen.getByRole('button', { name: /경고/ }))
+
+    expect(screen.getByRole('dialog', { name: '사용자 경고' }))
+        .toHaveTextContent('경고 3회부터 정지 검토')
+    await userEvent.click(screen.getByRole('radio', { name: '도배·광고' }))
+    await userEvent.type(screen.getByLabelText('경고 운영 메모'), '반복 도배 확인')
+    await userEvent.click(screen.getByRole('button', { name: '경고 발송' }))
+
+    await waitFor(() => expect(warnUser).toHaveBeenCalledWith(9, 'SPAM', '반복 도배 확인'))
+    expect(resolveReport).not.toHaveBeenCalled()
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('대상이 없거나 탈퇴했으면 경고를 열지 않는다', () => {
+    const first = renderPanel(makeReportItem({ targetUser: null }))
+    expect(screen.getByRole('button', { name: /경고/ })).toBeDisabled()
+    first.unmount()
+
+    renderPanel(makeReportItem({
+      targetUser: { id: 9, displayName: '탈퇴자', status: 'WITHDRAWN', profileImageUrl: null },
+    }))
+    expect(screen.getByRole('button', { name: /경고/ })).toBeDisabled()
+  })
+
   it('기각은 REJECTED 종결이고 처리 메모를 싣는다', async () => {
     renderPanel()
     await userEvent.type(screen.getByLabelText('처리 메모'), '중복 신고')
