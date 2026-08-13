@@ -143,6 +143,12 @@ button { font: inherit; }
 .btn-blind { background: var(--ink); color: #fff; border-color: var(--ink); }         /* 가림 — 기본(잉크) */
 .btn-susp { background: var(--red-soft); color: var(--red); border-color: var(--red-border); }
 .btn-danger-solid { background: var(--red); color: #fff; border-color: var(--red); }   /* 정지 확정 전용 */
+.btn-room-end {
+  background: var(--warn-bg); color: var(--amber-ink); border-color: var(--amber-soft);
+}
+.btn-room-end-solid {
+  background: var(--amber-ink); color: #fff; border-color: var(--amber-ink);
+}
 .btn-link {
   background: none; border: none; padding: 0; cursor: pointer;
   color: var(--blue); text-decoration: none; font-weight: 600; font-size: 12px;
@@ -368,6 +374,10 @@ table.report-table { width: 100%; border-collapse: collapse; }
 }
 .dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .dialog-actions .btn { text-align: center; }
+.room-end-copy {
+  background: var(--warn-bg); border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 9px 11px; color: var(--amber-ink); font-size: 12px; line-height: 1.45;
+}
 
 /* HP-303 경고는 파괴적 제재가 아니므로 빨강을 쓰지 않는다. 기존 판단 재료의 호박색 토큰을
    재사용하되, 버튼 대비를 위해 글자는 짙은 잉크로 둔다. */

@@ -69,6 +69,7 @@ export function rowStatusLabel(
   if (status === 'REJECTED') return '— 기각'
   if (resolvedAction === 'BLIND') return '✓ 가림'
   if (resolvedAction === 'SUSPEND') return '✓ 정지'
+  if (resolvedAction === 'ROOM_CLOSE') return '✓ 방 종료'
   return '✓ 처리'
 }
 
@@ -86,7 +87,7 @@ export const ACTION_LABELS: Record<AdminActionType, string> = {
 
 /** 종결 결과를 앞자리에 쓰는 이름 — 라벨은 `<결과> · 신고 종결` 한 규칙으로 읽힌다. */
 const OUTCOME_LABELS: Record<ResolveOutcome, string> = {
-  BLIND: '가림', SUSPEND: '정지', NONE: '조치 없음', REJECTED: '기각',
+  BLIND: '가림', SUSPEND: '정지', ROOM_CLOSE: '방 종료', NONE: '조치 없음', REJECTED: '기각',
 }
 
 /**

@@ -83,7 +83,9 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
   })
 
   it('그룹방 신고는 출처만 밝히고 공개 채팅 전용 판단·가림·경고를 열지 않는다', () => {
-    renderPanel(makeReportItem({ source: 'GROUP_ROOM', currentStatus: null, spoilerScore: null }))
+    renderPanel(makeReportItem({
+      source: 'GROUP_ROOM', roomActive: false, currentStatus: null, spoilerScore: null,
+    }))
 
     expect(screen.getByText(/출처 그룹방/)).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '스포일러 점수' })).not.toBeInTheDocument()
@@ -93,6 +95,8 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
     expect(screen.getByRole('button', { name: /계정 정지/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: '조치 없이 종결' })).toBeEnabled()
     expect(screen.getByRole('button', { name: '기각' })).toBeEnabled()
+    expect(screen.getByText(/방 상태 종료·만료/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '방 종료 · 신고 종결' })).toBeDisabled()
   })
 
   /** 작성자 카드에만 있던 상세 진입을 신고자 카드에도 연다(HP-270) — 남용자에게 닿는 길. */
@@ -124,6 +128,36 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
 })
 
 describe('조치 플로우 — 가림(잉크 기본)·정지(빨강)·기각(보조)', () => {
+  it('살아 있는 그룹방은 확인 뒤 신고가 가리킨 방 종료로 종결한다', async () => {
+    renderPanel(makeReportItem({
+      source: 'GROUP_ROOM', roomActive: true, currentStatus: 'visible', spoilerScore: null,
+    }))
+
+    expect(screen.getByText(/방 상태 운영 중/)).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('처리 메모'), '신고 내용 확인')
+    await userEvent.click(screen.getByRole('button', { name: '방 종료 · 신고 종결' }))
+
+    const dialog = screen.getByRole('dialog', { name: '그룹방 종료' })
+    expect(dialog).toHaveTextContent('초대 링크, 재생 상태와 채팅이 즉시 삭제됩니다')
+    expect(resolveReport).not.toHaveBeenCalled()
+    expect(within(dialog).getByRole('button', { name: '취소' })).toHaveFocus()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '방 종료' }))
+
+    await waitFor(() => expect(resolveReport)
+        .toHaveBeenCalledWith(101, 'RESOLVED', '신고 내용 확인', 'ROOM_CLOSE'))
+    expect(onActionDone).toHaveBeenCalled()
+  })
+
+  it('그룹방 종료 확인을 취소하면 쓰기를 보내지 않는다', async () => {
+    renderPanel(makeReportItem({ source: 'GROUP_ROOM', roomActive: true }))
+    await userEvent.click(screen.getByRole('button', { name: '방 종료 · 신고 종결' }))
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+
+    expect(screen.queryByRole('dialog', { name: '그룹방 종료' })).not.toBeInTheDocument()
+    expect(resolveReport).not.toHaveBeenCalled()
+  })
+
   it('경고는 고정 사유·별도 운영 메모로 보내고 신고 판정은 자동 종결하지 않는다', async () => {
     renderPanel()
     await userEvent.click(screen.getByRole('button', { name: /경고/ }))

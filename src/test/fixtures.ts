@@ -12,6 +12,7 @@ export function makeReportItem(overrides: Partial<ReportItem> = {}): ReportItem 
     status: 'OPEN',
     resolvedAction: null,
     source: 'EPISODE',
+    roomActive: false,
     episodeId: 42,
     msgId: '01FIXTUREMSG0000000000000A',
     snapshotMessage: '범인은 집사다',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, isSuspensionActive,
-  reporterTrustLine, suspensionChip, suspensionState, withRo,
+  reporterTrustLine, rowStatusLabel, suspensionChip, suspensionState, withRo,
 } from './format'
 
 describe('formatKst 계열', () => {
@@ -58,10 +58,11 @@ describe('actionLabel — 신고 종결의 결과까지 드러낸다(HP-268)', (
   it('종결은 결과를 함께 붙인다 — "신고 종결"만으론 무엇을 했는지 알 수 없다', () => {
     expect(actionLabel('RESOLVE_REPORT', 'BLIND')).toBe('가림 · 신고 종결')
     expect(actionLabel('RESOLVE_REPORT', 'SUSPEND')).toBe('정지 · 신고 종결')
+    expect(actionLabel('RESOLVE_REPORT', 'ROOM_CLOSE')).toBe('방 종료 · 신고 종결')
     expect(actionLabel('RESOLVE_REPORT', 'NONE')).toBe('조치 없음 · 신고 종결')
   })
 
-  it('기각도 예외 없이 붙인다 — 네 결과가 같은 모양이라야 세로로 훑힌다', () => {
+  it('기각도 예외 없이 붙인다 — 모든 결과가 같은 모양이라야 세로로 훑힌다', () => {
     expect(actionLabel('RESOLVE_REPORT', 'REJECTED')).toBe('기각 · 신고 종결')
   })
 
@@ -76,6 +77,12 @@ describe('actionLabel — 신고 종결의 결과까지 드러낸다(HP-268)', (
     expect(actionLabel('UNSUSPEND', null)).toBe('정지 해제')
     expect(actionLabel('WARN', null)).toBe('경고')
     expect(actionLabel('REOPEN_REPORT', null)).toBe('신고 재오픈')
+  })
+})
+
+describe('rowStatusLabel', () => {
+  it('그룹방 종료로 종결된 행은 일반 처리와 구분한다', () => {
+    expect(rowStatusLabel('RESOLVED', 'ROOM_CLOSE')).toBe('✓ 방 종료')
   })
 })
 

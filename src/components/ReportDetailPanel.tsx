@@ -7,6 +7,7 @@ import type { ReportItem, SuspendDuration, WarningReason } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
 import AuthorMessages from './AuthorMessages'
 import Avatar from './Avatar'
+import RoomEndDialog from './RoomEndDialog'
 import SuspendDialog from './SuspendDialog'
 import WarningDialog from './WarningDialog'
 import type { QueueCommand } from '../queueKeys'
@@ -86,6 +87,7 @@ export default function ReportDetailPanel({
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [warningOpen, setWarningOpen] = useState(false)
+  const [roomEndOpen, setRoomEndOpen] = useState(false)
   /** React가 disabled를 다시 그리기 전의 빠른 연타까지 막는 동기 잠금. */
   const writeLock = useRef(false)
   const consumedCommand = useRef(0)
@@ -111,6 +113,7 @@ export default function ReportDetailPanel({
     setError(null)
     setDialogOpen(false)
     setWarningOpen(false)
+    setRoomEndOpen(false)
   }, [report.id])
 
   useEffect(() => {
@@ -248,11 +251,20 @@ export default function ReportDetailPanel({
     }, true)
   }
 
+  /** 신고가 가진 내부 roomId로만 실행되는 단일 요청 종결. UI와 요청에는 roomId가 나오지 않는다. */
+  const endRoom = () => {
+    if (report.source !== 'GROUP_ROOM' || !report.roomActive) return
+    setRoomEndOpen(false)
+    run(async () => {
+      await resolveReport(report.id, 'RESOLVED', noteOrNull(), 'ROOM_CLOSE')
+    }, true)
+  }
+
   // 상세 모달 안에서만 도착하는 조치 키. 보조 다이얼로그와 타이핑 경계는 부모가 차단한다.
   useEffect(() => {
     if (!shortcutCommand || shortcutCommand.sequence === consumedCommand.current) return
     consumedCommand.current = shortcutCommand.sequence
-    if (locked || dialogOpen || warningOpen) return
+    if (locked || dialogOpen || warningOpen || roomEndOpen) return
     switch (shortcutCommand.key) {
       case 'b':
         if (report.source !== 'GROUP_ROOM') blind()
@@ -277,6 +289,8 @@ export default function ReportDetailPanel({
         신고 {formatKstShort(report.createdAt)}
         {' '}· 출처 {report.source === 'GROUP_ROOM' ? '그룹방' : '회차'}
         {' '}· ep.{report.episodeId} · 현재 상태 {liveStatusLabel(report.currentStatus)}
+        {report.source === 'GROUP_ROOM'
+          && <> · 방 상태 {report.roomActive ? '운영 중' : '종료·만료'}</>}
         {report.source === 'EPISODE' && <> · 스포일러 점수 {report.spoilerScore ?? '—'}</>}
       </div>
       {report.detail && (
@@ -382,6 +396,17 @@ export default function ReportDetailPanel({
             onClick={() => setDialogOpen(true)}>
           계정 정지…
         </button>
+        {report.source === 'GROUP_ROOM' && (
+          <button
+              type="button" className="btn btn-room-end"
+              disabled={locked || !report.roomActive}
+              title={report.roomActive
+                ? '이 신고가 가리킨 그룹방만 종료합니다'
+                : '그룹방이 이미 종료되었거나 만료되었습니다'}
+              onClick={() => setRoomEndOpen(true)}>
+            방 종료 · 신고 종결
+          </button>
+        )}
         {/* "조치 없음"은 별개 상태 이름이라 기각 버튼에 괄호로 붙어 있으면 둘이 뒤섞여 읽힌다 */}
         <button type="button" className="btn" disabled={locked} onClick={resolveWithoutAction}>
           조치 없이 종결
@@ -417,7 +442,8 @@ export default function ReportDetailPanel({
         {report.handledBy && (
           <><br />{report.status === 'REJECTED' ? '기각'
             : report.resolvedAction === 'BLIND' ? '가림'
-            : report.resolvedAction === 'SUSPEND' ? '정지' : '조치 없음'}
+            : report.resolvedAction === 'SUSPEND' ? '정지'
+            : report.resolvedAction === 'ROOM_CLOSE' ? '방 종료' : '조치 없음'}
           : <b>{report.handledBy.displayName}</b> · {formatKstShort(report.handledAt)}
             {report.resolutionNote ? ` · ${report.resolutionNote}` : ''}</>
         )}
@@ -439,6 +465,12 @@ export default function ReportDetailPanel({
               run(async () => { await warnUser(report.targetUser!.id, reason, warningNote) })
             }}
             onCancel={() => setWarningOpen(false)} />
+      )}
+      {roomEndOpen && (
+        <RoomEndDialog
+            busy={locked}
+            onConfirm={endRoom}
+            onCancel={() => setRoomEndOpen(false)} />
       )}
     </div>
   )

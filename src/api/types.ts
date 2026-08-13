@@ -28,8 +28,8 @@ export interface WarningResult {
 
 export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT'
 
-/** 처리(RESOLVED)에 동반된 조치 — "처리됨"을 가림/정지로 구분한다. null = 단순 처리. */
-export type ResolutionAction = 'BLIND' | 'SUSPEND'
+/** 처리(RESOLVED)에 동반된 조치. null = 단순 처리. */
+export type ResolutionAction = 'BLIND' | 'SUSPEND' | 'ROOM_CLOSE'
 
 export interface UserSummary {
   id: number
@@ -48,6 +48,8 @@ export interface ReportItem {
   resolvedAction: ResolutionAction | null
   /** 채팅 출처. roomId 자체는 사적 방 열거를 막기 위해 관리 API가 내보내지 않는다. */
   source: ReportSource
+  /** 신고가 가리킨 그룹방이 현재 Redis에 남아 있는지. roomId 자체는 노출하지 않는다. */
+  roomActive: boolean
   episodeId: number
   msgId: string
   snapshotMessage: string
@@ -114,7 +116,7 @@ export interface ReceivedReport {
  * 신고 종결이 무엇으로 끝났는지(HP-268). `NONE` = 처리했지만 가림·정지는 하지 않음.
  * 종결 외 조치는 종별이 곧 결과라 붙지 않는다.
  */
-export type ResolveOutcome = 'BLIND' | 'SUSPEND' | 'NONE' | 'REJECTED'
+export type ResolveOutcome = 'BLIND' | 'SUSPEND' | 'ROOM_CLOSE' | 'NONE' | 'REJECTED'
 
 export interface AdminActionRow {
   id: number
