@@ -5,7 +5,53 @@ vi.mock('../env', () => ({
   env: { apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '' },
 }))
 
-import { blindMessage, fixSpoilerScore, listAuthorMessages } from './admin'
+import { blindMessage, fixSpoilerScore, listActions, listAuthorMessages } from './admin'
+
+describe('listActions — 전역 조치 로그 필터·커서 계약(HP-299)', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValue(new Response('{"items":[],"nextCursor":null,"admins":[]}', {
+      status: 200,
+    }))
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('선택한 필터와 복합 커서를 GET 쿼리에 그대로 싣는다', async () => {
+    await listActions({
+      adminUserId: 7,
+      action: 'SUSPEND',
+      from: '2026-08-09T15:00:00.000Z',
+      to: '2026-08-12T14:59:59.999Z',
+    }, '1786505640000_31')
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(url.pathname).toBe('/api/v1/admin/actions')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      adminUserId: '7',
+      action: 'SUSPEND',
+      from: '2026-08-09T15:00:00.000Z',
+      to: '2026-08-12T14:59:59.999Z',
+      cursor: '1786505640000_31',
+      size: '30',
+    })
+  })
+
+  /**
+   * 빈 값은 "전체"라는 뜻이지 값이 빈 필터가 아니다. URL에 키를 남기면 서버의 기본값이나
+   * 타입 바인딩보다 빈 문자열 해석이 먼저 개입해, 전체 조회가 400 또는 빈 결과로 바뀔 수 있다.
+   */
+  it('전체 조회는 빈 필터와 빈 커서를 URL에서 아예 뺀다', async () => {
+    await listActions({ adminUserId: '', action: '', from: '', to: '' }, null)
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(Object.fromEntries(url.searchParams)).toEqual({ size: '30' })
+  })
+})
 
 /**
  * 계약 테스트 — 콘솔이 만드는 요청이 BE가 받는 것과 <b>문자열 단위로</b> 같은지 고정한다.

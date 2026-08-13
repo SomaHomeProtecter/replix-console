@@ -1,7 +1,7 @@
 import { apiFetch, qs } from './client'
 import type {
-  AuthorMessages, ReportPage, ReportReason, ReportStatus, ResolutionAction, ResolveResult,
-  SuspendDuration, SuspendedUsers, SuspensionResult, UserDetail,
+  AdminActionLogResponse, AdminActionType, AuthorMessages, ReportPage, ReportReason, ReportStatus,
+  ResolutionAction, ResolveResult, SuspendDuration, SuspendedUsers, SuspensionResult, UserDetail,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -9,6 +9,27 @@ import type {
 export interface ReportFilters {
   status: ReportStatus | ''
   reason: ReportReason | ''
+}
+
+export interface ActionLogFilters {
+  adminUserId: number | ''
+  action: AdminActionType | ''
+  from: string
+  to: string
+}
+
+/** 전역 조치 로그(HP-299) — 서버 정렬을 그대로 받고 복합 커서는 불투명 문자열로 전달한다. */
+export function listActions(
+  filters: ActionLogFilters, cursor: string | null, size = 30,
+): Promise<AdminActionLogResponse> {
+  return apiFetch(`/api/v1/admin/actions${qs({
+    adminUserId: filters.adminUserId,
+    action: filters.action,
+    from: filters.from,
+    to: filters.to,
+    cursor,
+    size,
+  })}`)
 }
 
 export function listReports(

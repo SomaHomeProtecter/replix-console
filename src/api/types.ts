@@ -116,6 +116,34 @@ export interface AdminActionRow {
   outcome: ResolveOutcome | null
 }
 
+/** 전역 조치 로그 한 행(HP-299) — 사용자 상세 이력과 달리 처리자·대상 사용자를 모두 명시한다. */
+export interface AdminActionLogRow {
+  id: number
+  createdAt: string
+  action: AdminActionType
+  outcome: ResolveOutcome | null
+  reason: string | null
+  adminId: number
+  adminName: string | null
+  targetType: AdminTargetType
+  targetId: string
+  targetSummary: string | null
+  targetUserId: number | null
+  targetUserName: string | null
+}
+
+export interface AdminActor {
+  id: number
+  displayName: string | null
+}
+
+export interface AdminActionLogResponse {
+  items: AdminActionLogRow[]
+  nextCursor: string | null
+  /** 현재 페이지가 아니라 전체 조치 이력에서 distinct한 처리자 선택지. */
+  admins: AdminActor[]
+}
+
 /**
  * 그 사용자가 <b>보낸</b> 신고의 집계(HP-270) — 받은 신고와 반대 축이다.
  * 비율이 아니라 원수치가 내려온다: 분모를 무엇으로 잡느냐가 뜻을 뒤집기 때문이다.

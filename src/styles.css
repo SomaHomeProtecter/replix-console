@@ -506,3 +506,43 @@ table.susp-table {
 }
 .sstate.active, .sstate.indefinite { background: var(--red-soft); color: var(--red); }
 .sstate.expired { background: var(--amber-soft); color: var(--amber-ink); }
+
+/* ── 전역 조치 로그 (HP-299) ── */
+.action-log { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.action-log .board-head .filter-note { margin-left: auto; }
+.action-filters {
+  display: flex; align-items: end; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.action-filters label { display: flex; flex-direction: column; gap: 4px; }
+.action-filters label > span { color: var(--muted-2); font-size: 11px; font-weight: 750; }
+.action-filters select, .action-filters input {
+  height: 32px; min-width: 140px; border: 1px solid var(--line-strong); border-radius: 6px;
+  background: var(--panel); color: var(--body); padding: 4px 9px; font: inherit;
+}
+.action-filters select:focus-visible, .action-filters input:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: 1px;
+}
+/* 내용 길이와 무관하게 칸이 움직이지 않는다 — 현황판과 같은 고정 레이아웃 원칙. */
+table.action-table {
+  width: 100%; border-collapse: collapse; background: var(--panel); table-layout: fixed;
+}
+.action-table th:nth-child(1), .action-table td:nth-child(1) { width: 120px; }
+.action-table th:nth-child(2), .action-table td:nth-child(2) { width: 160px; }
+.action-table th:nth-child(3), .action-table td:nth-child(3) { width: 180px; }
+.action-table th:nth-child(4), .action-table td:nth-child(4) { width: 220px; }
+.action-table th {
+  text-align: left; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase; padding: 10px 16px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel-2);
+}
+.action-table td {
+  padding: 10px 16px; border-bottom: 1px solid var(--line-2);
+  vertical-align: middle; font-size: 12.5px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.action-table .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.action-table .admin { color: var(--label); font-weight: 650; }
+.action-table .action { color: var(--ink); font-weight: 700; }
+.action-table .why { color: var(--body); }

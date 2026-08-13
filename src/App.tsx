@@ -2,13 +2,14 @@ import type { MouseEvent } from 'react'
 import { Link, NavLink, Route, Routes } from 'react-router'
 import { logout, userName } from './auth'
 import { env } from './env'
+import ActionLogPage from './pages/ActionLogPage'
 import ReportQueuePage from './pages/ReportQueuePage'
 import SuspensionBoardPage from './pages/SuspensionBoardPage'
 import UserDetailPage from './pages/UserDetailPage'
 import { useWriting, WritingProvider } from './writing'
 
 /**
- * 화면 3개 — 신고 큐(홈) · 정지 현황판(HP-300) · 사용자 상세. 톱바 = 시안 cm-top.
+ * 화면 4개 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 사용자 상세. 톱바 = 시안 cm-top.
  *
  * <p>상세는 여전히 <b>직접 가는 길이 없다</b>: 신고 큐나 현황판의 이름을 눌러 들어간다.
  * 회원 검색·목록은 만들지 않는다 — 콘솔의 동선은 "신고·정지에서 사람으로"이지 그 반대가 아니다.
@@ -47,6 +48,11 @@ function AppContent() {
               title={writingTitle} onClick={preventWhileWriting}>
             정지 현황
           </NavLink>
+          <NavLink
+              to="/actions" aria-disabled={writing || undefined}
+              title={writingTitle} onClick={preventWhileWriting}>
+            조치 로그
+          </NavLink>
         </nav>
         <div className="topbar-right">
           {/* 지표 화면은 만들지 않는다(HP-223 확정 제약 ③ — Redis 전수 스캔 회피 + HP-102 스택
@@ -71,6 +77,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<ReportQueuePage />} />
           <Route path="/suspensions" element={<SuspensionBoardPage />} />
+          <Route path="/actions" element={<ActionLogPage />} />
           <Route path="/users/:userId" element={<UserDetailPage />} />
         </Routes>
       </main>

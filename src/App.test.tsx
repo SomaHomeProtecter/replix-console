@@ -21,6 +21,7 @@ beforeEach(() => {
   envMock.grafanaUrl = null
   vi.mocked(admin.listReports).mockResolvedValue({ items: [], nextCursor: null })
   vi.mocked(admin.listSuspendedUsers).mockResolvedValue({ rows: [], total: 0 })
+  vi.mocked(admin.listActions).mockResolvedValue({ items: [], nextCursor: null, admins: [] })
 })
 
 /**
@@ -28,11 +29,12 @@ beforeEach(() => {
  * 링크가 아닌 글자였다 — 화면이 하나뿐일 때는 맞았지만, 지금은 그대로 두면 새 화면에 갈 길이 없다.
  */
 describe('톱바 탭 — 화면 사이를 오간다', () => {
-  it('두 화면이 각자의 경로로 걸려 있다', () => {
+  it('세 화면이 각자의 경로로 걸려 있다', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
 
     expect(screen.getByRole('link', { name: '신고 큐' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: '정지 현황' })).toHaveAttribute('href', '/suspensions')
+    expect(screen.getByRole('link', { name: '조치 로그' })).toHaveAttribute('href', '/actions')
   })
 
   it('지금 보는 화면을 탭이 표시한다', () => {
@@ -60,6 +62,13 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     expect(admin.listSuspendedUsers).toHaveBeenCalled()
   })
 
+  it('/actions는 전역 조치 로그를 연다', async () => {
+    render(<MemoryRouter initialEntries={['/actions']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('region', { name: '조치 로그' })).toBeInTheDocument()
+    expect(admin.listActions).toHaveBeenCalled()
+  })
+
   it('정지 해제가 도는 동안 톱바의 이탈 수단을 막고, 끝나면 다시 연다', async () => {
     const user = userEvent.setup()
     let release!: () => void
@@ -78,6 +87,7 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
       screen.getByRole('link', { name: /Re\s*plix Admin/ }),
       screen.getByRole('link', { name: '신고 큐' }),
       screen.getByRole('link', { name: '정지 현황' }),
+      screen.getByRole('link', { name: '조치 로그' }),
     ]
     await waitFor(() => {
       for (const link of topbarLinks) expect(link).toHaveAttribute('aria-disabled', 'true')
