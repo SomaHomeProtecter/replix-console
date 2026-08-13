@@ -205,3 +205,15 @@ export interface SuspendedUsers {
   rows: SuspendedUserRow[]
   total: number
 }
+
+/** 사용자 상세 진입용 검색 결과(HP-301) — 이메일은 결과에 노출하지 않는다. */
+export interface UserSearchRow {
+  userId: number
+  displayName: string
+  profileImageUrl: string | null
+  status: UserStatus
+}
+
+export interface UserSearchResult {
+  rows: UserSearchRow[]
+}

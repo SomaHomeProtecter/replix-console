@@ -5,7 +5,28 @@ vi.mock('../env', () => ({
   env: { apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '' },
 }))
 
-import { blindMessage, fixSpoilerScore, listActions, listAuthorMessages } from './admin'
+import { blindMessage, fixSpoilerScore, listActions, listAuthorMessages, searchUsers } from './admin'
+
+describe('searchUsers — 상세 진입 검색 계약(HP-301)', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValue(new Response('{"rows":[]}', { status: 200 }))
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('GET /api/v1/admin/users/search?q={검색어}로 인코딩해 보낸다', async () => {
+    await searchUsers('김 운영+test@example.com')
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(url.pathname).toBe('/api/v1/admin/users/search')
+    expect(Object.fromEntries(url.searchParams)).toEqual({ q: '김 운영+test@example.com' })
+  })
+})
 
 describe('listActions — 전역 조치 로그 필터·커서 계약(HP-299)', () => {
   const fetchMock = vi.fn()

@@ -80,10 +80,55 @@ button { font: inherit; }
 .topnav a[aria-disabled="true"], .brand[aria-disabled="true"] {
   opacity: 0.45; cursor: not-allowed;
 }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--top-muted); font-size: 12px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; color: var(--top-muted); font-size: 12px; }
 .btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; }
 .btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
 .content { flex: 1; min-height: 0; padding: 18px; display: flex; flex-direction: column; }
+
+/* 상세 진입용 사용자 검색(HP-301) — 결과 패널은 톱바 아래로만 펼치고 빈 검색 목록은 없다. */
+.user-search { position: relative; margin-left: auto; width: clamp(220px, 24vw, 320px); }
+.user-search-form {
+  display: flex; align-items: stretch; width: 100%; border: 1px solid #465363;
+  border-radius: 6px; overflow: hidden; background: #2a3441;
+}
+.user-search-form:focus-within { border-color: #8db5dc; box-shadow: 0 0 0 1px #8db5dc; }
+.user-search-form input {
+  flex: 1; min-width: 0; border: 0; outline: 0; padding: 6px 9px;
+  color: var(--top-ink); background: transparent; font: inherit;
+}
+.user-search-form input::placeholder { color: #909dac; }
+.user-search-form input:disabled { opacity: .45; cursor: not-allowed; }
+.user-search-form button {
+  border: 0; border-left: 1px solid #465363; padding: 0 10px; cursor: pointer;
+  background: #354252; color: var(--top-ink); font-weight: 750; font-size: 12px;
+}
+.user-search-form button:disabled { opacity: .4; cursor: not-allowed; }
+.user-search-results {
+  position: absolute; z-index: 20; top: calc(100% + 7px); right: 0; width: min(380px, 90vw);
+  overflow: hidden; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--panel); color: var(--body); box-shadow: 0 12px 28px rgba(10, 18, 26, .22);
+}
+.user-search-results ul { list-style: none; margin: 0; padding: 4px; }
+.user-search-results li + li { border-top: 1px solid var(--line-2); }
+.user-search-results a {
+  display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 5px;
+  color: inherit; text-decoration: none;
+}
+.user-search-results a:hover { background: var(--blue-soft); }
+.user-search-results a[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.user-search-results .ua {
+  width: 30px; height: 30px; flex: none; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: #e9b06c; color: #fff; font-size: 11px; font-weight: 800;
+}
+.user-search-identity { min-width: 0; display: flex; flex-direction: column; }
+.user-search-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.user-search-identity span { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.user-search-status { margin-left: auto; color: var(--green); font-weight: 750; font-size: 11px; }
+.user-search-status.suspended { color: var(--red); }
+.user-search-status.withdrawn { color: var(--muted); }
+.user-search-note { padding: 12px; color: var(--muted-2); }
+.user-search-note.error { color: var(--red); }
 
 /* ── 버튼 공통 ── */
 .btn {

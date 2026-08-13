@@ -2,6 +2,7 @@ import { apiFetch, qs } from './client'
 import type {
   AdminActionLogResponse, AdminActionType, AuthorMessages, ReportPage, ReportReason, ReportStatus,
   ResolutionAction, ResolveResult, SuspendDuration, SuspendedUsers, SuspensionResult, UserDetail,
+  UserSearchResult,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -117,4 +118,9 @@ export function listSuspendedUsers(): Promise<SuspendedUsers> {
 
 export function getUserDetail(userId: number): Promise<UserDetail> {
   return apiFetch(`/api/v1/admin/users/${userId}`)
+}
+
+/** 상세 진입용 사용자 검색(HP-301) — 서버가 최대 10건으로 닫고 빈 검색은 목록을 열지 않는다. */
+export function searchUsers(query: string): Promise<UserSearchResult> {
+  return apiFetch(`/api/v1/admin/users/search${qs({ q: query })}`)
 }

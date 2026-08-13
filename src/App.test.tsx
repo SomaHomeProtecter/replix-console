@@ -22,6 +22,7 @@ beforeEach(() => {
   vi.mocked(admin.listReports).mockResolvedValue({ items: [], nextCursor: null })
   vi.mocked(admin.listSuspendedUsers).mockResolvedValue({ rows: [], total: 0 })
   vi.mocked(admin.listActions).mockResolvedValue({ items: [], nextCursor: null, admins: [] })
+  vi.mocked(admin.searchUsers).mockResolvedValue({ rows: [] })
 })
 
 /**
@@ -94,6 +95,8 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     })
     const logout = screen.getByRole('button', { name: '로그아웃' })
     expect(logout).toBeDisabled()
+    expect(screen.getByRole('searchbox', { name: '사용자 검색' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '검색' })).toBeDisabled()
 
     await user.click(topbarLinks[0])
     await user.click(logout)
@@ -104,6 +107,7 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     await waitFor(() => {
       for (const link of topbarLinks) expect(link).not.toHaveAttribute('aria-disabled')
       expect(logout).toBeEnabled()
+      expect(screen.getByRole('searchbox', { name: '사용자 검색' })).toBeEnabled()
     })
   })
 })

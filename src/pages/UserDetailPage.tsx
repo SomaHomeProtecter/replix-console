@@ -20,7 +20,7 @@ type Tab = 'reports' | 'actions' | 'suspensions'
 
 /**
  * 사용자 상세(시안 cm2) — 헤더(아바타·이름·상태 칩(정지 만료 lazy 계산)·userId/provider) +
- * 좌 기본 정보 블록(읽기 전용) / 우 탭 3개(건수 표기). 진입은 신고 큐 경유만(검색·목록 없음).
+ * 좌 기본 정보 블록(읽기 전용) / 우 탭 3개(건수 표기). 신고·정지·조치 로그·검색에서 진입한다.
  * 정지/해제 버튼은 정본이 침묵한 보완 — 해제 동선이 없으면 콘솔에서 정지를 되돌릴 수 없다.
  */
 export default function UserDetailPage() {

@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes } from 'react-router'
 import { logout, userName } from './auth'
 import { env } from './env'
 import ActionLogPage from './pages/ActionLogPage'
+import UserSearch from './components/UserSearch'
 import ReportQueuePage from './pages/ReportQueuePage'
 import SuspensionBoardPage from './pages/SuspensionBoardPage'
 import UserDetailPage from './pages/UserDetailPage'
@@ -11,8 +12,8 @@ import { useWriting, WritingProvider } from './writing'
 /**
  * 화면 4개 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 사용자 상세. 톱바 = 시안 cm-top.
  *
- * <p>상세는 여전히 <b>직접 가는 길이 없다</b>: 신고 큐나 현황판의 이름을 눌러 들어간다.
- * 회원 검색·목록은 만들지 않는다 — 콘솔의 동선은 "신고·정지에서 사람으로"이지 그 반대가 아니다.
+ * <p>상세는 신고 큐·현황판·조치 로그와 톱바 사용자 검색에서 들어간다. 검색은 상세 진입만 열고,
+ * 빈 검색으로 펼쳐지는 회원 전체 목록은 만들지 않는다.
  */
 function AppContent() {
   const envLabel = env.apiBaseUrl.includes('replix-dev') ? 'DEV' : 'LOCAL'
@@ -54,6 +55,7 @@ function AppContent() {
             조치 로그
           </NavLink>
         </nav>
+        <UserSearch disabled={writing} disabledTitle={writingTitle} />
         <div className="topbar-right">
           {/* 지표 화면은 만들지 않는다(HP-223 확정 제약 ③ — Redis 전수 스캔 회피 + HP-102 스택
               재사용). 대신 있는 곳으로 보낸다(HP-297). 이모지를 쓰지 않는 이유는 HP-310과 같다 —
