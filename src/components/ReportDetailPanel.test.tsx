@@ -82,6 +82,19 @@ describe('상세 패널(정본) — 스냅샷 원문·메타·대상 사용자 �
     expect(screen.getByText(/사라짐/)).toBeInTheDocument()
   })
 
+  it('그룹방 신고는 출처만 밝히고 공개 채팅 전용 판단·가림·경고를 열지 않는다', () => {
+    renderPanel(makeReportItem({ source: 'GROUP_ROOM', currentStatus: null, spoilerScore: null }))
+
+    expect(screen.getByText(/출처 그룹방/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '스포일러 점수' })).not.toBeInTheDocument()
+    expect(admin.listAuthorMessages).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '가림' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /경고/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /계정 정지/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '조치 없이 종결' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '기각' })).toBeEnabled()
+  })
+
   /** 작성자 카드에만 있던 상세 진입을 신고자 카드에도 연다(HP-270) — 남용자에게 닿는 길. */
   it('신고자 카드도 사용자 상세로 이어진다', () => {
     renderPanel()

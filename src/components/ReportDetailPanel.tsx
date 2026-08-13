@@ -163,10 +163,13 @@ export default function ReportDetailPanel({
         })
   }
 
-  const blind = () => run(async () => {
-    await blindMessage(report.episodeId, report.msgId)
-    await resolveReport(report.id, 'RESOLVED', noteOrNull(), 'BLIND')
-  }, true)
+  const blind = () => {
+    if (report.source === 'GROUP_ROOM') return
+    run(async () => {
+      await blindMessage(report.episodeId, report.msgId)
+      await resolveReport(report.id, 'RESOLVED', noteOrNull(), 'BLIND')
+    }, true)
+  }
 
   const reject = () => run(async () => {
     await resolveReport(report.id, 'REJECTED', noteOrNull(), null)
@@ -252,7 +255,7 @@ export default function ReportDetailPanel({
     if (locked || dialogOpen || warningOpen) return
     switch (shortcutCommand.key) {
       case 'b':
-        blind()
+        if (report.source !== 'GROUP_ROOM') blind()
         break
       case 'n':
         resolveWithoutAction()
@@ -272,8 +275,9 @@ export default function ReportDetailPanel({
       <blockquote className="snapshot">{report.snapshotMessage}</blockquote>
       <div className="meta-line" title={`msgId ${report.msgId}`}>
         신고 {formatKstShort(report.createdAt)}
-        {' '}· 회차 ep.{report.episodeId} · 현재 상태 {liveStatusLabel(report.currentStatus)}
-        {' '}· 스포일러 점수 {report.spoilerScore ?? '—'}
+        {' '}· 출처 {report.source === 'GROUP_ROOM' ? '그룹방' : '회차'}
+        {' '}· ep.{report.episodeId} · 현재 상태 {liveStatusLabel(report.currentStatus)}
+        {report.source === 'EPISODE' && <> · 스포일러 점수 {report.spoilerScore ?? '—'}</>}
       </div>
       {report.detail && (
         <div className="meta-line">신고 사유({REASON_LABELS[report.reason]}) — {report.detail}</div>
@@ -307,9 +311,12 @@ export default function ReportDetailPanel({
         )}
       </div>
 
-      {/* 판단 재료(점수)와 조치를 같은 눈높이에 둔다 — 점수 줄이 조치 그리드 바로 위다(HP-294). */}
-      <h5 className="side-h">스포일러 점수</h5>
-      <div className="score-row">
+      {/* 그룹방은 스포일러 채점·공개 작성자 글 조회 대상이 아니다. 신고가 가져온 스냅샷과
+          작성자만 보여 주며 방/멤버를 열거하는 새 경로를 만들지 않는다(HP-304). */}
+      {report.source === 'EPISODE' && <>
+        {/* 판단 재료(점수)와 조치를 같은 눈높이에 둔다 — 점수 줄이 조치 그리드 바로 위다(HP-294). */}
+        <h5 className="side-h">스포일러 점수</h5>
+        <div className="score-row">
         <span className="score-now">{report.spoilerScore ?? '—'}</span>
         <span className="score-arrow" aria-hidden="true">→</span>
         <div className="score-picker" role="radiogroup" aria-label="정정할 스포일러 점수">
@@ -338,25 +345,32 @@ export default function ReportDetailPanel({
             onClick={fixScore}>
           점수 정정
         </button>
-      </div>
+        </div>
 
       {/* 작성자가 이 회차에 남긴 다른 글(HP-298) — 조치 그리드 <b>앞</b>에 둔다. 도배인지
           아닌지는 나머지 줄을 봐야 정해지므로 이것도 판단 재료이고, 판단 재료는 조치보다
           위에 온다(점수 줄과 같은 규칙). */}
       {/* key로 신고마다 새로 마운트한다 — 같은 메시지에 신고가 둘일 때 목록이 빈 채 남던
           문제를 구조적으로 없앤다(AuthorMessages의 report prop 주석 참조). */}
-      <AuthorMessages
-          key={report.id} report={report} busy={busy}
-          onActionDone={onActionDone} onBusyChange={setBulkBusy} />
+        <AuthorMessages
+            key={report.id} report={report} busy={busy}
+            onActionDone={onActionDone} onBusyChange={setBulkBusy} />
+      </>}
 
       <h5 className="side-h">조치</h5>
       {error && <div className="error-box" role="alert">{error}</div>}
       <div className="acts">
-        <button type="button" className="btn btn-blind" disabled={locked} onClick={blind}>가림</button>
+        <button
+            type="button" className="btn btn-blind"
+            disabled={locked || report.source === 'GROUP_ROOM'}
+            title={report.source === 'GROUP_ROOM' ? '그룹방 메시지는 가림 대상이 아닙니다' : undefined}
+            onClick={blind}>가림</button>
         <button
             type="button" className="btn btn-warn"
-            disabled={locked || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
-            title={report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
+            disabled={locked || report.source === 'GROUP_ROOM'
+              || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
+            title={report.source === 'GROUP_ROOM' ? '그룹방 신고는 정지·종결·기각으로 처리합니다'
+              : report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
             onClick={() => setWarningOpen(true)}>
           경고…
         </button>

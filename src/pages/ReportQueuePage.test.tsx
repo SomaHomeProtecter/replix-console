@@ -45,6 +45,7 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     const rows = await screen.findAllByRole('row')
     const first = rows[1] // rows[0] = 헤더
     expect(within(first).getByText('스포일러')).toBeInTheDocument()
+    expect(within(first).getByText('회차')).toBeInTheDocument()
     // 작성자·신고자를 독립 칸으로(HP-268) — 종전엔 작성자가 발췌 앞 회색 글씨라 눈에 안 들어왔고
     // 신고자는 아예 없어 "같은 사람이 반복 신고 중인지"를 목록에서 볼 수 없었다
     expect(within(first).getByText('스포일러꾼')).toBeInTheDocument()      // 작성자
@@ -54,6 +55,18 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
     const second = rows[2]
     expect(within(second).getByText('욕설·혐오')).toBeInTheDocument()
     expect(within(second).getByText('✓ 가림')).toBeInTheDocument() // 처리됨을 조치로 구분(E2E 피드백)
+  })
+
+  it('그룹방 신고는 방 식별자 대신 출처 표식만 보여준다', async () => {
+    listReports.mockResolvedValue({
+      items: [makeReportItem({ source: 'GROUP_ROOM', snapshotMessage: '방에서 온 신고' })],
+      nextCursor: null,
+    })
+    renderPage()
+
+    const row = (await screen.findAllByRole('row'))[1]
+    expect(within(row).getByText('그룹방')).toBeInTheDocument()
+    expect(row).not.toHaveTextContent('01ROOM')
   })
 
   /**

@@ -5,6 +5,7 @@
  */
 export type ReportReason = 'ABUSE' | 'SPOILER' | 'SPAM' | 'OTHER'
 export type ReportStatus = 'OPEN' | 'RESOLVED' | 'REJECTED'
+export type ReportSource = 'EPISODE' | 'GROUP_ROOM'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'WITHDRAWN'
 export type SuspendDuration = 'H24' | 'H72' | 'D7' | 'PERMANENT'
 export type AdminActionType =
@@ -45,6 +46,8 @@ export interface ReportItem {
   detail: string | null
   status: ReportStatus
   resolvedAction: ResolutionAction | null
+  /** 채팅 출처. roomId 자체는 사적 방 열거를 막기 위해 관리 API가 내보내지 않는다. */
+  source: ReportSource
   episodeId: number
   msgId: string
   snapshotMessage: string

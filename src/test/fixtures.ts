@@ -11,6 +11,7 @@ export function makeReportItem(overrides: Partial<ReportItem> = {}): ReportItem 
     detail: '결말을 그대로 말해요',
     status: 'OPEN',
     resolvedAction: null,
+    source: 'EPISODE',
     episodeId: 42,
     msgId: '01FIXTUREMSG0000000000000A',
     snapshotMessage: '범인은 집사다',

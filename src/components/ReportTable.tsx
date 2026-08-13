@@ -47,6 +47,7 @@ export default function ReportTable({ items, selectedId, onSelect }: {
           <tr>
             <th>시각</th>
             <th>사유</th>
+            <th>출처</th>
             <th>작성자</th>
             <th>신고된 채팅 (스냅샷)</th>
             <th>신고자</th>
@@ -81,6 +82,11 @@ export default function ReportTable({ items, selectedId, onSelect }: {
                 <ElapsedBadge createdAt={item.createdAt} now={now} />
               </td>
               <td><Pill reason={item.reason} /></td>
+              <td>
+                <span className={`source-mark${item.source === 'GROUP_ROOM' ? ' group' : ''}`}>
+                  {item.source === 'GROUP_ROOM' ? '그룹방' : '회차'}
+                </span>
+              </td>
               {/* 계정 이름이 정본 — 신고 시점 이름과 다르면(닉 변경) 그 사실을 title로 남긴다 */}
               <td className="party" title={authorTitle(item)}>
                 {item.targetUser?.displayName ?? item.snapshotDisplayName ?? '—'}
