@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -327,6 +327,103 @@ describe('신고 큐(정본 ①) — 테이블·필터·커서 페이징', () =>
   })
 })
 
+describe('HP-295 — 키보드 큐 처리의 소유권과 안전 경계', () => {
+  const reports = () => [
+    makeReportItem({ id: 101, snapshotMessage: '첫 신고' }),
+    makeReportItem({ id: 102, snapshotMessage: '둘째 신고' }),
+    makeReportItem({ id: 103, snapshotMessage: '셋째 신고' }),
+  ]
+
+  it('모달이 닫힌 동안 J/K는 행 포커스만 움직이고 Enter가 명시적으로 연다', async () => {
+    listReports.mockResolvedValue({ items: reports(), nextCursor: null })
+    renderPage()
+    await screen.findByText('첫 신고')
+    const rows = screen.getAllByRole('row').slice(1)
+
+    fireEvent.keyDown(document, { key: 'j' })
+    expect(rows[0]).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'j' })
+    expect(rows[1]).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'k' })
+    expect(rows[0]).toHaveFocus()
+
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+  })
+
+  it('3건을 마우스 없이 처리하되 성공 뒤 다음 모달은 자동으로 열지 않는다', async () => {
+    const all = reports()
+    listReports
+        .mockResolvedValueOnce({ items: all, nextCursor: null })
+        .mockResolvedValueOnce({ items: all.slice(1), nextCursor: null })
+        .mockResolvedValueOnce({ items: all.slice(2), nextCursor: null })
+        .mockResolvedValueOnce({ items: [], nextCursor: null })
+    vi.mocked(admin.resolveReport).mockResolvedValue({} as never)
+    renderPage()
+    await screen.findByText('첫 신고')
+
+    fireEvent.keyDown(document, { key: 'j' })
+    for (const [id, nextId] of [[101, 102], [102, 103], [103, null]] as const) {
+      await userEvent.keyboard('{Enter}')
+      expect(screen.getByRole('dialog', { name: '신고 상세' })).toBeInTheDocument()
+      await userEvent.keyboard('n')
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+      })
+      expect(admin.resolveReport).toHaveBeenCalledWith(id, 'RESOLVED', null, null)
+      if (nextId !== null) {
+        const next = document.querySelector<HTMLElement>(`[data-report-id="${nextId}"]`)
+        expect(next).toHaveFocus()
+      }
+    }
+    expect(admin.resolveReport).toHaveBeenCalledTimes(3)
+  })
+
+  it('처리 메모 입력은 단축키가 아니고 보조 다이얼로그가 아래 조치 키를 막는다', async () => {
+    listReports.mockResolvedValue({ items: reports(), nextCursor: null })
+    renderPage()
+    await screen.findByText('첫 신고')
+    await userEvent.click(screen.getAllByRole('row')[1])
+
+    const note = screen.getByRole('textbox', { name: '처리 메모' })
+    await userEvent.type(note, 'bnxs')
+    expect(note).toHaveValue('bnxs')
+    expect(admin.blindMessage).not.toHaveBeenCalled()
+    expect(admin.resolveReport).not.toHaveBeenCalled()
+    expect(admin.suspendUser).not.toHaveBeenCalled()
+
+    // 메모 밖에서 S는 정지 확인까지만 연다. 위 겹에서 X를 눌러도 기각으로 새지 않는다.
+    ;(screen.getByRole('dialog', { name: '신고 상세' }) as HTMLElement).focus()
+    await userEvent.keyboard('s')
+    expect(screen.getByRole('dialog', { name: '계정 정지' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('dialog', { name: '계정 정지' }), { key: 'x' })
+    expect(admin.resolveReport).not.toHaveBeenCalled()
+    expect(admin.suspendUser).not.toHaveBeenCalled()
+  })
+
+  it('OS 자동 반복·빠른 개별 연타·IME 조합은 한 신고를 중복 종결하지 않는다', async () => {
+    listReports.mockResolvedValue({ items: reports(), nextCursor: null })
+    let finish!: () => void
+    vi.mocked(admin.resolveReport).mockImplementation(() => new Promise<void>((resolve) => {
+      finish = resolve
+    }) as never)
+    renderPage()
+    await screen.findByText('첫 신고')
+    await userEvent.click(screen.getAllByRole('row')[1])
+    const modal = screen.getByRole('dialog', { name: '신고 상세' })
+
+    fireEvent.keyDown(modal, { key: 'x', repeat: true })
+    fireEvent.keyDown(modal, { key: 'x', isComposing: true })
+    expect(admin.resolveReport).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(modal, { key: 'x' })
+    fireEvent.keyDown(modal, { key: 'x' })
+    fireEvent.keyDown(modal, { key: 'x' })
+    await waitFor(() => expect(admin.resolveReport).toHaveBeenCalledTimes(1))
+    finish()
+  })
+})
+
 describe('쓰기 도중에는 모달을 닫지 않는다(HP-298)', () => {
   /**
    * 모달이 쓰기 도중 닫히면 상세 패널이 언마운트돼 <b>결과를 알릴 곳이 사라진다</b> —
@@ -358,20 +455,18 @@ describe('쓰기 도중에는 모달을 닫지 않는다(HP-298)', () => {
     expect(screen.getByRole('button', { name: '닫기' })).toBeDisabled()
   })
 
-  it('쓰기가 끝나면 다시 닫을 수 있다 — 잠금이 남으면 모달이 갇힌다', async () => {
+  it('닫는 조치가 성공하면 모달이 닫힌다 — 잠금이 남아 갇히지 않는다', async () => {
     // clearAllMocks는 호출 기록만 지우고 구현은 남긴다 — 앞 테스트가 심은 "영영 안 끝나는"
     // 구현이 새면 여기서도 잠긴 채라 원인과 무관한 실패가 난다(이 파일 beforeEach 주석 참조).
     vi.mocked(admin.resolveReport).mockResolvedValue({ id: 101, status: 'REJECTED' } as never)
-    const { container } = renderPage()
+    renderPage()
     await screen.findByText('범인은 집사다', { exact: false })
     await userEvent.click(screen.getAllByRole('row')[1])
     await userEvent.click(within(screen.getByRole('dialog', { name: '신고 상세' }))
         .getByRole('button', { name: '기각' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: '닫기' })).toBeEnabled())
-
-    await userEvent.click(container.querySelector('.modal-backdrop')!)
-
-    expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '신고 상세' })).not.toBeInTheDocument()
+    })
   })
 })
 

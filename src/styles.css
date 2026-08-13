@@ -500,6 +500,19 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .score-chip input { position: absolute; opacity: 0; pointer-events: none; }
 .btn-score { padding: 4px 10px; font-size: 11.5px; margin-left: auto; }
 
+/* 단축키 안내 줄(HP-295) — 기존 콘솔의 보조 패널 톤을 유지한다. */
+.kbar {
+  display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+  margin-top: 10px; padding: 8px 14px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: 11.5px; color: var(--muted-2);
+}
+.kbar kbd {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line-strong); border-bottom-width: 2px;
+  border-radius: 4px; padding: 1px 5px; margin-right: 4px;
+}
+
 /* 작성자 글 일괄 보기·가림(HP-298) — 상세 모달 안, 조치 그리드 위(판단 재료). */
 .author-msgs { margin-top: 4px; }
 .author-msgs .hint { font-weight: 400; }

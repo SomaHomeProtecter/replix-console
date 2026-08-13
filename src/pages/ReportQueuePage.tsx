@@ -4,6 +4,10 @@ import type { ReportItem } from '../api/types'
 import FilterBar from '../components/FilterBar'
 import ReportDetailPanel from '../components/ReportDetailPanel'
 import ReportTable from '../components/ReportTable'
+import { isTypingTarget, shortcutKey, type QueueCommand } from '../queueKeys'
+
+const FOCUSABLE = 'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), '
+  + '[href], select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
  * 신고 큐(정본 ①) — 테이블 + 상세 <b>모달</b>. 행 선택 시 상세·조치가 가운데 팝업으로 열리고,
@@ -38,11 +42,16 @@ export default function ReportQueuePage() {
    * 들고 있는다. 다음 조치가 끝나면 그때 결과로 덮인다.
    */
   const [notice, setNotice] = useState<string | null>(null)
+  const [command, setCommand] = useState<QueueCommand | null>(null)
   const loadSeq = useRef(0)
   /** 조치 뒤 재조회에서 되돌릴 스크롤 위치. null = 되돌리지 않음(필터 변경·최초 로드). */
   const restoreScroll = useRef<number | null>(null)
   /** 지금까지 펼친 페이지 수("더 불러오기" 횟수 + 1) — 조치 뒤 같은 만큼 다시 읽는다. */
   const pagesLoaded = useRef(1)
+  /** 조치 성공 뒤 포커스를 줄 다음 OPEN 신고. 모달을 자동으로 열지는 않는다. */
+  const pendingFocusId = useRef<number | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  const openerRef = useRef<HTMLElement | null>(null)
 
   const load = useCallback(async (target: ReportFilters, cursor: string | null) => {
     // 경합 가드(리뷰 M1): 필터 변경과 "더 불러오기"가 겹치면 뒤늦은 응답이 새 목록을
@@ -126,16 +135,88 @@ export default function ReportQueuePage() {
 
   const selected = items.find((item) => item.id === selectedId) ?? null
 
-  // 모달 열림 동안 Esc = 닫기. 정지 다이얼로그가 위에 떠 있으면 그쪽 핸들러가
-  // stopPropagation으로 먼저 소비해 다이얼로그만 닫힌다(겹 순서 보존).
+  const openReport = useCallback((id: number) => {
+    openerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement : null
+    setSelectedId(id)
+  }, [])
+
+  const closeReport = useCallback(() => {
+    setSelectedId(null)
+    setCommand(null)
+    const opener = openerRef.current
+    requestAnimationFrame(() => {
+      if (opener && document.contains(opener)) opener.focus()
+    })
+  }, [])
+
+  // 상세를 열면 키보드 소유권을 모달로 옮긴다.
   useEffect(() => {
-    if (selectedId === null) return
+    if (selected === null) return
+    modalRef.current?.focus()
+  }, [selected?.id])
+
+  // 조치 성공으로 OPEN 행이 빠진 뒤 다음 행에만 포커스를 둔다. 자동으로 열지 않는다.
+  useLayoutEffect(() => {
+    if (selectedId !== null || pendingFocusId.current === null) return
+    const id = pendingFocusId.current
+    const row = document.querySelector<HTMLElement>(`[data-report-id="${id}"]`)
+    if (row) row.focus()
+    pendingFocusId.current = null
+  }, [items, selectedId])
+
+  /**
+   * 신고를 닫는 조치가 성공했다. 현재 OPEN 큐에서 바로 제거해 같은 건에 연타할 창을 닫고,
+   * 그 다음 OPEN 행에 포커스를 둔 뒤 서버 정본을 재조회한다.
+   */
+  const handleReportClosed = useCallback((reportId: number) => {
+    const at = items.findIndex((item) => item.id === reportId)
+    const next = at < 0 ? null
+      : items.slice(at + 1).find((item) => item.status === 'OPEN')?.id ?? null
+    pendingFocusId.current = next
+    setSelectedId(null)
+    setCommand(null)
+    if (filters.status === 'OPEN') {
+      setItems((current) => current.filter((item) => item.id !== reportId))
+    }
+    void reloadKeepingPlace()
+  }, [filters.status, items, reloadKeepingPlace])
+
+  /** 모달 전체의 Tab 순환. 상세 뒤의 페이지로 포커스가 새지 않게 한다. */
+  const trapModalTab = (e: React.KeyboardEvent) => {
+    const box = modalRef.current
+    if (!box) return
+    const focusables = Array.from(box.querySelectorAll<HTMLElement>(FOCUSABLE))
+    if (focusables.length === 0) return
+    const active = document.activeElement
+    const inside = box.contains(active) && active !== box
+    if (e.shiftKey && (!inside || active === focusables[0])) {
+      e.preventDefault()
+      focusables[focusables.length - 1].focus()
+    } else if (!e.shiftKey && (!inside || active === focusables[focusables.length - 1])) {
+      e.preventDefault()
+      focusables[0].focus()
+    }
+  }
+
+  /** 모달이 닫힌 큐에서만 J/K로 행 포커스를 움직인다. */
+  useEffect(() => {
+    if (selectedId !== null) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !writing) setSelectedId(null)
+      if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return
+      const key = shortcutKey(e.key)
+      if (key !== 'j' && key !== 'k') return
+      const rows = Array.from(document.querySelectorAll<HTMLElement>('.report-table tbody tr'))
+      if (rows.length === 0) return
+      e.preventDefault()
+      const current = rows.indexOf(document.activeElement as HTMLElement)
+      const target = current < 0 ? 0
+        : Math.max(0, Math.min(rows.length - 1, current + (key === 'j' ? 1 : -1)))
+      rows[target].focus()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [selectedId, writing])
+  }, [selectedId])
 
   return (
     <section className="queue-layout" aria-label="신고 큐">
@@ -150,7 +231,7 @@ export default function ReportQueuePage() {
           }} />
       {error && <div className="error-box queue-error" role="alert">{error}</div>}
       {notice && <div className="notice-box queue-error" role="status">{notice}</div>}
-      <ReportTable items={items} selectedId={selectedId} onSelect={setSelectedId} />
+      <ReportTable items={items} selectedId={selectedId} onSelect={openReport} />
       {nextCursor && (
         <button
             type="button" className="btn load-more" disabled={loading}
@@ -160,18 +241,47 @@ export default function ReportQueuePage() {
       )}
       {loading && items.length === 0 && <div className="page-status">불러오는 중…</div>}
 
+      <div className="kbar" aria-label="단축키 안내">
+        <span><kbd>J</kbd><kbd>K</kbd> 행 이동</span>
+        <span><kbd>↵</kbd> 상세 열기</span>
+        <span><kbd>B</kbd> 가림</span>
+        <span><kbd>N</kbd> 조치 없이 종결</span>
+        <span><kbd>X</kbd> 기각</span>
+        <span><kbd>S</kbd> 정지 확인</span>
+        <span><kbd>Esc</kbd> 닫기</span>
+      </div>
+
       {selected && (
         <div
             className="modal-backdrop"
-            onClick={() => { if (!writing) setSelectedId(null) }}>
+            onClick={() => { if (!writing) closeReport() }}>
           <div
-              className="modal-card" role="dialog" aria-modal="true" aria-label="신고 상세"
-              onClick={(e) => e.stopPropagation()}>
+              ref={modalRef} className="modal-card" role="dialog" aria-modal="true"
+              aria-label="신고 상세" tabIndex={-1}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // 보조 다이얼로그는 모든 keydown 전파를 끊으므로 여기에는 상세 소유 키만 온다.
+                if (e.key === 'Tab') {
+                  trapModalTab(e)
+                  return
+                }
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  if (!writing) closeReport()
+                  return
+                }
+                if (e.nativeEvent.isComposing || e.repeat || e.metaKey || e.ctrlKey || e.altKey
+                    || isTypingTarget(e.target)) return
+                const key = shortcutKey(e.key)
+                if (key !== 'b' && key !== 'n' && key !== 'x' && key !== 's') return
+                e.preventDefault()
+                setCommand((current) => ({ key, sequence: (current?.sequence ?? 0) + 1 }))
+              }}>
             <button
                 type="button" className="modal-close" aria-label="닫기"
                 disabled={writing}
                 title={writing ? '조치를 처리하는 중입니다 — 끝나면 닫을 수 있습니다' : undefined}
-                onClick={() => setSelectedId(null)}>
+                onClick={closeReport}>
               ✕
             </button>
             <ReportDetailPanel
@@ -180,6 +290,8 @@ export default function ReportQueuePage() {
                   setNotice(next ?? null)
                   void reloadKeepingPlace()
                 }}
+                onReportClosed={handleReportClosed}
+                shortcutCommand={command}
                 onBusyChange={setWriting} />
           </div>
         </div>

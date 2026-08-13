@@ -65,7 +65,9 @@ export default function WarningDialog({ targetName, busy, onConfirm, onCancel }:
           aria-label="사용자 경고" tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.stopPropagation(); onCancel() }
+            // 아래 신고 상세의 조치 단축키까지 어떤 키도 새지 않는다.
+            e.stopPropagation()
+            if (e.key === 'Escape') { onCancel() }
             else if (e.key === 'Tab') trapTab(e)
           }}>
         <button type="button" className="modal-close" aria-label="닫기" onClick={onCancel}>✕</button>

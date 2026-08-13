@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import {
   blindMessage, fixSpoilerScore, reopenReport, resolveReport, suspendUser, unblindMessage, warnUser,
@@ -9,6 +9,7 @@ import AuthorMessages from './AuthorMessages'
 import Avatar from './Avatar'
 import SuspendDialog from './SuspendDialog'
 import WarningDialog from './WarningDialog'
+import type { QueueCommand } from '../queueKeys'
 
 /** 채점 스키마(HP-109)와 같은 범위 — BE가 `@Min(0) @Max(10)`으로 되돌려 보내므로 화면이 먼저 막는다. */
 const SCORE_CHOICES = Array.from({ length: 11 }, (_, i) => i)
@@ -39,13 +40,19 @@ function liveStatusLabel(currentStatus: string | null): string {
  * 것은 재오픈 버튼이 한다. 종전에는 가림 해제가 재오픈까지 자동으로 해 "판정"과 "제재 상태"가
  * 엉켰다 — 자세한 근거는 {@code unblind} 주석.
  */
-export default function ReportDetailPanel({ report, onActionDone, onBusyChange }: {
+export default function ReportDetailPanel({
+  report, onActionDone, onReportClosed, shortcutCommand = null, onBusyChange,
+}: {
   report: ReportItem
   /**
    * 조치 후 부모가 목록을 다시 읽는다. 인자로 <b>결과 문구</b>가 올 수 있다(HP-298 일괄 가림) —
    * 그 문구는 이 패널이 사라진 뒤에도 남아야 해서 페이지가 들고 있는다.
    */
   onActionDone: (notice?: string) => void
+  /** 신고를 닫는 조치가 성공했을 때만 호출 — 부모가 모달을 닫고 다음 행에 포커스한다. */
+  onReportClosed?: (reportId: number) => void
+  /** 상세 모달이 소유한 조치 단축키. 같은 키 연타를 구분하려 sequence를 함께 받는다. */
+  shortcutCommand?: QueueCommand | null
   /**
    * 쓰기가 도는 동안 페이지가 모달을 닫지 못하게 한다(HP-298).
    *
@@ -79,6 +86,9 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [warningOpen, setWarningOpen] = useState(false)
+  /** React가 disabled를 다시 그리기 전의 빠른 연타까지 막는 동기 잠금. */
+  const writeLock = useRef(false)
+  const consumedCommand = useRef(0)
   /**
    * 운영자가 고른 점수. <b>null = 아직 안 골랐다</b>(화면엔 서버 값이 그대로 보인다).
    *
@@ -130,28 +140,37 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
     return trimmed ? trimmed : null
   }
 
-  const run = (work: () => Promise<void>) => {
+  const run = (work: () => Promise<void>, closesReport = false) => {
+    // setBusy는 다음 렌더 전까지 반영되지 않는다. 같은 틱의 클릭/키 입력은 ref로 즉시 막는다.
+    if (writeLock.current) return
+    writeLock.current = true
     setBusy(true)
     setError(null)
     work()
-        .then(() => onActionDone())
+        .then(() => {
+          if (closesReport && onReportClosed) onReportClosed(report.id)
+          else onActionDone()
+        })
         .catch((e: unknown) => {
           setError(e instanceof Error ? e.message : String(e))
           // 부분 실패(예: 가림 성공·종결 실패)면 화면이 실상과 어긋난 채 남는다 —
           // 실패해도 다시 읽어 실제 상태를 반영한다(리뷰 m3).
           onActionDone()
         })
-        .finally(() => setBusy(false))
+        .finally(() => {
+          writeLock.current = false
+          setBusy(false)
+        })
   }
 
   const blind = () => run(async () => {
     await blindMessage(report.episodeId, report.msgId)
     await resolveReport(report.id, 'RESOLVED', noteOrNull(), 'BLIND')
-  })
+  }, true)
 
   const reject = () => run(async () => {
     await resolveReport(report.id, 'REJECTED', noteOrNull(), null)
-  })
+  }, true)
 
   /**
    * 조치 없이 종결(HP-268) — 신고는 타당하나 가림·정지까지는 하지 않고 닫는다.
@@ -166,7 +185,7 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
    */
   const resolveWithoutAction = () => run(async () => {
     await resolveReport(report.id, 'RESOLVED', noteOrNull(), null)
-  })
+  }, true)
 
   /**
    * 가림 해제 — 메시지만 푼다. <b>신고 상태는 건드리지 않는다.</b>
@@ -223,8 +242,29 @@ export default function ReportDetailPanel({ report, onActionDone, onBusyChange }
       // 처리 메모가 비어 있으면 감사 추적이 이어지도록 정지 내용을 자동 메모로 남긴다
       await resolveReport(report.id, 'RESOLVED',
           noteOrNull() ?? `계정 정지(${DURATION_LABELS[duration]}) — ${reason}`, 'SUSPEND')
-    })
+    }, true)
   }
+
+  // 상세 모달 안에서만 도착하는 조치 키. 보조 다이얼로그와 타이핑 경계는 부모가 차단한다.
+  useEffect(() => {
+    if (!shortcutCommand || shortcutCommand.sequence === consumedCommand.current) return
+    consumedCommand.current = shortcutCommand.sequence
+    if (locked || dialogOpen || warningOpen) return
+    switch (shortcutCommand.key) {
+      case 'b':
+        blind()
+        break
+      case 'n':
+        resolveWithoutAction()
+        break
+      case 'x':
+        reject()
+        break
+      case 's':
+        if (report.targetUser && report.targetUser.status !== 'WITHDRAWN') setDialogOpen(true)
+        break
+    }
+  }, [shortcutCommand])
 
   return (
     <div className="detail-panel">

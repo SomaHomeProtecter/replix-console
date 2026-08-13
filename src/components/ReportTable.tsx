@@ -59,9 +59,14 @@ export default function ReportTable({ items, selectedId, onSelect }: {
             // aria-current + tabIndex/키보드 선택으로 콘솔 유일 진입 동선을 키보드에도 연다.
             <tr
                 key={item.id}
+                data-report-id={item.id}
                 tabIndex={0}
                 aria-current={selectedId === item.id ? 'true' : undefined}
-                onClick={() => onSelect(item.id)}
+                onClick={(e) => {
+                  // 모달이 닫힌 뒤 돌아올 실제 자리. 클릭도 먼저 행에 포커스를 둔다.
+                  e.currentTarget.focus()
+                  onSelect(item.id)
+                }}
                 onKeyDown={(e) => {
                   // 행 안의 링크·버튼에서 난 키까지 삼키면 그것들이 키보드로 닿지 않는다 —
                   // 신고자 링크가 그 경우였다(2026-08-11 자체 리뷰). 행 자신에서 난 키만 처리한다.

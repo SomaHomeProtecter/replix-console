@@ -84,9 +84,9 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
+            // 아래 신고 상세의 단축키까지 어떤 키도 새지 않는다. 위 겹이 키보드 소유자다.
+            e.stopPropagation()
             if (e.key === 'Escape') {
-              // 상세 모달의 문서 레벨 Esc 핸들러까지 번지면 겹이 한 번에 다 닫힌다 — 위 겹만 닫는다
-              e.stopPropagation()
               onCancel()
             } else if (e.key === 'Tab') {
               trapTab(e)
