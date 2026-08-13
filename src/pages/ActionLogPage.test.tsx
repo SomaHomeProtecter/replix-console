@@ -170,6 +170,21 @@ describe('전역 조치 로그 — 필터와 서버 정렬 결과를 그대로 �
         .toHaveAttribute('title', '4:01KZSEED0000000000000000')
   })
 
+  /**
+   * 처리자 열은 이름이 없으면 <code>#id</code>로 떨어뜨린다. 대상 열도 같아야 한다 — 링크를
+   * 통째로 없애면 <b>그 사람 상세로 갈 길이 사라진다.</b> 지금 스키마는 display_name이 NOT NULL이라
+   * 이 갈래가 실제로 돌지는 않지만, DTO 미러가 null을 허용하는 한 두 열이 다른 답을 해선 안 된다.
+   */
+  it('대상 이름이 없어도 #id로 상세 링크를 건다', async () => {
+    listActions.mockResolvedValue(response({
+      items: [row({ targetType: 'USER', targetId: '19', targetUserName: null })],
+    }))
+    renderPage()
+
+    const link = await screen.findByRole('link', { name: '#19' })
+    expect(link).toHaveAttribute('href', '/users/19')
+  })
+
   /** 상세는 온 곳으로 되돌려야 한다 — 출처를 안 실으면 조치 로그에서 들어와도 신고 큐로 나간다. */
   it('대상 링크는 어디서 왔는지를 함께 실어 보낸다', async () => {
     listActions.mockResolvedValue(response({ items: [row({ targetType: 'USER' })] }))

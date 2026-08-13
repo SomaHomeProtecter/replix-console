@@ -144,13 +144,16 @@ export default function ActionLogPage() {
             <tbody>
               {items.map((row) => {
                 // 대상 사용자를 아는 행만 상세로 건다 — MESSAGE나 사라진 신고는 걸 곳이 없다.
-                const linked = row.targetUserName !== null && row.targetUserId !== null
+                // 이름은 처리자 열과 같은 규칙으로 떨어뜨린다(#id) — 이름이 없다고 링크를 없애면
+                // 그 사람 상세로 갈 길이 사라진다. 두 열이 같은 상황에 다른 답을 하지 않게 한다.
+                const linked = row.targetUserId !== null
+                const targetName = row.targetUserName ?? `#${row.targetUserId}`
                 // 이름만으로는 어느 신고인지 못 가린다 — 같은 사람의 정지와 신고 종결이 대상
                 // 칸에서 똑같아진다. 사용자 상세와 같은 발췌·따옴표를 함께 싣는다.
                 const excerpt = linked && row.targetSummary ? `“${row.targetSummary}”` : null
                 // 열은 폭이 고정이라 넘치면 잘린다(styles.css) — 감사 로그에서 대상 식별자가
                 // 잘린 채 확인할 방법이 없으면 그 행은 읽을 수 없으므로 전문을 title로 남긴다.
-                const title = [linked ? row.targetUserName : targetText(row), excerpt]
+                const title = [linked ? targetName : targetText(row), excerpt]
                     .filter((part): part is string => part !== null).join(' · ')
                 return (
                   <tr key={row.id}>
@@ -162,7 +165,7 @@ export default function ActionLogPage() {
                         ? <Link
                               className="btn-link" to={`/users/${row.targetUserId}`}
                               state={BACK_TO_LOG}>
-                            {row.targetUserName}
+                            {targetName}
                           </Link>
                         : targetText(row)}
                       {excerpt && <span className="target-excerpt">{excerpt}</span>}
