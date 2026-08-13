@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes } from 'react-router'
 import { logout, userName } from './auth'
 import { env } from './env'
 import ActionLogPage from './pages/ActionLogPage'
+import ModerationReviewPage from './pages/ModerationReviewPage'
 import UserSearch from './components/UserSearch'
 import ReportQueuePage from './pages/ReportQueuePage'
 import SuspensionBoardPage from './pages/SuspensionBoardPage'
@@ -10,7 +11,7 @@ import UserDetailPage from './pages/UserDetailPage'
 import { useWriting, WritingProvider } from './writing'
 
 /**
- * 화면 4개 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 사용자 상세. 톱바 = 시안 cm-top.
+ * 화면 5개 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 사용자 상세. 톱바 = 시안 cm-top.
  *
  * <p>상세는 신고 큐·현황판·조치 로그와 톱바 사용자 검색에서 들어간다. 검색은 상세 진입만 열고,
  * 빈 검색으로 펼쳐지는 회원 전체 목록은 만들지 않는다.
@@ -54,6 +55,11 @@ function AppContent() {
               title={writingTitle} onClick={preventWhileWriting}>
             조치 로그
           </NavLink>
+          <NavLink
+              to="/moderation-reviews" aria-disabled={writing || undefined}
+              title={writingTitle} onClick={preventWhileWriting}>
+            오탐 검토
+          </NavLink>
         </nav>
         <UserSearch disabled={writing} disabledTitle={writingTitle} />
         <div className="topbar-right">
@@ -67,7 +73,7 @@ function AppContent() {
               Grafana · 모더레이션
             </a>
           )}
-          <span>{userName()} (admin)</span>
+          <span className="operator">{userName()} (admin)</span>
           <button
               type="button" className="btn-logout" disabled={writing} title={writingTitle}
               onClick={() => logout()}>
@@ -80,6 +86,7 @@ function AppContent() {
           <Route path="/" element={<ReportQueuePage />} />
           <Route path="/suspensions" element={<SuspensionBoardPage />} />
           <Route path="/actions" element={<ActionLogPage />} />
+          <Route path="/moderation-reviews" element={<ModerationReviewPage />} />
           <Route path="/users/:userId" element={<UserDetailPage />} />
         </Routes>
       </main>

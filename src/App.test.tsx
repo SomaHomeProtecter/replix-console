@@ -23,6 +23,13 @@ beforeEach(() => {
   vi.mocked(admin.listSuspendedUsers).mockResolvedValue({ rows: [], total: 0 })
   vi.mocked(admin.listActions).mockResolvedValue({ items: [], nextCursor: null, admins: [] })
   vi.mocked(admin.searchUsers).mockResolvedValue({ rows: [] })
+  vi.mocked(admin.listModerationReviews).mockResolvedValue({
+    items: [], pendingTotal: 0,
+    counts: {
+      profanity: { falsePositive: 0, truePositive: 0 },
+      hate: { falsePositive: 0, truePositive: 0 }, evictedPending: 0,
+    },
+  })
 })
 
 /**
@@ -30,12 +37,13 @@ beforeEach(() => {
  * 링크가 아닌 글자였다 — 화면이 하나뿐일 때는 맞았지만, 지금은 그대로 두면 새 화면에 갈 길이 없다.
  */
 describe('톱바 탭 — 화면 사이를 오간다', () => {
-  it('세 화면이 각자의 경로로 걸려 있다', () => {
+  it('네 화면이 각자의 경로로 걸려 있다', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
 
     expect(screen.getByRole('link', { name: '신고 큐' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: '정지 현황' })).toHaveAttribute('href', '/suspensions')
     expect(screen.getByRole('link', { name: '조치 로그' })).toHaveAttribute('href', '/actions')
+    expect(screen.getByRole('link', { name: '오탐 검토' })).toHaveAttribute('href', '/moderation-reviews')
   })
 
   it('지금 보는 화면을 탭이 표시한다', () => {
@@ -70,6 +78,13 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     expect(admin.listActions).toHaveBeenCalled()
   })
 
+  it('/moderation-reviews는 클린봇 오탐 검토를 연다', async () => {
+    render(<MemoryRouter initialEntries={['/moderation-reviews']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('region', { name: '클린봇 오탐 검토' })).toBeInTheDocument()
+    expect(admin.listModerationReviews).toHaveBeenCalled()
+  })
+
   it('정지 해제가 도는 동안 톱바의 이탈 수단을 막고, 끝나면 다시 연다', async () => {
     const user = userEvent.setup()
     let release!: () => void
@@ -89,6 +104,7 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
       screen.getByRole('link', { name: '신고 큐' }),
       screen.getByRole('link', { name: '정지 현황' }),
       screen.getByRole('link', { name: '조치 로그' }),
+      screen.getByRole('link', { name: '오탐 검토' }),
     ]
     await waitFor(() => {
       for (const link of topbarLinks) expect(link).toHaveAttribute('aria-disabled', 'true')

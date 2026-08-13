@@ -54,22 +54,22 @@ button { font: inherit; }
 /* ── 앱 셸 · 톱바 (시안 cm-top) ── */
 .app { display: flex; flex-direction: column; height: 100%; }
 .topbar {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: 9px;
   background: var(--top); color: var(--top-ink);
-  padding: 10px 18px; flex: none; font-size: 13px;
+  padding: 9px 14px; flex: none; font-size: 13px;
 }
-.brand { color: inherit; text-decoration: none; font-weight: 800; }
+.brand { color: inherit; text-decoration: none; font-weight: 800; white-space: nowrap; }
 .brand .rx { color: var(--logo-red); }
 .env-chip {
   font-size: 11px; font-weight: 700; background: var(--top-chip);
   border-radius: 4px; padding: 1px 7px; color: var(--top-chip-ink);
 }
-.topnav { display: flex; gap: 4px; margin-left: 10px; }
+.topnav { display: flex; gap: 3px; margin-left: 3px; white-space: nowrap; }
 /* 탭은 화면이 둘 이상이 되면서 <b>링크</b>가 됐다(HP-300) — 종전엔 글자였다.
    켜짐 표시는 클래스가 아니라 aria-current로 건다: 스크린리더가 읽는 그 표시와 눈에 보이는
    표시가 <b>같은 근거</b>를 쓰게 해, 한쪽만 켜지는 일이 생기지 않는다. */
 .topnav a {
-  padding: 4px 10px; border-radius: 6px; color: var(--top-muted);
+  padding: 4px 8px; border-radius: 6px; color: var(--top-muted);
   text-decoration: none; font-weight: 700;
 }
 .topnav a:hover { color: var(--top-ink); }
@@ -80,13 +80,14 @@ button { font: inherit; }
 .topnav a[aria-disabled="true"], .brand[aria-disabled="true"] {
   opacity: 0.45; cursor: not-allowed;
 }
-.topbar-right { display: flex; align-items: center; gap: 10px; color: var(--top-muted); font-size: 12px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; color: var(--top-muted); font-size: 12px; min-width: 0; }
+.topbar-right .operator { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; }
 .btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
 .content { flex: 1; min-height: 0; padding: 18px; display: flex; flex-direction: column; }
 
 /* 상세 진입용 사용자 검색(HP-301) — 결과 패널은 톱바 아래로만 펼치고 빈 검색 목록은 없다. */
-.user-search { position: relative; margin-left: auto; width: clamp(220px, 24vw, 320px); }
+.user-search { position: relative; margin-left: auto; width: clamp(180px, 21vw, 280px); }
 .user-search-form {
   display: flex; align-items: stretch; width: 100%; border: 1px solid #465363;
   border-radius: 6px; overflow: hidden; background: #2a3441;
@@ -598,3 +599,63 @@ table.action-table {
 .action-table .admin { color: var(--label); font-weight: 650; }
 .action-table .action { color: var(--ink); font-weight: 700; }
 .action-table .why { color: var(--body); }
+
+/* ── 클린봇 오탐 검토 (HP-302) ──
+   아티팩트 F10의 밝은 검토 패널과 한 줄 판정 밀도를 유지한다. 빨강은 정지 전용이므로
+   오탐·혐오 표식은 호박/보라를 써 의미가 충돌하지 않게 한다. */
+.moderation-review { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.review-head { display: flex; align-items: end; gap: 16px; }
+.review-head h1 { margin: 0; font-size: 16px; color: var(--ink); }
+.review-head p { margin: 3px 0 0; color: var(--muted-2); font-size: 12px; }
+.review-head .refresh { margin-left: auto; padding: 5px 11px; }
+.review-panel {
+  min-height: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--frame);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.09);
+}
+.review-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel-2);
+}
+.review-counts { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.review-counts li {
+  border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 11px;
+  color: var(--muted-2); font-size: 12px; white-space: nowrap;
+}
+.review-counts li.pending { background: var(--ink); border-color: var(--ink); color: #fff; }
+.review-counts b { font-variant-numeric: tabular-nums; }
+.review-stage-filters { display: flex; gap: 5px; padding-left: 6px; border-left: 1px solid var(--line); }
+.review-list { list-style: none; margin: 0; padding: 0; }
+.review-list li {
+  display: grid; grid-template-columns: 108px 126px minmax(220px, 1fr) 150px 122px;
+  gap: 12px; align-items: center; min-height: 50px; padding: 8px 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+.review-list li:hover { background: var(--blue-soft); }
+.review-list time { color: var(--muted); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.review-stage {
+  display: inline-flex; align-items: center; gap: 5px; width: max-content;
+  border-radius: 4px; padding: 2px 7px; font-size: 11px; font-weight: 800;
+}
+.review-stage.profanity { background: var(--amber-soft); color: var(--amber-ink); }
+.review-stage.hate { background: var(--purple-soft); color: var(--purple); }
+.review-stage b { font-family: var(--mono); }
+.review-message { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-category { color: var(--muted-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.review-actions .btn { padding: 4px 11px; }
+.review-false { border-style: dashed; border-color: var(--amber); color: var(--amber-ink); }
+.review-true { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+@media (max-width: 1120px) {
+  .topbar-right .operator { display: none; }
+  .review-list li { grid-template-columns: 96px 116px minmax(180px, 1fr) 120px 118px; gap: 8px; }
+}
+
+@media (max-width: 900px) {
+  .topbar { gap: 6px; padding-inline: 10px; }
+  .topnav a { padding-inline: 6px; }
+  .user-search { width: 170px; }
+  .grafana-link { display: none; }
+  .review-list li { grid-template-columns: 90px 112px minmax(160px, 1fr) 118px; }
+  .review-category { display: none; }
+}

@@ -5,7 +5,45 @@ vi.mock('../env', () => ({
   env: { apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '' },
 }))
 
-import { blindMessage, fixSpoilerScore, listActions, listAuthorMessages, searchUsers } from './admin'
+import {
+  blindMessage, decideModerationReview, fixSpoilerScore, listActions, listAuthorMessages,
+  listModerationReviews, searchUsers,
+} from './admin'
+
+describe('moderation reviews — bounded 표본 조회·판정 계약(HP-302)', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('조회 상한을 GET 쿼리에 싣는다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      items: [], pendingTotal: 0, counts: {},
+    }), { status: 200 }))
+
+    await listModerationReviews(37)
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://api.test/api/v1/admin/moderation-reviews?size=37')
+  })
+
+  it('표본 ID를 경로 인코딩하고 판정 하나만 POST한다', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      sampleId: '42:M/1', decision: 'FALSE_POSITIVE', counts: {},
+    }), { status: 200 }))
+
+    await decideModerationReview('42:M/1', 'FALSE_POSITIVE')
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      'http://api.test/api/v1/admin/moderation-reviews/42%3AM%2F1/decision')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body as string)).toEqual({ decision: 'FALSE_POSITIVE' })
+  })
+})
 
 describe('searchUsers — 상세 진입 검색 계약(HP-301)', () => {
   const fetchMock = vi.fn()

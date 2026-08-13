@@ -217,3 +217,43 @@ export interface UserSearchRow {
 export interface UserSearchResult {
   rows: UserSearchRow[]
 }
+
+export type ModerationReviewStage = 'PROFANITY' | 'HATE'
+export type ModerationReviewDecision = 'FALSE_POSITIVE' | 'TRUE_POSITIVE'
+
+export interface ModerationReviewRow {
+  sampleId: string
+  episodeId: number
+  msgId: string
+  userId: number | null
+  displayName: string | null
+  message: string
+  stage: ModerationReviewStage
+  category: string | null
+  /** 1차 규칙은 확률값이 없어 null, 2차 kor_unsmile만 실제 선택 category 점수. */
+  score: number | null
+  createdAt: string
+}
+
+export interface ModerationStageCounts {
+  falsePositive: number
+  truePositive: number
+}
+
+export interface ModerationReviewCounts {
+  profanity: ModerationStageCounts
+  hate: ModerationStageCounts
+  evictedPending: number
+}
+
+export interface ModerationReviewPage {
+  items: ModerationReviewRow[]
+  pendingTotal: number
+  counts: ModerationReviewCounts
+}
+
+export interface ModerationDecisionResult {
+  sampleId: string
+  decision: ModerationReviewDecision
+  counts: ModerationReviewCounts
+}
