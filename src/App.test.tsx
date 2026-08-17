@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.mocked(admin.listActions).mockResolvedValue({ items: [], nextCursor: null, admins: [] })
   vi.mocked(admin.searchUsers).mockResolvedValue({ rows: [] })
   vi.mocked(admin.listModerationReviews).mockResolvedValue({
-    items: [], pendingTotal: 0,
+    items: [], pendingTotal: 0, viewTotal: 0, hasMore: false,
     counts: {
       profanity: { falsePositive: 0, truePositive: 0 },
       hate: { falsePositive: 0, truePositive: 0 }, evictedPending: 0,

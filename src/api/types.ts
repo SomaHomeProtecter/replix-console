@@ -242,6 +242,7 @@ export interface UserSearchResult {
 
 export type ModerationReviewStage = 'PROFANITY' | 'HATE'
 export type ModerationReviewDecision = 'FALSE_POSITIVE' | 'TRUE_POSITIVE'
+export type ModerationReviewView = 'PENDING' | ModerationReviewDecision
 
 export interface ModerationReviewRow {
   sampleId: string
@@ -255,6 +256,10 @@ export interface ModerationReviewRow {
   /** 1차 규칙은 확률값이 없어 null, 2차 kor_unsmile만 실제 선택 category 점수. */
   score: number | null
   createdAt: string
+  decision: ModerationReviewDecision | null
+  reviewerId: number | null
+  reviewerName: string | null
+  decidedAt: string | null
 }
 
 export interface ModerationStageCounts {
@@ -271,6 +276,9 @@ export interface ModerationReviewCounts {
 export interface ModerationReviewPage {
   items: ModerationReviewRow[]
   pendingTotal: number
+  /** 현재 view·stage 조건에 맞는 최근 상세 보존분 전체 건수. */
+  viewTotal: number
+  hasMore: boolean
   counts: ModerationReviewCounts
 }
 

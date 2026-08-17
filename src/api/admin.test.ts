@@ -45,15 +45,18 @@ describe('moderation reviews — bounded 표본 조회·판정 계약(HP-302)', 
   })
   afterEach(() => { vi.unstubAllGlobals() })
 
-  it('조회 상한을 GET 쿼리에 싣는다', async () => {
+  it('집계 갈래·단계·offset·상한을 GET 쿼리에 싣는다', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({
-      items: [], pendingTotal: 0, counts: {},
+      items: [], pendingTotal: 0, viewTotal: 0, hasMore: false, counts: {},
     }), { status: 200 }))
 
-    await listModerationReviews(37)
+    await listModerationReviews({
+      view: 'FALSE_POSITIVE', stage: 'HATE', offset: 50, size: 37,
+    })
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      'http://api.test/api/v1/admin/moderation-reviews?size=37')
+      'http://api.test/api/v1/admin/moderation-reviews'
+      + '?view=FALSE_POSITIVE&stage=HATE&offset=50&size=37')
   })
 
   it('표본 ID를 경로 인코딩하고 판정 하나만 POST한다', async () => {

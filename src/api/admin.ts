@@ -2,8 +2,8 @@ import { apiFetch, qs } from './client'
 import type {
   AdminActionLogResponse, AdminActionType, AuthorMessages, ReportPage, ReportReason, ReportStatus,
   ModerationDecisionResult, ModerationReviewDecision, ModerationReviewPage, ResolutionAction,
-  ResolveResult, SuspendDuration, SuspendedUsers, SuspensionResult, UserDetail, UserSearchResult,
-  WarningReason, WarningResult,
+  ModerationReviewStage, ModerationReviewView, ResolveResult, SuspendDuration, SuspendedUsers,
+  SuspensionResult, UserDetail, UserSearchResult, WarningReason, WarningResult,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -134,9 +134,18 @@ export function searchUsers(query: string): Promise<UserSearchResult> {
   return apiFetch(`/api/v1/admin/users/search${qs({ q: query })}`)
 }
 
-/** 차단 쓰기 시점에 쌓인 bounded 표본. Redis 메시지 전수 탐색을 하지 않는다(HP-302). */
-export function listModerationReviews(size = 50): Promise<ModerationReviewPage> {
-  return apiFetch(`/api/v1/admin/moderation-reviews${qs({ size })}`)
+export interface ModerationReviewFilters {
+  view: ModerationReviewView
+  stage: ModerationReviewStage | ''
+  offset: number
+  size?: number
+}
+
+/** 차단 시점 표본과 최근 판정 이력. Redis 메시지 전수 탐색을 하지 않는다(HP-302/327). */
+export function listModerationReviews(filters: ModerationReviewFilters): Promise<ModerationReviewPage> {
+  return apiFetch(`/api/v1/admin/moderation-reviews${qs({
+    view: filters.view, stage: filters.stage, offset: filters.offset, size: filters.size ?? 50,
+  })}`)
 }
 
 /** 판정은 튜닝 입력만 쌓고 원 채팅 상태를 바꾸지 않는다. */

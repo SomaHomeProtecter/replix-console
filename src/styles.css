@@ -669,10 +669,16 @@ table.action-table {
 }
 .review-counts { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0; }
 .review-counts li {
-  border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 11px;
-  color: var(--muted-2); font-size: 12px; white-space: nowrap;
+  border: 1px solid var(--line-strong); border-radius: 999px; overflow: hidden;
+  color: var(--muted-2); font-size: 12px; white-space: nowrap; background: var(--panel);
 }
-.review-counts li.pending { background: var(--ink); border-color: var(--ink); color: #fff; }
+.review-counts li.pending { border-color: var(--ink); }
+.review-counts button {
+  appearance: none; border: 0; background: transparent; color: inherit; font: inherit;
+  padding: 4px 11px; cursor: pointer;
+}
+.review-counts button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.review-counts button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .review-counts b { font-variant-numeric: tabular-nums; }
 .review-stage-filters { display: flex; gap: 5px; padding-left: 6px; border-left: 1px solid var(--line); }
 .review-list { list-style: none; margin: 0; padding: 0; }
@@ -696,6 +702,15 @@ table.action-table {
 .review-actions .btn { padding: 4px 11px; }
 .review-false { border-style: dashed; border-color: var(--amber); color: var(--amber-ink); }
 .review-true { background: var(--ink); border-color: var(--ink); color: #fff; }
+.review-outcome { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; }
+.review-outcome b { border-radius: 4px; padding: 2px 7px; font-size: 11px; }
+.review-outcome.false_positive b { background: var(--amber-soft); color: var(--amber-ink); }
+.review-outcome.true_positive b { background: var(--ink); color: #fff; }
+.review-outcome span { color: var(--muted-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.review-more { display: flex; justify-content: center; padding: 12px; border-top: 1px solid var(--line-2); }
+.review-load-error { display: flex; align-items: center; gap: 10px; }
+.review-load-error span { flex: 1; }
+.stale-box { border-color: var(--amber); background: var(--amber-soft); color: var(--amber-ink); }
 
 @media (max-width: 1120px) {
   .topbar-right .operator { display: none; }
