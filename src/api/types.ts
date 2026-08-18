@@ -287,3 +287,6 @@ export interface ModerationDecisionResult {
   decision: ModerationReviewDecision
   counts: ModerationReviewCounts
 }
+import type { EnvironmentMetadata } from '../environment'
+
+export type { EnvironmentMetadata }

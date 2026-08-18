@@ -9,15 +9,21 @@ import { makeSuspendedRow } from './test/fixtures'
 
 // env는 모듈 평가 시점에 굳으므로(부트스트랩 검증) 테스트마다 바꾸려면 가변 객체를 물린다.
 const envMock = vi.hoisted(() => ({
+  environment: 'DEV' as 'LOCAL' | 'DEV' | 'PROD',
   apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '',
+  expectedAudience: 'account', expectedAzp: 'replix-web',
   grafanaUrl: null as string | null,
 }))
 vi.mock('./env', () => ({ env: envMock }))
-vi.mock('./auth', () => ({ userName: () => '지호', logout: vi.fn(), getToken: vi.fn() }))
+vi.mock('./auth', () => ({
+  userName: () => '지호', roleLabel: () => 'admin', logout: vi.fn(),
+  switchEnvironment: vi.fn(), getToken: vi.fn(),
+}))
 vi.mock('./api/admin')
 
 beforeEach(() => {
   vi.clearAllMocks()
+  envMock.environment = 'DEV'
   envMock.grafanaUrl = null
   vi.mocked(admin.listReports).mockResolvedValue({ items: [], nextCursor: null })
   vi.mocked(admin.listSuspendedUsers).mockResolvedValue({ rows: [], total: 0 })
@@ -29,6 +35,24 @@ beforeEach(() => {
       profanity: { falsePositive: 0, truePositive: 0 },
       hate: { falsePositive: 0, truePositive: 0 }, evictedPending: 0,
     },
+  })
+})
+
+describe('환경 표시와 전환(HP-337)', () => {
+  it('선택한 환경을 표시하고 전환은 재인증 함수에 위임한다', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><App /></MemoryRouter>)
+
+    const selector = screen.getByRole('combobox', { name: '연결 환경' })
+    expect(selector).toHaveValue('DEV')
+    await user.selectOptions(selector, 'PROD')
+    expect(auth.switchEnvironment).toHaveBeenCalledWith('PROD')
+  })
+
+  it('PROD에서는 실제 데이터 경고를 모든 화면 위에 계속 표시한다', () => {
+    envMock.environment = 'PROD'
+    render(<MemoryRouter><App /></MemoryRouter>)
+    expect(screen.getByRole('status')).toHaveTextContent('PROD 운영 환경')
   })
 })
 

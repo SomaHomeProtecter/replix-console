@@ -1,4 +1,7 @@
-/** 콘솔 환경(.env.local) — 누락 검증을 부트스트랩 시점에 끝내 런타임 미스터리를 없앤다. */
+import { CONSOLE_ENVIRONMENTS, selectEnvironment } from './environment'
+import type { ConsoleEnvironment, ConsoleProfile } from './environment'
+
+/** 콘솔 환경(.env.local) — 세 환경의 누락 검증을 부트스트랩 시점에 끝낸다. */
 function required(name: string): string {
   const value = import.meta.env[name] as string | undefined
   if (!value) {
@@ -19,11 +22,31 @@ function optional(name: string): string | null {
   return value ? value : null
 }
 
-export const env = {
-  apiBaseUrl: required('VITE_API_BASE_URL').replace(/\/$/, ''),
-  kcUrl: required('VITE_KC_URL'),
-  kcRealm: required('VITE_KC_REALM'),
-  kcClientId: required('VITE_KC_CLIENT_ID'),
-  /** 모더레이션 대시보드(HP-297). 콘솔은 차트를 그리지 않고 있는 곳으로 보낸다. */
-  grafanaUrl: optional('VITE_GRAFANA_URL'),
+function profile(environment: ConsoleEnvironment, grafanaBaseUrl: string | null): ConsoleProfile {
+  const prefix = `VITE_${environment}`
+  const namespace = environment === 'LOCAL' ? null : environment.toLowerCase()
+  let grafanaUrl = grafanaBaseUrl
+  if (grafanaUrl && namespace) {
+    const url = new URL(grafanaUrl)
+    url.searchParams.set('var-namespace', namespace)
+    grafanaUrl = url.toString()
+  }
+  return {
+    environment,
+    apiBaseUrl: required(`${prefix}_API_BASE_URL`).replace(/\/$/, ''),
+    kcUrl: required(`${prefix}_KC_URL`).replace(/\/$/, ''),
+    kcRealm: required(`${prefix}_KC_REALM`),
+    kcClientId: required(`${prefix}_KC_CLIENT_ID`),
+    expectedAudience: required(`${prefix}_EXPECTED_AUDIENCE`),
+    expectedAzp: required(`${prefix}_EXPECTED_AZP`),
+    grafanaUrl,
+  }
 }
+
+const grafanaBaseUrl = optional('VITE_GRAFANA_URL')
+export const profiles = Object.fromEntries(
+    CONSOLE_ENVIRONMENTS.map((environment) => [environment, profile(environment, grafanaBaseUrl)]),
+) as Record<ConsoleEnvironment, ConsoleProfile>
+
+export const env = profiles[selectEnvironment(
+    window.location.search, required('VITE_DEFAULT_ENVIRONMENT'))]

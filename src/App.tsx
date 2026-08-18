@@ -1,7 +1,8 @@
 import type { MouseEvent } from 'react'
 import { Link, NavLink, Route, Routes } from 'react-router'
-import { logout, userName } from './auth'
+import { logout, roleLabel, switchEnvironment, userName } from './auth'
 import { env } from './env'
+import { CONSOLE_ENVIRONMENTS } from './environment'
 import ActionLogPage from './pages/ActionLogPage'
 import ModerationReviewPage from './pages/ModerationReviewPage'
 import UserSearch from './components/UserSearch'
@@ -9,6 +10,7 @@ import ReportQueuePage from './pages/ReportQueuePage'
 import SuspensionBoardPage from './pages/SuspensionBoardPage'
 import UserDetailPage from './pages/UserDetailPage'
 import { useWriting, WritingProvider } from './writing'
+import ProductionWriteGuard from './ProductionWriteGuard'
 
 /**
  * 화면 5개 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 사용자 상세. 톱바 = 시안 cm-top.
@@ -17,7 +19,6 @@ import { useWriting, WritingProvider } from './writing'
  * 빈 검색으로 펼쳐지는 회원 전체 목록은 만들지 않는다.
  */
 function AppContent() {
-  const envLabel = env.apiBaseUrl.includes('replix-dev') ? 'DEV' : 'LOCAL'
   const { writing } = useWriting()
   const writingTitle = writing
     ? '정지 해제를 처리하는 중입니다 — 끝나면 이동할 수 있습니다'
@@ -33,7 +34,17 @@ function AppContent() {
             title={writingTitle} onClick={preventWhileWriting}>
           <span className="rx">Re</span>plix Admin
         </Link>
-        <span className="env-chip">{envLabel}</span>
+        <label className={`env-selector env-${env.environment.toLowerCase()}`}>
+          <span className="sr-only">연결 환경</span>
+          <select
+              aria-label="연결 환경" value={env.environment} disabled={writing}
+              title={writingTitle ?? '환경을 바꾸면 현재 토큰과 선택 내용을 지우고 다시 로그인합니다'}
+              onChange={(event) => switchEnvironment(event.target.value as typeof env.environment)}>
+            {CONSOLE_ENVIRONMENTS.map((candidate) => (
+              <option key={candidate} value={candidate}>{candidate}</option>
+            ))}
+          </select>
+        </label>
         {/* 신고 큐는 "/"라 다른 <b>모든</b> 경로의 접두사다. end는 "정확히 그 경로일 때만 켜진다"는
             뜻을 못박아 둔 것이지, 지금 동작을 바꾸지는 않는다 — react-router 8.3은 접두사 일치에
             경로 경계(다음 글자가 "/")를 함께 보므로(lib/dom/lib.js의 endSlashPosition) end 없이도
@@ -73,7 +84,7 @@ function AppContent() {
               Grafana · 모더레이션
             </a>
           )}
-          <span className="operator">{userName()} (admin)</span>
+          <span className="operator">{userName()} ({roleLabel()})</span>
           <button
               type="button" className="btn-logout" disabled={writing} title={writingTitle}
               onClick={() => logout()}>
@@ -81,6 +92,11 @@ function AppContent() {
           </button>
         </div>
       </header>
+      {env.environment === 'PROD' && (
+        <div className="prod-environment-banner" role="status">
+          PROD 운영 환경 · 실제 사용자 데이터에 즉시 반영됩니다
+        </div>
+      )}
       <main className="content">
         <Routes>
           <Route path="/" element={<ReportQueuePage />} />
@@ -95,5 +111,9 @@ function AppContent() {
 }
 
 export default function App() {
-  return <WritingProvider><AppContent /></WritingProvider>
+  return (
+    <WritingProvider>
+      <ProductionWriteGuard><AppContent /></ProductionWriteGuard>
+    </WritingProvider>
+  )
 }

@@ -4,9 +4,14 @@ import type {
   ModerationDecisionResult, ModerationReviewDecision, ModerationReviewPage, ResolutionAction,
   ModerationReviewStage, ModerationReviewView, ResolveResult, SuspendDuration, SuspendedUsers,
   SuspensionResult, UserDetail, UserSearchResult, WarningReason, WarningResult,
+  EnvironmentMetadata,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
+
+export function getEnvironmentMetadata(): Promise<EnvironmentMetadata> {
+  return apiFetch('/api/v1/admin/meta/environment')
+}
 
 export interface ReportFilters {
   status: ReportStatus | ''
@@ -48,12 +53,18 @@ export function resolveReport(
 ): Promise<ResolveResult> {
   return apiFetch(`/api/v1/admin/reports/${reportId}/resolve`, {
     method: 'POST', body: JSON.stringify({ outcome, note, action }),
+  }, {
+    target: `신고 #${reportId}`,
+    change: `OPEN → ${outcome}${action ? ` (${action})` : ''}`,
+    reason: note?.trim() || '운영자 판정(별도 메모 없음)',
   })
 }
 
 /** 종결 번복 — 신고를 큐로 되돌린다(이미 OPEN이면 멱등). */
 export function reopenReport(reportId: number): Promise<ResolveResult> {
-  return apiFetch(`/api/v1/admin/reports/${reportId}/reopen`, { method: 'POST' })
+  return apiFetch(`/api/v1/admin/reports/${reportId}/reopen`, { method: 'POST' }, {
+    target: `신고 #${reportId}`, change: '종결 상태 → OPEN', reason: '운영자 판정 번복',
+  })
 }
 
 /**
@@ -64,7 +75,10 @@ export function reopenReport(reportId: number): Promise<ResolveResult> {
 export function blindMessage(
   episodeId: number, msgId: string, signal?: AbortSignal,
 ): Promise<{ blinded: boolean }> {
-  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST', signal })
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST', signal }, {
+    target: `메시지 ${episodeId}:${msgId}`, change: '현재 상태 → 강제 가림',
+    reason: '운영자가 신고·작성자 메시지를 검토해 선택',
+  })
 }
 
 /**
@@ -81,7 +95,10 @@ export function listAuthorMessages(
 }
 
 export function unblindMessage(episodeId: number, msgId: string): Promise<{ blinded: boolean }> {
-  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'DELETE' })
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'DELETE' }, {
+    target: `메시지 ${episodeId}:${msgId}`, change: '강제 가림 → 이전 상태 복원',
+    reason: '운영자 가림 판정 번복',
+  })
 }
 
 /**
@@ -94,6 +111,9 @@ export function fixSpoilerScore(
 ): Promise<{ spoilerScore: number }> {
   return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/spoiler-score`, {
     method: 'PATCH', body: JSON.stringify({ score }),
+  }, {
+    target: `메시지 ${episodeId}:${msgId}`, change: `스포일러 점수 → ${score}`,
+    reason: '운영자 수동 점수 정정',
   })
 }
 
@@ -102,11 +122,15 @@ export function suspendUser(
 ): Promise<SuspensionResult> {
   return apiFetch(`/api/v1/admin/users/${userId}/suspend`, {
     method: 'POST', body: JSON.stringify({ duration, reason }),
+  }, {
+    target: `사용자 #${userId}`, change: `계정 정지(${duration})`, reason,
   })
 }
 
 export function unsuspendUser(userId: number): Promise<SuspensionResult> {
-  return apiFetch(`/api/v1/admin/users/${userId}/suspend`, { method: 'DELETE' })
+  return apiFetch(`/api/v1/admin/users/${userId}/suspend`, { method: 'DELETE' }, {
+    target: `사용자 #${userId}`, change: 'SUSPENDED → ACTIVE', reason: '운영자 정지 해제',
+  })
 }
 
 export function warnUser(
@@ -114,6 +138,9 @@ export function warnUser(
 ): Promise<WarningResult> {
   return apiFetch(`/api/v1/admin/users/${userId}/warnings`, {
     method: 'POST', body: JSON.stringify({ reason, note }),
+  }, {
+    target: `사용자 #${userId}`, change: `경고 발송(${reason})`,
+    reason: note?.trim() || `정책 사유 ${reason}`,
   })
 }
 
@@ -154,5 +181,8 @@ export function decideModerationReview(
 ): Promise<ModerationDecisionResult> {
   return apiFetch(`/api/v1/admin/moderation-reviews/${encodeURIComponent(sampleId)}/decision`, {
     method: 'POST', body: JSON.stringify({ decision }),
+  }, {
+    target: `클린봇 표본 ${sampleId}`, change: `미판정 → ${decision}`,
+    reason: '운영자 표본 판정',
   })
 }

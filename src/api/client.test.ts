@@ -3,8 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../auth', () => ({ getToken: vi.fn(async () => 'test-token') }))
 
 import { getToken } from '../auth'
+const envMock = vi.hoisted(() => ({
+  environment: 'DEV' as 'DEV' | 'PROD', apiBaseUrl: 'http://api.test',
+  kcUrl: '', kcRealm: '', kcClientId: '',
+}))
 vi.mock('../env', () => ({
-  env: { apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '' },
+  env: envMock,
 }))
 
 import { API_TIMEOUT_MS, ApiHttpError, apiFetch, qs } from './client'
@@ -13,6 +17,7 @@ describe('apiFetch', () => {
   const fetchMock = vi.fn()
 
   beforeEach(() => {
+    envMock.environment = 'DEV'
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
   })
@@ -38,6 +43,14 @@ describe('apiFetch', () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+  })
+
+  it('PROD 쓰기에 확인 설명이 없으면 fetch 전에 차단한다', async () => {
+    envMock.environment = 'PROD'
+
+    await expect(apiFetch('/x', { method: 'POST', body: '{}' }))
+        .rejects.toThrow('요청 설명이 없어')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('BE ApiError 본문(code·message)을 ApiHttpError로 옮긴다', async () => {

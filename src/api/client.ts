@@ -1,5 +1,7 @@
 import { getToken } from '../auth'
 import { env } from '../env'
+import { confirmProductionWrite } from '../prodWriteConfirmation'
+import type { ProductionWriteSummary } from '../prodWriteConfirmation'
 
 /** BE ApiError(code·message)를 상태와 함께 실어 나른다 — 403은 서버 판정을 그대로 화면에 드러낸다(DoD). */
 export class ApiHttpError extends Error {
@@ -54,7 +56,19 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetch<T>(
+  path: string, init?: RequestInit, writeSummary?: ProductionWriteSummary,
+): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase()
+  // 사람이 확인 내용을 읽고 PROD를 입력하는 시간은 네트워크 15초 상한에 포함하지 않는다.
+  // 상한은 확인이 끝나 실제 토큰 갱신·요청이 시작되는 순간부터 잰다.
+  if (env.environment === 'PROD' && method !== 'GET' && method !== 'HEAD') {
+    if (!writeSummary) {
+      throw new Error('PROD 쓰기 요청 설명이 없어 전송을 차단했습니다')
+    }
+    await confirmProductionWrite(writeSummary)
+  }
+
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {

@@ -2,7 +2,7 @@
 
 신고 큐를 보고 **가림 · 계정 정지 · 기각**을 수행하는 운영 콘솔이다(HP-227, 화면 정본 = HP-227 코멘트 11343).
 
-**배포하지 않는다 (확정)** — 팀원이 로컬에서 `npm run dev`로 연다. 방어선은 URL 비밀이 아니라 **토큰 + admin 역할**이므로 로컬 구동으로도 보안 수준은 같고, 공개 호스팅(Pages/ALB)은 무단 접근 시도 표면과 CD만 늘린다. 팀 외부 운영자가 생기면 그때 호스팅을 다시 판단한다.
+**현재는 배포하지 않는다** — 팀원이 로컬에서 `npm run dev`로 열되 한 화면에서 LOCAL/DEV/PROD를 전환한다. 환경을 바꾸면 기존 토큰과 화면 상태를 폐기하고 해당 Keycloak에서 다시 인증한다. 서버의 환경·issuer·audience·azp 자기 선언과 콘솔 프로필이 하나라도 다르면 데이터를 그리기 전에 차단한다(HP-337).
 
 ## 왜 BE 레포에 있나 · 언제 분리하나 (HP-267)
 
@@ -19,7 +19,11 @@
 ## 요구 사항
 
 - Node 20+ / npm
-- 콘솔 사용자 Keycloak 계정에 realm 역할 **`admin`** — 없으면 로그인은 되지만 목록·조치가 전부 403이고, 그 판정이 화면에 그대로 뜬다(의도된 동작).
+- 콘솔 사용자 Keycloak 계정에 realm 역할이 필요하다. 기존 **`admin`**은 모든 기능을 유지한다.
+  - `admin_console_viewer`: 조회 전용
+  - `moderation_operator`: 조회 + 신고·메시지·계정 조치
+  - `feature_flag_operator`: 기능 제어(HP-343에서 사용)
+  - `prod_change_approver`: PROD 고위험 변경 승인(HP-343에서 사용)
 
 ## 시작하기
 
@@ -30,18 +34,15 @@ cp .env.example .env.local   # 기본값 = dev 환경. 로컬 BE 대상이면 �
 npm run dev                  # http://localhost:5173
 ```
 
-브라우저에서 `http://localhost:5173` → Keycloak 로그인 → 신고 큐. 포트는 **5173 고정**(strictPort — redirect URI 등록과 일치해야 해서, 포트가 밀리면 기동을 실패시킨다).
+브라우저에서 `http://localhost:5173` → Keycloak 로그인 → 신고 큐. 포트는 **5173 고정**(strictPort — redirect URI 등록과 일치해야 해서, 포트가 밀리면 기동을 실패시킨다). 톱바 환경 선택에서 전환하며 URL에는 `?environment=DEV|PROD|LOCAL`이 남는다.
 
 ## 환경 변수 (.env.local)
 
-| 변수 | dev 환경 | 로컬 BE |
-| --- | --- | --- |
-| `VITE_API_BASE_URL` | `https://api.replix-dev.site` | `http://localhost:8080` |
-| `VITE_KC_URL` | `https://auth.replix-dev.site` | `http://localhost:8081` |
-| `VITE_KC_REALM` | `replix` | `replix` |
-| `VITE_KC_CLIENT_ID` | `replix-web` | `replix-web` |
+환경마다 `VITE_<LOCAL|DEV|PROD>_API_BASE_URL`, `KC_URL`, `KC_REALM`, `KC_CLIENT_ID`,
+`EXPECTED_AUDIENCE`, `EXPECTED_AZP`를 각각 둔다. 전체 예시는 `.env.example`이 정본이다.
+`VITE_DEFAULT_ENVIRONMENT`는 URL 선택값이 없을 때만 사용한다.
 
-client는 **기존 `replix-web`을 그대로 쓴다** — BE `AzpValidator`가 단일 azp만 수용해 새 client 토큰은 401이 된다(HP-225).
+client는 **기존 `replix-web`을 그대로 쓴다**. BE는 issuer·audience·azp를 독립 검증하므로 어느 하나라도 다른 토큰은 401이다.
 
 ## Keycloak redirect URI
 
