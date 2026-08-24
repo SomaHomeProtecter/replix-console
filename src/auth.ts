@@ -9,9 +9,36 @@ import { validateTokenClaims } from './environment'
  * 컴포넌트는 이 모듈만 본다 — keycloak-js 타입이 UI에 새지 않고, 테스트는 이 모듈 하나만 mock 한다.
  */
 const keycloak = new Keycloak({ url: env.kcUrl, realm: env.kcRealm, clientId: env.kcClientId })
+const ACCOUNT_SWITCH_PARAM = 'accountSwitch'
+
+function accountSwitchRedirect(): URL {
+  const redirect = new URL(window.location.href)
+  redirect.searchParams.delete(ACCOUNT_SWITCH_PARAM)
+  return redirect
+}
 
 /** 앱 진입 1회 — 미로그인은 KC 로그인 화면으로 보낸다(login-required). */
 export async function initAuth(): Promise<void> {
+  const switchAccount = new URLSearchParams(window.location.search)
+      .get(ACCOUNT_SWITCH_PARAM) === '1'
+  if (switchAccount) {
+    // 로그아웃 직후 login-required를 바로 실행하면 남아 있는 Google SSO 세션이 같은 계정을
+    // 다시 선택해 버린다. 먼저 adapter만 초기화한 뒤 계정 선택을 명시해 다른 운영 계정으로
+    // 전환할 수 있게 한다. redirect에서는 표식을 지워 다음 부팅이 정상 callback을 처리한다.
+    await keycloak.init({ pkceMethod: 'S256', checkLoginIframe: false })
+    keycloak.clearToken()
+    // Keycloak 26과 Google broker는 OIDC 표준 prompt=select_account를 그대로 전달하지만
+    // keycloak-js 26.2 타입은 none/login/consent만 열어 둔다. 런타임 지원값을 이 호출에만 좁혀 쓴다.
+    const loginWithAccountChoice = keycloak.login as unknown as (options: {
+      prompt: 'select_account'
+      redirectUri: string
+    }) => Promise<void>
+    await loginWithAccountChoice({
+      prompt: 'select_account',
+      redirectUri: accountSwitchRedirect().toString(),
+    })
+    return
+  }
   await keycloak.init({
     onLoad: 'login-required',
     pkceMethod: 'S256',
@@ -34,7 +61,14 @@ export async function getToken(): Promise<string> {
 }
 
 export function logout(): void {
-  void keycloak.logout()
+  const redirect = new URL(window.location.href)
+  redirect.searchParams.set(ACCOUNT_SWITCH_PARAM, '1')
+  void keycloak.logout({ redirectUri: redirect.toString() }).catch(() => {
+    // IdP logout 실패를 삼켜 현재 화면에 남기지 않는다. 로컬 토큰을 폐기하고 같은 계정 선택
+    // 진입점으로 이동하면 다음 부팅도 fail-closed 상태에서 재인증을 요구한다.
+    keycloak.clearToken()
+    window.location.assign(redirect)
+  })
 }
 
 /** 환경 전환은 기존 토큰을 폐기하고 대상 프로필 URL로 돌아온 뒤 새 Keycloak에서 재인증한다. */
