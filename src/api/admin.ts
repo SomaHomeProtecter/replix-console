@@ -5,6 +5,7 @@ import type {
   ModerationReviewStage, ModerationReviewView, ResolveResult, SuspendDuration, SuspendedUsers,
   SuspensionResult, UserDetail, UserSearchResult, WarningReason, WarningResult,
   EnvironmentMetadata,
+  FeatureFlagChange, FeatureFlagRow,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -184,5 +185,22 @@ export function decideModerationReview(
   }, {
     target: `클린봇 표본 ${sampleId}`, change: `미판정 → ${decision}`,
     reason: '운영자 표본 판정',
+  })
+}
+
+/** 현재 연결 환경의 코드 registry와 영속 override·runtime 수렴 상태. */
+export function listFeatureFlags(): Promise<FeatureFlagRow[]> {
+  return apiFetch('/api/v1/admin/control/flags')
+}
+
+export function changeFeatureFlag(
+  key: string, change: FeatureFlagChange,
+): Promise<FeatureFlagRow> {
+  return apiFetch(`/api/v1/admin/control/flags/${encodeURIComponent(key)}`, {
+    method: 'PATCH', body: JSON.stringify(change),
+  }, {
+    target: `기능 플래그 ${key}`,
+    change: `${change.enabled ? 'ON' : 'OFF'} · rollout ${change.rolloutPercentage}%`,
+    reason: change.reason,
   })
 }

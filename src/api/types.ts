@@ -287,6 +287,40 @@ export interface ModerationDecisionResult {
   decision: ModerationReviewDecision
   counts: ModerationReviewCounts
 }
+
+export type FeatureRisk = 'MEDIUM' | 'HIGH'
+
+export interface FeatureFlagRow {
+  key: string
+  displayName: string
+  description: string
+  environment: 'LOCAL' | 'DEV' | 'PROD'
+  enabled: boolean
+  effectiveEnabled: boolean
+  rolloutPercentage: number
+  expiresAt: string | null
+  owner: string
+  risk: FeatureRisk
+  allowlistedUserIds: number[]
+  revision: number
+  connected: boolean
+  registryDigest: string
+  updatedAt: string
+  activeInstances: number
+  mismatchedInstances: number
+  converged: boolean
+  lastReportedAt: string | null
+}
+
+export interface FeatureFlagChange {
+  enabled: boolean
+  rolloutPercentage: number
+  expiresAt: string | null
+  owner: string
+  allowlistedUserIds: number[]
+  expectedRevision: number
+  reason: string
+}
 import type { EnvironmentMetadata } from '../environment'
 
 export type { EnvironmentMetadata }

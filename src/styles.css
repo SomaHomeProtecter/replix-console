@@ -526,6 +526,47 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .boot-error { padding: 40px; color: var(--red); }
 .page-status { color: var(--muted); padding: 24px 0; text-align: center; }
 
+/* ── 기능 제어(HP-340) — 기존 전폭 표·pill·중앙 dialog 문법을 그대로 확장한다. ── */
+.feature-control {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  background: var(--panel); border: 1px solid var(--frame); border-radius: 10px;
+  overflow: hidden; box-shadow: 0 10px 30px rgba(20, 30, 40, .12);
+}
+.feature-control > .board-head { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.feature-control .board-head > div p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.feature-table th, .feature-table td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); text-align: left; vertical-align: middle; }
+.feature-table th { color: var(--muted-2); background: var(--panel-2); font-size: 11px; letter-spacing: .03em; }
+.feature-table th:nth-child(1) { width: 32%; }
+.feature-table th:nth-child(2) { width: 90px; }
+.feature-table th:nth-child(3) { width: 76px; }
+.feature-table th:nth-child(4) { width: 150px; }
+.feature-table th:nth-child(5) { width: 210px; }
+.feature-table th:nth-child(6) { width: 78px; }
+.feature-name { display: flex; flex-direction: column; min-width: 0; }
+.feature-name strong { color: var(--ink); font-size: 13px; }
+.feature-name code { margin-top: 1px; color: var(--blue); font: 10.5px var(--mono); }
+.feature-name span, .feature-runtime span, .feature-meta { display: block; color: var(--muted); font-size: 11px; }
+.feature-state { display: inline-block; min-width: 62px; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 8px; text-align: center; font-size: 11px; font-weight: 800; }
+.feature-state.on { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
+.feature-state.off { color: var(--amber-ink); background: var(--amber-bg); border-color: var(--amber-soft); }
+.feature-state.pending { color: var(--blue); background: var(--blue-soft); border-color: #cadbec; }
+.feature-state.partial { color: var(--purple); background: var(--purple-soft); border-color: #d1cef1; }
+.feature-state.disconnected { color: var(--muted); background: var(--line-2); }
+.feature-table .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.feature-runtime strong { color: var(--body); font-size: 11.5px; }
+.feature-dialog { width: min(520px, calc(100vw - 40px)); }
+.feature-toggle { display: flex; gap: 6px; }
+.feature-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.feature-form-grid .span2 { grid-column: span 2; }
+.feature-form-grid label > span { display: block; margin-bottom: 3px; color: var(--muted-2); font-size: 11.5px; font-weight: 700; }
+.feature-form-grid label > span b { color: var(--amber-ink); }
+.feature-form-grid input, .feature-form-grid textarea {
+  width: 100%; margin: 0; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 7px 9px; color: var(--body); background: var(--panel); font: inherit; font-size: 12px;
+}
+.feature-form-grid textarea { resize: vertical; }
+
 /* 톱바 Grafana 딥링크(HP-297) — 톱바의 보조 정보와 같은 톤으로 두어 상단이 시끄러워지지 않게 한다. */
 .grafana-link {
   color: var(--top-muted); font-size: 12px; text-decoration: underline;

@@ -11,6 +11,7 @@ import SuspensionBoardPage from './pages/SuspensionBoardPage'
 import UserDetailPage from './pages/UserDetailPage'
 import { useWriting, WritingProvider } from './writing'
 import ProductionWriteGuard from './ProductionWriteGuard'
+import FeatureControlPage from './pages/FeatureControlPage'
 
 /**
  * 화면 5개 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 사용자 상세. 톱바 = 시안 cm-top.
@@ -71,6 +72,11 @@ function AppContent() {
               title={writingTitle} onClick={preventWhileWriting}>
             오탐 검토
           </NavLink>
+          <NavLink
+              to="/feature-control" aria-disabled={writing || undefined}
+              title={writingTitle} onClick={preventWhileWriting}>
+            기능 제어
+          </NavLink>
         </nav>
         <UserSearch disabled={writing} disabledTitle={writingTitle} />
         <div className="topbar-right">
@@ -103,6 +109,7 @@ function AppContent() {
           <Route path="/suspensions" element={<SuspensionBoardPage />} />
           <Route path="/actions" element={<ActionLogPage />} />
           <Route path="/moderation-reviews" element={<ModerationReviewPage />} />
+          <Route path="/feature-control" element={<FeatureControlPage />} />
           <Route path="/users/:userId" element={<UserDetailPage />} />
         </Routes>
       </main>

@@ -17,7 +17,7 @@ const envMock = vi.hoisted(() => ({
 vi.mock('./env', () => ({ env: envMock }))
 vi.mock('./auth', () => ({
   userName: () => '지호', roleLabel: () => 'admin', logout: vi.fn(),
-  switchEnvironment: vi.fn(), getToken: vi.fn(),
+  switchEnvironment: vi.fn(), getToken: vi.fn(), realmRoles: () => ['admin'],
 }))
 vi.mock('./api/admin')
 
@@ -36,6 +36,7 @@ beforeEach(() => {
       hate: { falsePositive: 0, truePositive: 0 }, evictedPending: 0,
     },
   })
+  vi.mocked(admin.listFeatureFlags).mockResolvedValue([])
 })
 
 describe('환경 표시와 전환(HP-337)', () => {
@@ -61,13 +62,14 @@ describe('환경 표시와 전환(HP-337)', () => {
  * 링크가 아닌 글자였다 — 화면이 하나뿐일 때는 맞았지만, 지금은 그대로 두면 새 화면에 갈 길이 없다.
  */
 describe('톱바 탭 — 화면 사이를 오간다', () => {
-  it('네 화면이 각자의 경로로 걸려 있다', () => {
+  it('다섯 화면이 각자의 경로로 걸려 있다', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
 
     expect(screen.getByRole('link', { name: '신고 큐' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: '정지 현황' })).toHaveAttribute('href', '/suspensions')
     expect(screen.getByRole('link', { name: '조치 로그' })).toHaveAttribute('href', '/actions')
     expect(screen.getByRole('link', { name: '오탐 검토' })).toHaveAttribute('href', '/moderation-reviews')
+    expect(screen.getByRole('link', { name: '기능 제어' })).toHaveAttribute('href', '/feature-control')
   })
 
   it('지금 보는 화면을 탭이 표시한다', () => {
@@ -129,6 +131,7 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
       screen.getByRole('link', { name: '정지 현황' }),
       screen.getByRole('link', { name: '조치 로그' }),
       screen.getByRole('link', { name: '오탐 검토' }),
+      screen.getByRole('link', { name: '기능 제어' }),
     ]
     await waitFor(() => {
       for (const link of topbarLinks) expect(link).toHaveAttribute('aria-disabled', 'true')
