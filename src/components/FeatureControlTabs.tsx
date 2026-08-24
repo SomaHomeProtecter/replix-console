@@ -8,6 +8,7 @@ export default function FeatureControlTabs() {
       <NavLink to="/feature-control/presets">장애 대응 프리셋</NavLink>
       <NavLink to="/feature-control/notices">사용자 공지</NavLink>
       <NavLink to="/feature-control/drift">Drift 해소</NavLink>
+      <NavLink to="/feature-control/incidents">인시던트 타임라인</NavLink>
     </nav>
   )
 }

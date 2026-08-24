@@ -7,7 +7,7 @@ import type {
   EnvironmentMetadata,
   FeatureChangeSet, FeatureChangeSetCreate, FeatureControlPreset, FeatureControlPresetApply,
   FeatureDriftReapply, FeatureDriftState, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
-  ServiceNotice, ServiceNoticeCreate,
+  IncidentTimeline, ServiceNotice, ServiceNoticeCreate,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -326,4 +326,8 @@ export function createDriftReapplyChangeSet(
     target: `runtime drift ${drift.flagKey}`, change: '원하는 상태 재적용 초안 생성',
     reason: request.reason,
   })
+}
+
+export function getIncidentTimeline(reference: string): Promise<IncidentTimeline> {
+  return apiFetch(`/api/v1/admin/control/incidents/timeline${qs({ reference })}`)
 }

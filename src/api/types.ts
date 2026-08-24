@@ -422,6 +422,35 @@ export interface FeatureDriftReapply {
   verificationWindowSeconds: number
 }
 
+export interface IncidentRevisionReference {
+  flagKey: string
+  expectedRevision: number
+  appliedRevision: number | null
+}
+
+export interface IncidentTimelineEntry {
+  sourceType: 'CHANGE_SET' | 'NOTICE'
+  sourceId: number
+  sourceTitle: string
+  sourceStatus: string
+  eventType: string
+  reason: string
+  actorUserId: number
+  occurredAt: string
+  jiraReference: string | null
+  presetId: FeatureControlPreset['id'] | null
+  linkedChangeSetId: number | null
+  revisions: IncidentRevisionReference[]
+}
+
+export interface IncidentTimeline {
+  incidentReference: string
+  environment: FeatureFlagRow['environment']
+  jiraReferences: string[]
+  sourceCount: number
+  entries: IncidentTimelineEntry[]
+}
+
 export interface FeatureChangeSetCreate {
   title: string
   purpose: string

@@ -16,6 +16,7 @@ import FeatureChangeSetPage from './pages/FeatureChangeSetPage'
 import FeatureControlPresetPage from './pages/FeatureControlPresetPage'
 import ServiceNoticePage from './pages/ServiceNoticePage'
 import FeatureDriftPage from './pages/FeatureDriftPage'
+import IncidentTimelinePage from './pages/IncidentTimelinePage'
 
 /**
  * 주요 조치 화면 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 기능 제어 · 사용자 상세.
@@ -119,6 +120,7 @@ function AppContent() {
           <Route path="/feature-control/presets" element={<FeatureControlPresetPage />} />
           <Route path="/feature-control/notices" element={<ServiceNoticePage />} />
           <Route path="/feature-control/drift" element={<FeatureDriftPage />} />
+          <Route path="/feature-control/incidents" element={<IncidentTimelinePage />} />
           <Route path="/users/:userId" element={<UserDetailPage />} />
         </Routes>
       </main>

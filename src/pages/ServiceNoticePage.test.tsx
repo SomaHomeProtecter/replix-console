@@ -35,7 +35,20 @@ function renderPage() {
   </MemoryRouter>)
 }
 
+function renderSelectedPage() {
+  return render(<MemoryRouter initialEntries={['/feature-control/notices?selected=31']}>
+    <WritingProvider><ServiceNoticePage /></WritingProvider>
+  </MemoryRouter>)
+}
+
 describe('사용자 공지 화면(HP-343)', () => {
+  it('타임라인 딥링크로 들어오면 해당 공지 상세를 바로 연다', async () => {
+    renderSelectedPage()
+    expect(await screen.findByRole('complementary', { name: '사용자 공지 #31 상세' }))
+      .toBeInTheDocument()
+    expect(admin.getServiceNotice).toHaveBeenCalledWith(31)
+  })
+
   it('목록에서 상세를 열어 사용자 노출 내용과 내부 메모를 분리해 보여준다', async () => {
     const user = userEvent.setup()
     renderPage()

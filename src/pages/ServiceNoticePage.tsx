@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import {
   cancelServiceNotice, createServiceNotice, endServiceNotice, getServiceNotice,
   listServiceNotices, publishServiceNotice, scheduleServiceNotice,
@@ -177,6 +178,7 @@ function NoticeDetail({ notice, onReload }: {
 }
 
 export default function ServiceNoticePage() {
+  const [searchParams] = useSearchParams()
   const [notices, setNotices] = useState<ServiceNotice[]>([])
   const [selected, setSelected] = useState<ServiceNotice | null>(null)
   const [creating, setCreating] = useState(false)
@@ -192,7 +194,10 @@ export default function ServiceNoticePage() {
     } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
     finally { setLoading(false) }
   }, [selected?.id])
-  useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = Number(searchParams.get('selected'))
+    void load(Number.isSafeInteger(id) && id > 0 ? id : undefined)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => ({
     published: notices.filter((notice) => notice.status === 'PUBLISHED').length,
     scheduled: notices.filter((notice) => notice.status === 'SCHEDULED').length,
