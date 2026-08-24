@@ -398,6 +398,30 @@ export interface FeatureGuardFinding {
   flagKey: string | null
 }
 
+export type FeatureDriftStatus = 'HEALTHY' | 'PROPAGATING' | 'DRIFT' | 'STALE' | 'NO_SIGNAL'
+
+export interface FeatureDriftState {
+  flagKey: string
+  displayName: string
+  status: FeatureDriftStatus
+  desiredRevision: number
+  activeInstances: number
+  mismatchedInstances: number
+  lastReportedAt: string | null
+  observationChangeSetId: number | null
+  observationDueAt: string | null
+  recommendedActions: string[]
+}
+
+export interface FeatureDriftReapply {
+  reason: string
+  jiraReference: string | null
+  incidentReference: string | null
+  safetyExpiresAt: string | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
+}
+
 export interface FeatureChangeSetCreate {
   title: string
   purpose: string

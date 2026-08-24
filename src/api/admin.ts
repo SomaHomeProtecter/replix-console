@@ -6,7 +6,7 @@ import type {
   SuspensionResult, UserDetail, UserSearchResult, WarningReason, WarningResult,
   EnvironmentMetadata,
   FeatureChangeSet, FeatureChangeSetCreate, FeatureControlPreset, FeatureControlPresetApply,
-  FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
+  FeatureDriftReapply, FeatureDriftState, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
   ServiceNotice, ServiceNoticeCreate,
 } from './types'
 
@@ -311,4 +311,19 @@ export function scheduleServiceNotice(
   return apiFetch(`/api/v1/admin/control/notices/${id}/schedule`, {
     method: 'POST', body: JSON.stringify({ expectedVersion: version, startsAt, endsAt, reason }),
   }, { target: `사용자 공지 #${id}`, change: `예약 게시 → ${startsAt}`, reason })
+}
+
+export function listFeatureDrift(): Promise<FeatureDriftState[]> {
+  return apiFetch('/api/v1/admin/control/drift')
+}
+
+export function createDriftReapplyChangeSet(
+  drift: FeatureDriftState, request: FeatureDriftReapply,
+): Promise<FeatureChangeSet> {
+  return apiFetch(`/api/v1/admin/control/drift/${encodeURIComponent(drift.flagKey)}/reapply`, {
+    method: 'POST', body: JSON.stringify(request),
+  }, {
+    target: `runtime drift ${drift.flagKey}`, change: '원하는 상태 재적용 초안 생성',
+    reason: request.reason,
+  })
 }

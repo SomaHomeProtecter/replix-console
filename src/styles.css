@@ -691,6 +691,28 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .notice-schedule label { min-width: 0; }
 .feature-state.status-published { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
 
+/* HP-343 runtime drift 해소 — 기능 목록 표 안에서 판정과 안전 조치를 바로 비교한다. */
+.drift-page > .board-head .filter-note { margin-left: auto; }
+.drift-table { flex: 1; min-height: 0; overflow: auto; }
+.drift-table .feature-table th:nth-child(1) { width: 25%; }
+.drift-table .feature-table th:nth-child(2) { width: 100px; }
+.drift-table .feature-table th:nth-child(3) { width: 110px; }
+.drift-table .feature-table th:nth-child(4) { width: 145px; }
+.drift-table .feature-table th:nth-child(5) { width: 130px; }
+.drift-table .feature-table th:nth-child(6) { width: auto; }
+.feature-state.drift-healthy { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
+.feature-state.drift-propagating { color: var(--blue); background: var(--blue-soft); border-color: #cadbec; }
+.feature-state.drift-drift, .feature-state.drift-stale { color: var(--red); background: var(--red-soft); border-color: #e4b7b7; }
+.feature-state.drift-no_signal { color: var(--muted); background: var(--line-2); }
+.drift-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.drift-actions > span { color: var(--muted-2); font-size: 10.5px; }
+.drift-actions .btn { margin-left: auto; white-space: nowrap; }
+.drift-dialog { width: min(600px, calc(100vw - 40px)); }
+.drift-reapply-target { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 10px; background: var(--panel-2); }
+.drift-reapply-target strong { color: var(--ink); font-size: 12px; }
+.drift-reapply-target code { color: var(--blue); font: 10px var(--mono); }
+.drift-reapply-target span { grid-column: 1 / -1; color: var(--muted); font: 10px var(--mono); }
+
 /* 톱바 Grafana 딥링크(HP-297) — 톱바의 보조 정보와 같은 톤으로 두어 상단이 시끄러워지지 않게 한다. */
 .grafana-link {
   color: var(--top-muted); font-size: 12px; text-decoration: underline;
@@ -955,6 +977,9 @@ table.action-table {
   .notice-preview { grid-template-columns: auto 1fr; }
   .notice-preview > p { grid-column: 1 / -1; }
   .notice-schedule { grid-template-columns: 1fr; }
+  .drift-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .drift-table { overflow-x: auto; }
+  .drift-table .feature-table { min-width: 780px; }
   .change-set-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
   .change-list { min-width: 0; }
   .change-workspace { overflow: visible; }
