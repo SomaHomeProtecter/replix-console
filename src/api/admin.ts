@@ -5,7 +5,7 @@ import type {
   ModerationReviewStage, ModerationReviewView, ResolveResult, SuspendDuration, SuspendedUsers,
   SuspensionResult, UserDetail, UserSearchResult, WarningReason, WarningResult,
   EnvironmentMetadata,
-  FeatureFlagChange, FeatureFlagRow,
+  FeatureChangeSet, FeatureChangeSetCreate, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -202,5 +202,61 @@ export function changeFeatureFlag(
     target: `기능 플래그 ${key}`,
     change: `${change.enabled ? 'ON' : 'OFF'} · rollout ${change.rolloutPercentage}%`,
     reason: change.reason,
+  })
+}
+
+export function listFeatureChangeSets(): Promise<FeatureChangeSet[]> {
+  return apiFetch('/api/v1/admin/control/change-sets')
+}
+
+export function getFeatureChangeSet(id: number): Promise<FeatureChangeSet> {
+  return apiFetch(`/api/v1/admin/control/change-sets/${id}`)
+}
+
+export function createFeatureChangeSet(change: FeatureChangeSetCreate): Promise<FeatureChangeSet> {
+  return apiFetch('/api/v1/admin/control/change-sets', {
+    method: 'POST', body: JSON.stringify(change),
+  }, {
+    target: `기능 변경 세트 ${change.title}`, change: `초안 생성 · ${change.items.length}개 플래그`,
+    reason: change.purpose,
+  })
+}
+
+function changeSetWorkflow(id: number, action: string, version: number, reason: string) {
+  return apiFetch<FeatureChangeSet>(`/api/v1/admin/control/change-sets/${id}/${action}`, {
+    method: 'POST', body: JSON.stringify({ expectedVersion: version, reason }),
+  }, { target: `기능 변경 세트 #${id}`, change: action, reason })
+}
+
+export const requestFeatureChangeReview = (id: number, version: number, reason: string) =>
+  changeSetWorkflow(id, 'request-review', version, reason)
+export const approveFeatureChangeSet = (id: number, version: number, reason: string) =>
+  changeSetWorkflow(id, 'approve', version, reason)
+export const rejectFeatureChangeSet = (id: number, version: number, reason: string) =>
+  changeSetWorkflow(id, 'reject', version, reason)
+export const applyFeatureChangeSet = (id: number, version: number, reason: string) =>
+  changeSetWorkflow(id, 'apply', version, reason)
+export const cancelFeatureChangeSet = (id: number, version: number, reason: string) =>
+  changeSetWorkflow(id, 'cancel', version, reason)
+
+export function scheduleFeatureChangeSet(
+  id: number, version: number, scheduledAt: string, reason: string,
+): Promise<FeatureChangeSet> {
+  return apiFetch(`/api/v1/admin/control/change-sets/${id}/schedule`, {
+    method: 'POST', body: JSON.stringify({ expectedVersion: version, scheduledAt, reason }),
+  }, { target: `기능 변경 세트 #${id}`, change: `예약 → ${scheduledAt}`, reason })
+}
+
+export function rollbackFeatureChangeSet(
+  id: number, version: number, safetyExpiresAt: string | null, reason: string,
+): Promise<FeatureChangeSet> {
+  return apiFetch(`/api/v1/admin/control/change-sets/${id}/rollback`, {
+    method: 'POST', body: JSON.stringify({ expectedVersion: version, safetyExpiresAt, reason }),
+  }, { target: `기능 변경 세트 #${id}`, change: '롤백 초안 생성', reason })
+}
+
+export function dryRunFeatureChangeSet(id: number, userIds: number[]): Promise<FeatureDryRunRow[]> {
+  return apiFetch(`/api/v1/admin/control/change-sets/${id}/dry-run`, {
+    method: 'POST', body: JSON.stringify({ userIds }),
   })
 }

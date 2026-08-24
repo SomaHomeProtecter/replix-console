@@ -5,6 +5,7 @@ import * as admin from '../api/admin'
 import type { FeatureFlagRow } from '../api/types'
 import FeatureControlPage from './FeatureControlPage'
 import { WritingProvider } from '../writing'
+import { MemoryRouter } from 'react-router'
 
 vi.mock('../api/admin')
 vi.mock('../auth', () => ({ realmRoles: () => ['admin'] }))
@@ -20,7 +21,7 @@ const row = (overrides: Partial<FeatureFlagRow> = {}): FeatureFlagRow => ({
 })
 
 function renderPage() {
-  return render(<WritingProvider><FeatureControlPage /></WritingProvider>)
+  return render(<MemoryRouter><WritingProvider><FeatureControlPage /></WritingProvider></MemoryRouter>)
 }
 
 beforeEach(() => {

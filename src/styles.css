@@ -569,6 +569,74 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 }
 .feature-form-grid textarea { resize: vertical; }
 
+/* HP-343 변경 세트 — 기능 목록과 같은 패널·표·chip 문법 안에서 승인 흐름만 한 단계 깊게 보인다. */
+.control-tabs { display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.control-tabs a { padding: 9px 12px 8px; color: var(--muted-2); font-size: 12px; font-weight: 750; text-decoration: none; border-bottom: 2px solid transparent; }
+.control-tabs a.active { color: var(--ink); border-bottom-color: var(--ink); }
+.change-set-page > .board-head .filter-note { margin-left: auto; }
+.change-workspace { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(410px, .9fr); min-height: 0; flex: 1; }
+.change-list { min-height: 0; overflow: auto; border-right: 1px solid var(--line); }
+.change-list table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.change-list th, .change-list td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); text-align: left; font-size: 12px; }
+.change-list th { position: sticky; top: 0; z-index: 1; background: var(--panel-2); color: var(--muted-2); font-size: 11px; }
+.change-list th:first-child { width: 42%; }
+.change-list th:nth-child(2) { width: 110px; }
+.change-list th:nth-child(3) { width: 100px; }
+.change-list th:nth-child(4) { width: 112px; }
+.change-list tbody tr { cursor: pointer; }
+.change-list tbody tr:hover, .change-list tbody tr.selected { background: var(--blue-soft); }
+.change-list td:first-child strong, .change-list td:first-child span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.change-list td:first-child span { margin-top: 2px; color: var(--muted); font-size: 10.5px; }
+.feature-state.status-review_requested, .feature-state.status-approved, .feature-state.status-scheduled { color: var(--blue); background: var(--blue-soft); border-color: #cadbec; }
+.feature-state.status-succeeded, .feature-state.status-rolled_back { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
+.feature-state.status-partially_failed, .feature-state.status-failed, .feature-state.status-rejected { color: var(--amber-ink); background: var(--amber-bg); border-color: var(--amber-soft); }
+.feature-state.status-cancelled { color: var(--muted); background: var(--line-2); }
+.change-detail { min-width: 0; overflow: auto; padding: 16px; background: var(--panel); }
+.change-detail-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.change-detail-head h2 { margin: 7px 0 0; color: var(--ink); font-size: 16px; }
+.change-detail-head p { margin: 3px 0 0; color: var(--muted); font: 11px var(--mono); }
+.change-detail h3 { margin: 17px 0 7px; color: var(--ink); font-size: 12px; }
+.change-summary { display: grid; grid-template-columns: 1fr 1fr; margin: 13px 0 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.change-summary div { min-width: 0; padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
+.change-summary div:nth-child(odd) { border-right: 1px solid var(--line-2); }
+.change-summary dt { color: var(--muted); font-size: 10.5px; font-weight: 750; }
+.change-summary dd { margin: 2px 0 0; color: var(--body); font-size: 11.5px; overflow-wrap: anywhere; }
+.change-diffs { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.change-diff { display: grid; grid-template-columns: minmax(120px, 1fr) 74px 16px 84px auto; gap: 6px; align-items: center; padding: 7px 9px; font-size: 11px; }
+.change-diff + .change-diff { border-top: 1px solid var(--line-2); }
+.change-diff code { overflow: hidden; text-overflow: ellipsis; color: var(--blue); font: 10.5px var(--mono); }
+.change-diff span { color: var(--muted); }
+.change-diff b { color: var(--muted); }
+.change-diff strong { color: var(--ink); }
+.change-diff small { color: var(--green); }
+.dry-run-box, .change-actions { margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.dry-run-box { display: flex; align-items: end; gap: 7px; flex-wrap: wrap; }
+.dry-run-box label, .change-actions label { flex: 1; min-width: 180px; }
+.dry-run-box label span, .change-actions label > span { display: block; margin-bottom: 3px; color: var(--muted-2); font-size: 11px; font-weight: 750; }
+.dry-run-box input, .change-actions input, .change-actions textarea, .change-target input { width: 100%; border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 8px; background: var(--panel); color: var(--body); font: inherit; font-size: 11.5px; }
+.dry-results { display: flex; flex-direction: column; width: 100%; padding-top: 6px; border-top: 1px solid var(--line); color: var(--body); font: 10.5px var(--mono); }
+.change-actions .dialog-actions { margin-top: 8px; }
+.schedule-row { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
+.schedule-row input { width: auto; flex: 1; }
+.change-events { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.change-events li { display: grid; grid-template-columns: 112px 132px 1fr; gap: 7px; padding: 7px 0; border-bottom: 1px solid var(--line-2); font-size: 10.5px; }
+.change-events span { color: var(--muted); font-family: var(--mono); }
+.change-events strong { color: var(--ink); }
+.change-events p { margin: 0; color: var(--body); }
+.change-empty { display: flex; align-items: center; justify-content: center; padding: 30px; color: var(--muted); text-align: center; }
+.change-set-create { width: min(760px, calc(100vw - 40px)); max-height: min(820px, calc(100vh - 40px)); overflow: auto; }
+.change-picks { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.change-pick { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.change-pick.selected { border-color: var(--line-strong); background: var(--panel); }
+.change-pick-main { display: flex; align-items: center; gap: 9px; padding: 8px 10px; cursor: pointer; }
+.change-pick-main > span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.change-pick-main strong { color: var(--ink); font-size: 12px; }
+.change-pick-main code { color: var(--blue); font: 10px var(--mono); }
+.change-pick-main small { color: var(--muted); font-size: 10.5px; }
+.change-target { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding: 8px 10px; border-top: 1px solid var(--line-2); }
+.change-target .preset-label { margin-left: 5px; color: var(--muted); font-size: 10.5px; }
+.change-target input { width: 170px; margin-left: auto; }
+
 /* 톱바 Grafana 딥링크(HP-297) — 톱바의 보조 정보와 같은 톤으로 두어 상단이 시끄러워지지 않게 한다. */
 .grafana-link {
   color: var(--top-muted); font-size: 12px; text-decoration: underline;
@@ -806,6 +874,9 @@ table.action-table {
   .grafana-link { display: none; }
   .review-list li { grid-template-columns: 90px 112px minmax(160px, 1fr) 118px; }
   .review-category { display: none; }
+  .change-workspace { grid-template-columns: 1fr; overflow: auto; }
+  .change-list { min-height: 260px; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .change-detail { overflow: visible; }
 }
 
 /* 좁은 화면에서는 공통 톱바를 세 줄로 접는다. 탭과 기능 표는 각각 자기 영역에서만
@@ -822,4 +893,16 @@ table.action-table {
   .user-search { order: 5; width: 100%; margin-left: 0; }
   .user-search-results { left: 0; right: auto; width: 100%; }
   .content { padding: 12px; }
+  .control-tabs { overflow-x: auto; padding-inline: 10px; }
+  .change-set-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .change-list { min-width: 0; }
+  .change-workspace { overflow: visible; }
+  .change-list th:first-child { width: 64%; }
+  .change-list th:nth-child(2) { width: 36%; }
+  .change-list th:nth-child(3), .change-list td:nth-child(3),
+  .change-list th:nth-child(4), .change-list td:nth-child(4) { display: none; }
+  .change-summary { grid-template-columns: 1fr; }
+  .change-summary div:nth-child(odd) { border-right: 0; }
+  .change-diff { grid-template-columns: minmax(100px, 1fr) 68px 12px 78px; }
+  .change-diff small { grid-column: 1 / -1; }
 }

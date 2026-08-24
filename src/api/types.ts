@@ -323,6 +323,83 @@ export interface FeatureFlagChange {
   expectedRevision: number
   reason: string
 }
+
+export type FeatureChangeSetStatus =
+  | 'DRAFT' | 'REVIEW_REQUESTED' | 'APPROVED' | 'REJECTED' | 'SCHEDULED' | 'RUNNING'
+  | 'SUCCEEDED' | 'PARTIALLY_FAILED' | 'FAILED' | 'ROLLED_BACK' | 'CANCELLED'
+
+export interface FeatureChangeSetItemInput {
+  flagKey: string
+  enabled: boolean
+  rolloutPercentage: number
+  expiresAt: string | null
+  owner: string
+  allowlistedUserIds: number[]
+  expectedRevision: number
+}
+
+export interface FeatureChangeSetItem extends Omit<FeatureChangeSetItemInput, 'enabled' | 'rolloutPercentage' | 'expiresAt' | 'owner' | 'allowlistedUserIds'> {
+  id: number
+  sequence: number
+  beforeState: string
+  targetEnabled: boolean
+  targetRolloutPercentage: number
+  targetExpiresAt: string | null
+  targetOwner: string
+  targetAllowlistedUserIds: number[]
+  appliedRevision: number | null
+  resultCode: string | null
+}
+
+export interface FeatureChangeSetEvent {
+  id: number
+  type: string
+  actorUserId: number
+  reason: string
+  payload: string
+  createdAt: string
+}
+
+export interface FeatureChangeSet {
+  id: number
+  environment: FeatureFlagRow['environment']
+  title: string
+  purpose: string
+  jiraReference: string | null
+  incidentReference: string | null
+  status: FeatureChangeSetStatus
+  risk: FeatureRisk
+  version: number
+  createdByUserId: number
+  approvedByUserId: number | null
+  scheduledByUserId: number | null
+  rollbackOfChangeSetId: number | null
+  approvalExpiresAt: string | null
+  requestedAt: string | null
+  approvedAt: string | null
+  scheduledAt: string | null
+  appliedAt: string | null
+  failureCode: string | null
+  createdAt: string
+  updatedAt: string
+  items: FeatureChangeSetItem[]
+  events: FeatureChangeSetEvent[]
+}
+
+export interface FeatureChangeSetCreate {
+  title: string
+  purpose: string
+  jiraReference: string | null
+  incidentReference: string | null
+  items: FeatureChangeSetItemInput[]
+}
+
+export interface FeatureDryRunRow {
+  userId: number
+  flagKey: string
+  currentEnabled: boolean
+  proposedEnabled: boolean
+}
 import type { EnvironmentMetadata } from '../environment'
 
 export type { EnvironmentMetadata }

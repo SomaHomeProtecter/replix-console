@@ -12,6 +12,7 @@ import UserDetailPage from './pages/UserDetailPage'
 import { useWriting, WritingProvider } from './writing'
 import ProductionWriteGuard from './ProductionWriteGuard'
 import FeatureControlPage from './pages/FeatureControlPage'
+import FeatureChangeSetPage from './pages/FeatureChangeSetPage'
 
 /**
  * 화면 5개 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 사용자 상세. 톱바 = 시안 cm-top.
@@ -110,6 +111,7 @@ function AppContent() {
           <Route path="/actions" element={<ActionLogPage />} />
           <Route path="/moderation-reviews" element={<ModerationReviewPage />} />
           <Route path="/feature-control" element={<FeatureControlPage />} />
+          <Route path="/feature-control/change-sets" element={<FeatureChangeSetPage />} />
           <Route path="/users/:userId" element={<UserDetailPage />} />
         </Routes>
       </main>

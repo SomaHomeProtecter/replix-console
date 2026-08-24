@@ -4,6 +4,8 @@ import type { FeatureFlagChange, FeatureFlagRow } from '../api/types'
 import { realmRoles } from '../auth'
 import { formatKstShort } from '../format'
 import { useWriting } from '../writing'
+import FeatureControlTabs from '../components/FeatureControlTabs'
+import { useNavigate } from 'react-router'
 
 type View = 'ALL' | 'ON' | 'OFF' | 'PARTIAL' | 'ATTENTION'
 
@@ -127,6 +129,7 @@ function ChangeDialog({ row, onClose, onChanged }: {
 }
 
 export default function FeatureControlPage() {
+  const navigate = useNavigate()
   const [rows, setRows] = useState<FeatureFlagRow[]>([])
   const [view, setView] = useState<View>('ALL')
   const [loading, setLoading] = useState(true)
@@ -171,6 +174,7 @@ export default function FeatureControlPage() {
         <div><h1>기능 제어</h1><p>저장 상태와 실행 인스턴스의 적용 수렴을 함께 확인합니다.</p></div>
         <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button>
       </div>
+      <FeatureControlTabs />
       <div className="filter-bar" aria-label="기능 상태 필터">
         {(Object.keys(VIEW_LABELS) as View[]).map((candidate) => (
           <button key={candidate} type="button" className="chip-f" aria-pressed={view === candidate}
@@ -198,8 +202,12 @@ export default function FeatureControlPage() {
                     <span>rev {row.revision} · {row.lastReportedAt ? formatKstShort(row.lastReportedAt) : '보고 없음'}</span>
                   </td>
                   <td><button type="button" className="btn" disabled={!writable || stale || !row.connected}
-                      title={!writable ? '기능 제어 변경 권한이 없습니다' : stale ? '최신 목록 확인이 필요합니다' : undefined}
-                      onClick={() => setSelected(row)}>변경</button></td>
+                      title={!writable ? '기능 제어 변경 권한이 없습니다' : stale ? '최신 목록 확인이 필요합니다'
+                        : row.environment === 'PROD' ? 'PROD 변경은 승인 가능한 변경 세트로 진행합니다' : undefined}
+                      onClick={() => row.environment === 'PROD'
+                        ? navigate('/feature-control/change-sets') : setSelected(row)}>
+                    {row.environment === 'PROD' ? '변경 세트' : '변경'}
+                  </button></td>
                 </tr>
               )
             })}</tbody>
