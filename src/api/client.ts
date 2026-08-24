@@ -124,6 +124,35 @@ export async function apiFetch<T>(
   }
 }
 
+/** 인증이 필요한 export 응답을 브라우저 파일로 보존한다. GET만 허용해 PROD 쓰기 가드를 우회하지 않는다. */
+export async function apiDownload(path: string): Promise<Blob> {
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => { timedOut = true; controller.abort() }, API_TIMEOUT_MS)
+  try {
+    const token = await untilAborted(getToken(), controller.signal)
+    const res = await fetch(`${env.apiBaseUrl}${path}`, {
+      signal: controller.signal, headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      let code = `HTTP_${res.status}`
+      let message = STATUS_FALLBACKS[res.status] ?? `요청 실패 (HTTP ${res.status})`
+      try {
+        const body = (await res.json()) as { code?: string; message?: string }
+        code = body.code ?? code; message = body.message ?? message
+      } catch { /* no body */ }
+      throw new ApiHttpError(res.status, code, message)
+    }
+    return res.blob()
+  } catch (e) {
+    if (timedOut) throw new ApiHttpError(0, TIMEOUT_CODE,
+        `서버가 ${API_TIMEOUT_MS / 1000}초 안에 응답하지 않아 요청을 취소했습니다`)
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** 쿼리스트링 조립 — 빈 값(null·undefined·'')은 파라미터 자체를 뺀다(BE의 "미지정 = 전체"와 맞춤). */
 export function qs(params: Record<string, string | number | null | undefined>): string {
   const search = new URLSearchParams()

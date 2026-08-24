@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { effectiveActions, mergeSuspendResolve } from '../actionHistory'
-import { getUserDetail, suspendUser, unsuspendUser, warnUser } from '../api/admin'
-import type { SuspendDuration, UserDetail, UserStatus, WarningReason } from '../api/types'
+import { exportUserTimeline, getUserDetail, getUserTimeline, suspendUser, unsuspendUser, warnUser } from '../api/admin'
+import type { SuspendDuration, UserDetail, UserStatus, UserTimeline, WarningReason } from '../api/types'
 import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
@@ -17,7 +17,7 @@ const CHIP_CLASSES: Record<UserStatus, string> = {
   WITHDRAWN: 'ustatus gone',
 }
 
-type Tab = 'reports' | 'actions' | 'suspensions'
+type Tab = 'reports' | 'timeline' | 'actions' | 'suspensions'
 
 /**
  * 사용자 상세(시안 cm2) — 헤더(아바타·이름·상태 칩(정지 만료 lazy 계산)·userId/provider) +
@@ -37,6 +37,7 @@ export default function UserDetailPage() {
   // 기본은 끔(전량) — 조치 이력은 감사 기록이라 "무엇이 있었나"가 정본이고,
   // 숨김은 "지금 뭐가 걸려 있나"를 볼 때의 보조 뷰다(HP-268).
   const [effectiveOnly, setEffectiveOnly] = useState(false)
+  const [timeline, setTimeline] = useState<UserTimeline | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -51,6 +52,12 @@ export default function UserDetailPage() {
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (tab !== 'timeline' || timeline) return
+    getUserTimeline(id).then(setTimeline).catch((e: unknown) =>
+      setError(e instanceof Error ? e.message : String(e)))
+  }, [id, tab, timeline])
+
   const run = (work: () => Promise<unknown>) => {
     setBusy(true)
     setError(null)
@@ -63,7 +70,18 @@ export default function UserDetailPage() {
           await load()
           setError(e instanceof Error ? e.message : String(e))
         })
-        .finally(() => setBusy(false))
+      .finally(() => setBusy(false))
+  }
+  const downloadTimeline = async (format: 'CSV' | 'JSON') => {
+    setBusy(true); setError(null)
+    try {
+      const blob = await exportUserTimeline(id, format); const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a'); anchor.href = url
+      anchor.download = `user-${id}-timeline.${format.toLowerCase()}`
+      document.body.appendChild(anchor); anchor.click(); anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
   }
 
   // 상세로 오는 길이 셋이라(신고 큐·정지 현황판·조치 로그) 돌아가는 길을 하나로 굳히면
@@ -92,6 +110,7 @@ export default function UserDetailPage() {
   const warnings = detail.warnings ?? { total: 0, suspensionReviewRecommended: false }
   const tabLabels: Record<Tab, string> = {
     reports: `받은 신고 ${detail.reportsReceived.length}`,
+    timeline: `통합 타임라인${timeline ? ` ${timeline.events.length}` : ''}`,
     actions: `조치 이력 ${detail.actions.length}`,
     suspensions: `정지 이력 ${detail.suspensions.length}`,
   }
@@ -177,7 +196,24 @@ export default function UserDetailPage() {
               ))
           )}
 
-          {tab !== 'reports' && (() => {
+          {tab === 'timeline' && (
+            !timeline ? <div className="page-status">타임라인을 불러오는 중…</div> : <>
+              <div className="eff-row"><div className="eff-main"><strong>판단 보조 신호</strong>
+                <span className="hidden-count">자동 제재 사용 안 함</span></div>
+                <p className="eff-hint">{timeline.limitation}</p></div>
+              <div className="timeline-signals">{timeline.signals.map((signal) => <div key={signal.code} className="incident-guide">
+                <strong>{signal.label} · {signal.numerator}{signal.denominator ? ` / ${signal.denominator}` : ''}</strong><p>{signal.interpretation}</p></div>)}</div>
+              <div className="dialog-actions"><button className="btn" type="button" disabled={busy} onClick={() => void downloadTimeline('CSV')}>마스킹 CSV</button>
+                <button className="btn" type="button" disabled={busy} onClick={() => void downloadTimeline('JSON')}>마스킹 JSON</button></div>
+              <div className="evrow act head2"><span>시각</span><span>종류</span><span>요약</span><span>원본</span><span>마스킹</span></div>
+              {timeline.events.map((event) => <div className="evrow act" key={event.id}>
+                <span className="t">{formatKstShort(event.occurredAt)}</span><span className="alabel">{event.type}</span>
+                <span>{event.summary}</span><span><Link className="btn-link" to={event.sourcePath}>열기</Link></span>
+                <span>{event.sensitiveMasked ? '적용' : '—'}</span></div>)}
+            </>
+          )}
+
+          {tab !== 'reports' && tab !== 'timeline' && (() => {
             // 정지 이력은 BE의 별도 축(suspensions) — actions에서 클라이언트 필터로 만들면
             // actions 상한(50)에 밀려 거짓 "기록 없음"이 될 수 있다(리뷰 m9)
             const all = tab === 'actions' ? detail.actions : detail.suspensions

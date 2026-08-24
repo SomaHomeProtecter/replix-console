@@ -1,4 +1,4 @@
-import { apiFetch, qs } from './client'
+import { apiDownload, apiFetch, qs } from './client'
 import type {
   AdminActionLogResponse, AdminActionType, AuthorMessages, ReportPage, ReportReason, ReportStatus,
   ModerationDecisionResult, ModerationReviewDecision, ModerationReviewPage, ResolutionAction,
@@ -9,6 +9,8 @@ import type {
   FeatureDriftReapply, FeatureDriftState, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
   Incident, IncidentDeclare, IncidentEventCreate, IncidentTimeline, IncidentTransition, IncidentUpdate,
   ServiceNotice, ServiceNoticeCreate,
+  OperationCaseDetail, OperationCasePage, OperationCaseView, CaseNoteType, UserTimeline,
+  CleanbotPolicy, CleanbotPolicyUpsert, CleanbotSimulation,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -164,6 +166,63 @@ export function getUserDetail(userId: number): Promise<UserDetail> {
 export function searchUsers(query: string): Promise<UserSearchResult> {
   return apiFetch(`/api/v1/admin/users/search${qs({ q: query })}`)
 }
+
+export const listOperationCases = (view: OperationCaseView): Promise<OperationCasePage> =>
+  apiFetch(`/api/v1/admin/cases${qs({ view })}`)
+export const getOperationCase = (reportId: number): Promise<OperationCaseDetail> =>
+  apiFetch(`/api/v1/admin/cases/${reportId}`)
+export function assignOperationCase(
+  reportId: number, expectedVersion: number, assigneeUserId: number | null,
+  dueAt: string | null, reason: string,
+): Promise<OperationCaseDetail> {
+  return apiFetch(`/api/v1/admin/cases/${reportId}/assignment`, {
+    method: 'PATCH', body: JSON.stringify({ expectedVersion, assigneeUserId, dueAt, reason }),
+  }, { target: `신고 케이스 #${reportId}`, change: `담당자 → ${assigneeUserId ?? '미배정'}`, reason })
+}
+export function addOperationCaseNote(
+  reportId: number, expectedVersion: number, type: CaseNoteType, body: string,
+): Promise<OperationCaseDetail> {
+  return apiFetch(`/api/v1/admin/cases/${reportId}/notes`, {
+    method: 'POST', body: JSON.stringify({ expectedVersion, type, body }),
+  }, { target: `신고 케이스 #${reportId}`, change: type, reason: body })
+}
+
+export const getUserTimeline = (userId: number): Promise<UserTimeline> =>
+  apiFetch(`/api/v1/admin/users/${userId}/timeline`)
+export const exportUserTimeline = (userId: number, format: 'CSV' | 'JSON'): Promise<Blob> =>
+  apiDownload(`/api/v1/admin/users/${userId}/timeline/export${qs({ format })}`)
+
+export const listCleanbotPolicies = (): Promise<CleanbotPolicy[]> =>
+  apiFetch('/api/v1/admin/moderation-policies')
+export function createCleanbotPolicy(policy: CleanbotPolicyUpsert): Promise<CleanbotPolicy> {
+  return apiFetch('/api/v1/admin/moderation-policies', { method: 'POST', body: JSON.stringify(policy) },
+      { target: `클린봇 정책 ${policy.name}`, change: '정책 초안 생성', reason: '정책 버전 실험' })
+}
+export function updateCleanbotPolicy(
+  id: number, revision: number, policy: CleanbotPolicyUpsert,
+): Promise<CleanbotPolicy> {
+  return apiFetch(`/api/v1/admin/moderation-policies/${id}${qs({ expectedRevision: revision })}`, {
+    method: 'PATCH', body: JSON.stringify(policy),
+  }, { target: `클린봇 정책 #${id}`, change: '정책 초안 수정', reason: '정책 버전 실험' })
+}
+function policyWorkflow(id: number, action: string, revision: number, reason: string, changeSetId?: number) {
+  return apiFetch<CleanbotPolicy>(`/api/v1/admin/moderation-policies/${id}/${action}`, {
+    method: 'POST', body: JSON.stringify({ expectedRevision: revision, reason, changeSetId }),
+  }, { target: `클린봇 정책 #${id}`, change: action, reason })
+}
+export const requestCleanbotPolicyReview = (id: number, revision: number, reason: string) =>
+  policyWorkflow(id, 'request-review', revision, reason)
+export const approveCleanbotPolicy = (id: number, revision: number, reason: string) =>
+  policyWorkflow(id, 'approve', revision, reason)
+export const activateCleanbotPolicy = (id: number, revision: number, reason: string, changeSetId?: number) =>
+  policyWorkflow(id, 'activate', revision, reason, changeSetId)
+export function simulateCleanbotPolicy(id: number, sampleLimit = 100): Promise<CleanbotSimulation> {
+  return apiFetch(`/api/v1/admin/moderation-policies/${id}/simulations`, {
+    method: 'POST', body: JSON.stringify({ sampleLimit }),
+  }, { target: `클린봇 정책 #${id}`, change: `과거 표본 ${sampleLimit}건 dry-run · 원본 무변경`, reason: '정책 비교 검증' })
+}
+export const listCleanbotSimulations = (id: number): Promise<CleanbotSimulation[]> =>
+  apiFetch(`/api/v1/admin/moderation-policies/${id}/simulations`)
 
 export interface ModerationReviewFilters {
   view: ModerationReviewView

@@ -244,6 +244,7 @@ button { font: inherit; }
 }
 .chip-f[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
 .filter-note { margin-left: auto; font-size: 12px; color: var(--muted-2); }
+.timeline-signals { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; padding: 10px 0; }
 
 /* 테이블 (cm-tr) */
 .report-table-wrap { overflow: auto; flex: 1; }

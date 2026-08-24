@@ -10,7 +10,9 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'WITHDRAWN'
 export type SuspendDuration = 'H24' | 'H72' | 'D7' | 'PERMANENT'
 export type AdminActionType =
   | 'BLIND' | 'UNBLIND' | 'SCORE_FIX' | 'SUSPEND' | 'UNSUSPEND' | 'WARN'
-  | 'RESOLVE_REPORT' | 'REOPEN_REPORT'
+  | 'RESOLVE_REPORT' | 'REOPEN_REPORT' | 'EXPORT_USER_TIMELINE'
+  | 'POLICY_CREATE' | 'POLICY_UPDATE' | 'POLICY_REVIEW_REQUEST' | 'POLICY_APPROVE'
+  | 'POLICY_ACTIVATE' | 'POLICY_RETIRE' | 'POLICY_SIMULATE'
 
 export type WarningReason = 'ABUSE' | 'SPOILER' | 'SPAM' | 'OTHER'
 
@@ -26,7 +28,7 @@ export interface WarningResult {
   suspensionReviewRecommended: boolean
 }
 
-export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT'
+export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT' | 'POLICY'
 
 /** 처리(RESOLVED)에 동반된 조치. null = 단순 처리. */
 export type ResolutionAction = 'BLIND' | 'SUSPEND' | 'ROOM_CLOSE'
@@ -187,6 +189,51 @@ export interface UserDetail {
   reportsSent: ReportsSent
   /** 누적 3회는 자동 정지가 아니라 운영자의 정지 검토 신호다. */
   warnings: { total: number; suspensionReviewRecommended: boolean }
+}
+
+export type OperationCaseView = 'ALL' | 'MINE' | 'UNASSIGNED' | 'OVERDUE'
+export type CaseNoteType = 'INTERNAL' | 'HANDOFF' | 'REVIEW_REQUEST'
+export interface OperatorRef { id: number; displayName: string | null }
+export interface OperationCaseRow {
+  reportId: number; createdAt: string; reason: ReportReason; messagePreview: string
+  targetUser: OperatorRef; assignee: OperatorRef | null; dueAt: string | null
+  reviewRequested: boolean; version: number; updatedAt: string | null
+  stale: boolean; overdue: boolean
+}
+export interface OperationWorkload { operator: OperatorRef; assigned: number; overdue: number }
+export interface OperationCasePage { items: OperationCaseRow[]; workloads: OperationWorkload[]; truncated: boolean }
+export interface OperationCaseNote { id: number; type: CaseNoteType; body: string; author: OperatorRef; createdAt: string }
+export interface OperationCaseEvent { id: number; type: string; detail: string; actor: OperatorRef; workspaceVersion: number; createdAt: string }
+export interface OperationCaseDetail { item: OperationCaseRow; notes: OperationCaseNote[]; events: OperationCaseEvent[] }
+
+export interface UserTimelineEvent {
+  id: string; occurredAt: string; type: string; summary: string; sourcePath: string; sensitiveMasked: boolean
+}
+export interface UserTimelineSignal {
+  code: string; label: string; numerator: number; denominator: number; interpretation: string
+}
+export interface UserTimeline {
+  userId: number; events: UserTimelineEvent[]; signals: UserTimelineSignal[]
+  automaticEnforcement: false; limitation: string
+}
+
+export type CleanbotPolicyStatus = 'DRAFT' | 'REVIEW_REQUESTED' | 'APPROVED' | 'ACTIVE' | 'RETIRED'
+export interface CleanbotPolicy {
+  id: number; name: string; status: CleanbotPolicyStatus; blockedTerms: string[]; allowedTerms: string[]
+  threshold: number; categoryMapping: Record<string, string>; basePolicyId: number | null
+  activatedChangeSetId: number | null; revision: number; createdBy: OperatorRef
+  reviewedBy: OperatorRef | null; approvedBy: OperatorRef | null; activatedBy: OperatorRef | null
+  createdAt: string; updatedAt: string; activatedAt: string | null
+}
+export interface CleanbotPolicyUpsert {
+  name: string; blockedTerms: string[]; allowedTerms: string[]; threshold: number
+  categoryMapping: Record<string, string>; basePolicyId: number | null
+}
+export interface CleanbotSimulationSample { sampleId: string; previouslyBlocked: boolean; candidateBlocked: boolean; outcome: string }
+export interface CleanbotSimulation {
+  id: number; policyId: number; sampleCount: number; newlyBlocked: number; newlyAllowed: number
+  unchanged: number; failures: number; sampleLimit: number; samples: CleanbotSimulationSample[]
+  limitation: string; createdAt: string
 }
 
 /** 한 회차에서 한 작성자가 남긴 글 한 줄(HP-298) — 운영자용이라 가려진 글도 원문이 온다. */

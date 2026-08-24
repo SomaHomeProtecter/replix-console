@@ -19,6 +19,8 @@ import FeatureDriftPage from './pages/FeatureDriftPage'
 import IncidentTimelinePage from './pages/IncidentTimelinePage'
 import IncidentModePage from './pages/IncidentModePage'
 import IncidentPrimaryBanner from './components/IncidentPrimaryBanner'
+import OperationCasesPage from './pages/OperationCasesPage'
+import CleanbotPolicyPage from './pages/CleanbotPolicyPage'
 
 /**
  * 주요 조치 화면 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 기능 제어 · 사용자 상세.
@@ -81,6 +83,16 @@ function AppContent() {
             오탐 검토
           </NavLink>
           <NavLink
+              to="/operation-cases" aria-disabled={writing || undefined}
+              title={writingTitle} onClick={preventWhileWriting}>
+            운영 협업
+          </NavLink>
+          <NavLink
+              to="/moderation-policies" aria-disabled={writing || undefined}
+              title={writingTitle} onClick={preventWhileWriting}>
+            정책 실험
+          </NavLink>
+          <NavLink
               to="/feature-control" aria-disabled={writing || undefined}
               title={writingTitle} onClick={preventWhileWriting}>
             기능 제어
@@ -118,6 +130,8 @@ function AppContent() {
           <Route path="/suspensions" element={<SuspensionBoardPage />} />
           <Route path="/actions" element={<ActionLogPage />} />
           <Route path="/moderation-reviews" element={<ModerationReviewPage />} />
+          <Route path="/operation-cases" element={<OperationCasesPage />} />
+          <Route path="/moderation-policies" element={<CleanbotPolicyPage />} />
           <Route path="/feature-control" element={<FeatureControlPage />} />
           <Route path="/feature-control/change-sets" element={<FeatureChangeSetPage />} />
           <Route path="/feature-control/presets" element={<FeatureControlPresetPage />} />

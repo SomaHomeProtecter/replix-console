@@ -83,6 +83,10 @@ export const ACTION_LABELS: Record<AdminActionType, string> = {
   SUSPEND: '정지', UNSUSPEND: '정지 해제',
   WARN: '경고',
   RESOLVE_REPORT: '신고 종결', REOPEN_REPORT: '신고 재오픈',
+  EXPORT_USER_TIMELINE: '사용자 타임라인 내보내기',
+  POLICY_CREATE: '정책 초안 생성', POLICY_UPDATE: '정책 초안 수정',
+  POLICY_REVIEW_REQUEST: '정책 검토 요청', POLICY_APPROVE: '정책 승인',
+  POLICY_ACTIVATE: '정책 활성화', POLICY_RETIRE: '정책 폐기', POLICY_SIMULATE: '정책 dry-run',
 }
 
 /** 종결 결과를 앞자리에 쓰는 이름 — 라벨은 `<결과> · 신고 종결` 한 규칙으로 읽힌다. */
