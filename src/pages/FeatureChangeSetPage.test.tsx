@@ -23,8 +23,10 @@ const changeSet: FeatureChangeSet = {
   id: 7, environment: 'DEV', title: '채팅 점진 적용', purpose: '채팅 전송을 점진적으로 적용합니다',
   jiraReference: 'HP-343', incidentReference: null, status: 'DRAFT', risk: 'HIGH', version: 0,
   createdByUserId: 11, approvedByUserId: null, scheduledByUserId: null,
-  rollbackOfChangeSetId: null, approvalExpiresAt: null, requestedAt: null, approvedAt: null,
-  scheduledAt: null, appliedAt: null, failureCode: null, createdAt: '2026-08-24T00:00:00Z',
+  rollbackOfChangeSetId: null, autoRollbackEnabled: true, verificationWindowSeconds: 60,
+  approvalExpiresAt: null, requestedAt: null, approvedAt: null,
+  scheduledAt: null, appliedAt: null, verificationDueAt: null,
+  verificationCompletedAt: null, failureCode: null, createdAt: '2026-08-24T00:00:00Z',
   updatedAt: '2026-08-24T00:00:00Z', items: [{
     id: 1, sequence: 0, flagKey: flag.key, expectedRevision: 3,
     beforeState: JSON.stringify({ enabled: true, rolloutPercentage: 100 }),
@@ -67,7 +69,7 @@ describe('기능 변경 세트 화면(HP-343)', () => {
     const dialog = screen.getByRole('dialog')
     await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '채팅 점진 적용')
     await user.type(within(dialog).getByRole('textbox', { name: /변경 목적/ }), '채팅 기능을 일부 사용자부터 적용합니다')
-    await user.click(within(dialog).getByRole('checkbox'))
+    await user.click(within(dialog).getByRole('checkbox', { name: /채팅 전송/ }))
     await user.click(within(dialog).getByRole('button', { name: '25%' }))
     await user.click(within(dialog).getByRole('button', { name: '초안 생성 (1)' }))
 

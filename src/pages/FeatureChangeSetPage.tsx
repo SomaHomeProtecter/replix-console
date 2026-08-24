@@ -42,6 +42,8 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
   const [purpose, setPurpose] = useState('')
   const [jira, setJira] = useState('HP-343')
   const [incident, setIncident] = useState('')
+  const [autoRollback, setAutoRollback] = useState(true)
+  const [verificationWindow, setVerificationWindow] = useState(60)
   const [items, setItems] = useState<Record<string, FeatureChangeSetItemInput>>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -75,7 +77,8 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
     }
     const request: FeatureChangeSetCreate = {
       title: title.trim(), purpose: purpose.trim(), jiraReference: jira.trim() || null,
-      incidentReference: incident.trim() || null, items: selected,
+      incidentReference: incident.trim() || null, autoRollbackEnabled: autoRollback,
+      verificationWindowSeconds: verificationWindow, items: selected,
     }
     setBusy(true); setWriting(true); setError(null)
     try { onCreated(await createFeatureChangeSet(request)) }
@@ -99,6 +102,15 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
               placeholder="선택" onChange={(event) => setIncident(event.target.value)} /></label>
           <label className="span2"><span>변경 목적 <b>필수</b></span><textarea value={purpose} rows={2}
               maxLength={500} disabled={busy} onChange={(event) => setPurpose(event.target.value)} /></label>
+          <label className="span2 auto-rollback-policy">
+            <span><input type="checkbox" checked={autoRollback} disabled={busy}
+                onChange={(event) => setAutoRollback(event.target.checked)} /> runtime 불일치 자동 롤백</span>
+            <select aria-label="적용 관찰 구간" value={verificationWindow} disabled={busy || !autoRollback}
+                onChange={(event) => setVerificationWindow(Number(event.target.value))}>
+              <option value={30}>30초 관찰</option><option value={60}>1분 관찰</option>
+              <option value={300}>5분 관찰</option><option value={600}>10분 관찰</option>
+            </select>
+          </label>
         </div>
         <div className="change-picks" aria-label="변경 기능 선택">
           {flags.map((flag) => {
@@ -203,6 +215,8 @@ function ChangeSetDetail({ changeSet, onReload }: {
       <div><dt>참조</dt><dd>{[changeSet.jiraReference, changeSet.incidentReference].filter(Boolean).join(' · ') || '—'}</dd></div>
       <div><dt>작성/승인</dt><dd>#{changeSet.createdByUserId} / {changeSet.approvedByUserId ? `#${changeSet.approvedByUserId}` : '—'}</dd></div>
       <div><dt>예약/적용</dt><dd>{changeSet.scheduledAt ? formatKstShort(changeSet.scheduledAt) : '—'} / {changeSet.appliedAt ? formatKstShort(changeSet.appliedAt) : '—'}</dd></div>
+      <div><dt>자동 롤백</dt><dd>{changeSet.autoRollbackEnabled ? `${changeSet.verificationWindowSeconds}초 관찰` : '사용 안 함'}</dd></div>
+      <div><dt>검증 완료</dt><dd>{changeSet.verificationCompletedAt ? formatKstShort(changeSet.verificationCompletedAt) : changeSet.verificationDueAt ? `${formatKstShort(changeSet.verificationDueAt)} 이후` : '—'}</dd></div>
     </dl>
     <h3>변경 diff</h3>
     <div className="change-diffs">{changeSet.items.map((item) => {

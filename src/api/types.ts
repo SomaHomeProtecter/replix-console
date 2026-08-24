@@ -374,11 +374,15 @@ export interface FeatureChangeSet {
   approvedByUserId: number | null
   scheduledByUserId: number | null
   rollbackOfChangeSetId: number | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
   approvalExpiresAt: string | null
   requestedAt: string | null
   approvedAt: string | null
   scheduledAt: string | null
   appliedAt: string | null
+  verificationDueAt: string | null
+  verificationCompletedAt: string | null
   failureCode: string | null
   createdAt: string
   updatedAt: string
@@ -391,6 +395,8 @@ export interface FeatureChangeSetCreate {
   purpose: string
   jiraReference: string | null
   incidentReference: string | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
   items: FeatureChangeSetItemInput[]
 }
 
