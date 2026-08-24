@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   activateCleanbotPolicy, approveCleanbotPolicy, createCleanbotPolicy, listCleanbotPolicies,
-  requestCleanbotPolicyReview, simulateCleanbotPolicy, updateCleanbotPolicy,
+  requestCleanbotPolicyReview, retireCleanbotPolicy, simulateCleanbotPolicy, updateCleanbotPolicy,
 } from '../api/admin'
 import type { CleanbotPolicy, CleanbotSimulation } from '../api/types'
 import { env } from '../env'
@@ -74,6 +74,7 @@ export default function CleanbotPolicyPage() {
           {selected.status === 'DRAFT' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => requestCleanbotPolicyReview(selected.id, selected.revision, reason))}>검토 요청</button>}
           {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
           {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
+          {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
           <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { setSimulation(await simulateCleanbotPolicy(selected.id, 100)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }}>표본 dry-run</button>
         </div>
         {simulation && <div className="incident-guide"><strong>무변경 시뮬레이션 · 표본 {simulation.sampleCount}</strong>

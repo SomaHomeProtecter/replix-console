@@ -42,4 +42,14 @@ describe('클린봇 정책 화면(HP-347)', () => {
       name: '정책 후보 B', threshold: 0.7, categoryMapping: { 지역: 'regional_hate' },
     })))
   })
+  it('활성 정책을 사유와 revision으로 안전하게 폐기한다', async () => {
+    const user = userEvent.setup(); const active = { ...policy, status: 'ACTIVE' as const, revision: 3 }
+    vi.mocked(admin.listCleanbotPolicies).mockResolvedValue([active])
+    vi.mocked(admin.retireCleanbotPolicy).mockResolvedValue({ ...active, status: 'RETIRED', revision: 4 })
+    render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
+    await user.type(screen.getByLabelText('조치 사유'), 'DEV 검증 종료로 정책을 해제합니다')
+    await user.click(screen.getByRole('button', { name: '정책 폐기' }))
+    await waitFor(() => expect(admin.retireCleanbotPolicy)
+      .toHaveBeenCalledWith(1, 3, 'DEV 검증 종료로 정책을 해제합니다', undefined))
+  })
 })

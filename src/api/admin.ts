@@ -216,6 +216,8 @@ export const approveCleanbotPolicy = (id: number, revision: number, reason: stri
   policyWorkflow(id, 'approve', revision, reason)
 export const activateCleanbotPolicy = (id: number, revision: number, reason: string, changeSetId?: number) =>
   policyWorkflow(id, 'activate', revision, reason, changeSetId)
+export const retireCleanbotPolicy = (id: number, revision: number, reason: string, changeSetId?: number) =>
+  policyWorkflow(id, 'retire', revision, reason, changeSetId)
 export function simulateCleanbotPolicy(id: number, sampleLimit = 100): Promise<CleanbotSimulation> {
   return apiFetch(`/api/v1/admin/moderation-policies/${id}/simulations`, {
     method: 'POST', body: JSON.stringify({ sampleLimit }),
