@@ -5,7 +5,8 @@ import type {
   ModerationReviewStage, ModerationReviewView, ResolveResult, SuspendDuration, SuspendedUsers,
   SuspensionResult, UserDetail, UserSearchResult, WarningReason, WarningResult,
   EnvironmentMetadata,
-  FeatureChangeSet, FeatureChangeSetCreate, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
+  FeatureChangeSet, FeatureChangeSetCreate, FeatureControlPreset, FeatureControlPresetApply,
+  FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -258,5 +259,20 @@ export function rollbackFeatureChangeSet(
 export function dryRunFeatureChangeSet(id: number, userIds: number[]): Promise<FeatureDryRunRow[]> {
   return apiFetch(`/api/v1/admin/control/change-sets/${id}/dry-run`, {
     method: 'POST', body: JSON.stringify({ userIds }),
+  })
+}
+
+export function listFeatureControlPresets(): Promise<FeatureControlPreset[]> {
+  return apiFetch('/api/v1/admin/control/presets')
+}
+
+export function createPresetChangeSet(
+  preset: FeatureControlPreset, request: FeatureControlPresetApply,
+): Promise<FeatureChangeSet> {
+  return apiFetch(`/api/v1/admin/control/presets/${preset.id}`, {
+    method: 'POST', body: JSON.stringify(request),
+  }, {
+    target: `기능 제어 프리셋 ${preset.displayName}`,
+    change: `변경 세트 초안 생성 · ${preset.targets.length}개 플래그`, reason: request.reason,
   })
 }

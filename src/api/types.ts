@@ -406,6 +406,31 @@ export interface FeatureDryRunRow {
   currentEnabled: boolean
   proposedEnabled: boolean
 }
+
+export interface FeatureControlPresetTarget {
+  flagKey: string
+  displayName: string
+  enabled: boolean
+  rolloutPercentage: number
+}
+
+export interface FeatureControlPreset {
+  id: 'NORMAL_OPERATION' | 'READ_ONLY' | 'CHAT_BLOCK' | 'REPORT_LIMIT' | 'STAGE2_BYPASS'
+  displayName: string
+  description: string
+  risk: FeatureRisk
+  requiresExpiry: boolean
+  targets: FeatureControlPresetTarget[]
+}
+
+export interface FeatureControlPresetApply {
+  reason: string
+  expiresAt: string | null
+  jiraReference: string | null
+  incidentReference: string | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
+}
 import type { EnvironmentMetadata } from '../environment'
 
 export type { EnvironmentMetadata }

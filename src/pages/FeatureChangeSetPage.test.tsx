@@ -42,6 +42,12 @@ function renderPage() {
   </MemoryRouter>)
 }
 
+function renderSelectedPage() {
+  return render(<MemoryRouter initialEntries={['/feature-control/change-sets?selected=7']}>
+    <WritingProvider><FeatureChangeSetPage /></WritingProvider>
+  </MemoryRouter>)
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(admin.listFeatureChangeSets).mockResolvedValue([{ ...changeSet, events: [] }])
@@ -59,6 +65,12 @@ describe('기능 변경 세트 화면(HP-343)', () => {
     expect(screen.getByText('ON · 100%')).toBeInTheDocument()
     expect(screen.getByText('ON · 25%')).toBeInTheDocument()
     expect(screen.getByText('CREATED')).toBeInTheDocument()
+  })
+
+  it('프리셋 완료 링크의 selected 쿼리로 상세를 바로 연다', async () => {
+    renderSelectedPage()
+    expect(await screen.findByRole('complementary', { name: '변경 세트 #7 상세' })).toBeInTheDocument()
+    expect(admin.getFeatureChangeSet).toHaveBeenCalledWith(7)
   })
 
   it('여러 기능을 고를 수 있는 초안에서 rollout 프리셋을 API 계약으로 보낸다', async () => {

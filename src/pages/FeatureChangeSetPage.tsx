@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import {
   applyFeatureChangeSet, approveFeatureChangeSet, cancelFeatureChangeSet,
   createFeatureChangeSet, dryRunFeatureChangeSet, getFeatureChangeSet,
@@ -260,6 +261,7 @@ function ChangeSetDetail({ changeSet, onReload }: {
 }
 
 export default function FeatureChangeSetPage() {
+  const [searchParams] = useSearchParams()
   const [sets, setSets] = useState<FeatureChangeSet[]>([])
   const [flags, setFlags] = useState<FeatureFlagRow[]>([])
   const [selected, setSelected] = useState<FeatureChangeSet | null>(null)
@@ -278,7 +280,10 @@ export default function FeatureChangeSetPage() {
     } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
     finally { setLoading(false) }
   }, [selected?.id])
-  useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = Number(searchParams.get('selected'))
+    void load(Number.isSafeInteger(id) && id > 0 ? id : undefined)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const counts = useMemo(() => ({
     waiting: sets.filter((set) => ['DRAFT', 'REVIEW_REQUESTED', 'APPROVED', 'SCHEDULED'].includes(set.status)).length,
