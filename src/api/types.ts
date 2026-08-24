@@ -487,6 +487,13 @@ export interface IncidentTransition {
   residualRisk: string | null; followUpJira: string | null; reason: string; requestId: string
 }
 
+export type IncidentResourceType = 'CHANGE_SET' | 'NOTICE' | 'PRESET' | 'RUNBOOK' | 'DASHBOARD' | 'JIRA'
+
+export interface IncidentEventCreate {
+  expectedVersion: number; summary: string; sourceType: IncidentResourceType | null
+  sourceId: string | null; structuredPayload: string; requestId: string
+}
+
 export interface FeatureChangeSetCreate {
   title: string
   purpose: string

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { addIncidentNote, declareIncident, getIncident, listIncidents, transitionIncident, updateIncident } from '../api/admin'
-import type { Incident, IncidentDeclare, IncidentStatus, IncidentTransition } from '../api/types'
+import { addIncidentEvent, addIncidentNote, declareIncident, getIncident, listIncidents, transitionIncident, updateIncident } from '../api/admin'
+import type { Incident, IncidentDeclare, IncidentResourceType, IncidentStatus, IncidentTransition } from '../api/types'
 import { realmRoles } from '../auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { env } from '../env'
@@ -9,6 +9,15 @@ import { formatKstShort } from '../format'
 
 const STATUS: Record<IncidentStatus, string> = { DECLARED: '선언', INVESTIGATING: '조사', MITIGATING: '완화',
   MONITORING: '관찰', RESOLVED: '해결', CANCELLED: '취소' }
+const TRANSITIONS: Record<IncidentStatus, IncidentStatus[]> = {
+  DECLARED: ['INVESTIGATING', 'CANCELLED'], INVESTIGATING: ['MITIGATING', 'CANCELLED'],
+  MITIGATING: ['MONITORING', 'CANCELLED'], MONITORING: ['MITIGATING', 'RESOLVED', 'CANCELLED'],
+  RESOLVED: ['INVESTIGATING'], CANCELLED: ['INVESTIGATING'],
+}
+const RESOURCE_LABEL: Record<IncidentResourceType, string> = {
+  CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', PRESET: '장애 대응 프리셋',
+  RUNBOOK: '런북', DASHBOARD: '대시보드', JIRA: 'Jira',
+}
 const active = (status: IncidentStatus) => !['RESOLVED', 'CANCELLED'].includes(status)
 const writable = () => { const r = realmRoles(); return r.includes('admin') || (r.includes('feature_flag_operator')
   && (env.environment !== 'PROD' || r.includes('prod_change_approver'))) }
@@ -40,7 +49,7 @@ function DeclareDialog({ close, created }: { close: () => void; created: (row: I
 }
 
 function TransitionDialog({ incident, close, done }: { incident: Incident; close: () => void; done: (row: Incident) => void }) {
-  const [target, setTarget] = useState<IncidentStatus>(incident.status === 'DECLARED' ? 'INVESTIGATING' : 'MONITORING')
+  const [target, setTarget] = useState<IncidentStatus>(TRANSITIONS[incident.status][0])
   const [owner, setOwner] = useState(incident.ownerUserId?.toString() ?? ''); const [next, setNext] = useState('')
   const [metrics, setMetrics] = useState(''); const [criteria, setCriteria] = useState(''); const [monitorEnd, setMonitorEnd] = useState('')
   const [revisions, setRevisions] = useState(''); const [impactEnd, setImpactEnd] = useState(''); const [risk, setRisk] = useState('')
@@ -58,9 +67,10 @@ function TransitionDialog({ incident, close, done }: { incident: Incident; close
     <p className="sub">{incident.reference} · {STATUS[incident.status]} → {STATUS[target]} · {incident.environment}</p>
     {error && <div className="error-box" role="alert">{error}</div>}<div className="feature-form-grid">
       <label className="span2"><span>다음 상태</span><select value={target} onChange={(e) => setTarget(e.target.value as IncidentStatus)}>
-        {(['INVESTIGATING','MITIGATING','MONITORING','RESOLVED','CANCELLED'] as IncidentStatus[]).map((s) => <option key={s} value={s}>{STATUS[s]}</option>)}</select></label>
+        {TRANSITIONS[incident.status].map((s) => <option key={s} value={s}>{STATUS[s]}</option>)}</select></label>
       {target === 'INVESTIGATING' && <><label><span>담당자 사용자 ID</span><input value={owner} onChange={(e) => setOwner(e.target.value)} /></label>
         <label><span>다음 업데이트</span><input type="datetime-local" value={next} onChange={(e) => setNext(e.target.value)} /></label></>}
+      {target === 'MITIGATING' && <p className="span2 sub">완화 전에는 변경 세트·공지·프리셋 또는 운영 리소스를 먼저 연결하세요.</p>}
       {target === 'MONITORING' && <><label><span>관찰 지표</span><input value={metrics} onChange={(e) => setMetrics(e.target.value)} /></label>
         <label><span>관찰 종료</span><input type="datetime-local" value={monitorEnd} onChange={(e) => setMonitorEnd(e.target.value)} /></label>
         <label className="span2"><span>성공 기준</span><textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} /></label></>}
@@ -97,25 +107,54 @@ function EditDialog({ incident, close, done }: { incident: Incident; close: () =
   </div></div>
 }
 
+function ResourceLinkDialog({ incident, close, done }: { incident: Incident; close: () => void; done: (row: Incident) => void }) {
+  const [sourceType, setSourceType] = useState<IncidentResourceType>('CHANGE_SET')
+  const [sourceId, setSourceId] = useState(''); const [summary, setSummary] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const submit = async () => {
+    if (!sourceId.trim() || summary.trim().length < 10) { setError('리소스 ID와 10자 이상의 연결 사유를 입력하세요'); return }
+    try { done(await addIncidentEvent(incident.id, { expectedVersion: incident.version, sourceType,
+      sourceId: sourceId.trim(), summary: summary.trim(), structuredPayload: '{}', requestId: crypto.randomUUID() })) }
+    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
+  }
+  return <div className="dialog-backdrop"><div className="dialog incident-dialog" role="dialog" aria-modal="true" aria-labelledby="resource-title">
+    <button className="modal-close" aria-label="닫기" onClick={close}>✕</button><h2 id="resource-title">완화 리소스 연결</h2>
+    <p className="sub">{incident.reference} · 연결 사실과 근거는 삭제할 수 없는 이벤트로 남습니다.</p>
+    {error && <div className="error-box" role="alert">{error}</div>}<div className="feature-form-grid">
+      <label><span>리소스 유형</span><select value={sourceType} onChange={(event) => { setSourceType(event.target.value as IncidentResourceType); setSourceId('') }}>
+        {(Object.keys(RESOURCE_LABEL) as IncidentResourceType[]).map((type) => <option key={type} value={type}>{RESOURCE_LABEL[type]}</option>)}</select></label>
+      {sourceType === 'PRESET' ? <label><span>리소스 ID</span><select value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
+        <option value="">선택</option><option value="NORMAL_OPERATION">정상 운영</option><option value="READ_ONLY">읽기 전용</option>
+        <option value="CHAT_BLOCK">채팅 차단</option><option value="REPORT_LIMIT">신고 제한</option><option value="STAGE2_BYPASS">2차 모더레이션 우회</option>
+      </select></label> : <label><span>리소스 ID</span><input value={sourceId} placeholder={sourceType === 'CHANGE_SET' || sourceType === 'NOTICE' ? '숫자 ID' : 'URL 또는 식별자'} onChange={(event) => setSourceId(event.target.value)} /></label>}
+      <label className="span2"><span>연결 사유</span><textarea rows={3} value={summary} maxLength={500} onChange={(event) => setSummary(event.target.value)} /></label>
+    </div><div className="dialog-actions"><button className="btn" onClick={close}>취소</button>
+      <button className="btn btn-blind" onClick={() => void submit()}>리소스 연결</button></div></div></div>
+}
+
 function Detail({ incident, reload }: { incident: Incident; reload: (id: number) => Promise<void> }) {
-  const [transitioning, setTransitioning] = useState(false); const [editing, setEditing] = useState(false); const [note, setNote] = useState(''); const [error, setError] = useState<string | null>(null)
+  const [transitioning, setTransitioning] = useState(false); const [editing, setEditing] = useState(false)
+  const [linking, setLinking] = useState(false); const [note, setNote] = useState(''); const [error, setError] = useState<string | null>(null)
   const addNote = async () => { if (note.trim().length < 10) { setError('운영 메모를 10자 이상 입력하세요'); return }
     try { await addIncidentNote(incident.id, incident.version, note.trim()); setNote(''); await reload(incident.id) }
     catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) } }
   return <aside className="change-detail incident-detail" aria-label={`인시던트 ${incident.reference} 상세`}>
     <div className="change-detail-head"><div><span className={`incident-sev ${incident.severity.toLowerCase()}`}>{incident.severity}</span>
       <h2>{incident.title}</h2><p>{incident.reference} · {incident.environment}</p></div>
-      {active(incident.status) && <div className="incident-head-actions"><button className="btn" disabled={!writable()} onClick={() => setEditing(true)}>정보 수정</button>
-        <button className="btn" disabled={!writable()} onClick={() => setTransitioning(true)}>상태 변경</button></div>}</div>
+      <div className="incident-head-actions">{active(incident.status) && <><button className="btn" disabled={!writable()} onClick={() => setEditing(true)}>정보 수정</button>
+        <button className="btn" disabled={!writable()} onClick={() => setLinking(true)}>리소스 연결</button></>}
+        <button className="btn" disabled={!writable()} onClick={() => setTransitioning(true)}>{active(incident.status) ? '상태 변경' : '인시던트 재개'}</button></div></div>
     <dl className="change-summary"><div><dt>상태</dt><dd>{STATUS[incident.status]}</dd></div><div><dt>담당자</dt><dd>{incident.ownerUserId ? `#${incident.ownerUserId}` : '미지정'}</dd></div>
       <div><dt>다음 업데이트</dt><dd>{incident.nextUpdateAt ? formatKstShort(incident.nextUpdateAt) : '—'}</dd></div><div><dt>후속 Jira</dt><dd>{incident.followUpJira ?? '—'}</dd></div></dl>
     <div className="incident-impact"><strong>현재 영향</strong><p>{incident.impactSummary}</p></div>
     <div className="change-actions"><label><span>운영 메모</span><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
       {error && <div className="error-box" role="alert">{error}</div>}<div className="dialog-actions"><button className="btn" disabled={!canNote()} onClick={() => void addNote()}>메모 추가</button>
         <Link className="btn" to={`/feature-control/incidents?reference=${encodeURIComponent(incident.reference)}`}>참조 타임라인</Link></div></div>
-    <h3>인시던트 이벤트</h3><ol className="change-events">{incident.events.map((event) => <li key={event.id}><span>{formatKstShort(event.occurredAt)}</span><strong>{event.type}</strong><p>{event.summary}</p></li>)}</ol>
+    <h3>인시던트 이벤트</h3><ol className="change-events">{incident.events.map((event) => <li key={event.id}><span>{formatKstShort(event.occurredAt)}</span><strong>{event.type}</strong>
+      <p>{event.summary}{event.sourceType && event.sourceId ? ` · ${event.sourceType} ${event.sourceId}` : ''}</p></li>)}</ol>
     {transitioning && <TransitionDialog incident={incident} close={() => setTransitioning(false)} done={(row) => { setTransitioning(false); void reload(row.id) }} />}
     {editing && <EditDialog incident={incident} close={() => setEditing(false)} done={(row) => { setEditing(false); void reload(row.id) }} />}
+    {linking && <ResourceLinkDialog incident={incident} close={() => setLinking(false)} done={(row) => { setLinking(false); void reload(row.id) }} />}
   </aside>
 }
 

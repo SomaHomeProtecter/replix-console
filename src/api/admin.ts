@@ -7,7 +7,8 @@ import type {
   EnvironmentMetadata,
   FeatureChangeSet, FeatureChangeSetCreate, FeatureControlPreset, FeatureControlPresetApply,
   FeatureDriftReapply, FeatureDriftState, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
-  Incident, IncidentDeclare, IncidentTimeline, IncidentTransition, IncidentUpdate, ServiceNotice, ServiceNoticeCreate,
+  Incident, IncidentDeclare, IncidentEventCreate, IncidentTimeline, IncidentTransition, IncidentUpdate,
+  ServiceNotice, ServiceNoticeCreate,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -348,8 +349,13 @@ export function updateIncident(id: number, request: IncidentUpdate): Promise<Inc
     { target: `인시던트 #${id}`, change: `${request.severity} · 담당/영향 수정`, reason: request.reason })
 }
 export function addIncidentNote(id: number, version: number, summary: string): Promise<Incident> {
-  return apiFetch(`/api/v1/admin/control/incident-mode/${id}/events`, { method: 'POST', body: JSON.stringify({
+  return addIncidentEvent(id, {
     expectedVersion: version, summary, sourceType: null, sourceId: null,
     structuredPayload: '{}', requestId: crypto.randomUUID(),
-  }) }, { target: `인시던트 #${id}`, change: '운영 메모 추가', reason: summary })
+  }, '운영 메모 추가')
+}
+export function addIncidentEvent(id: number, request: IncidentEventCreate, change = '리소스 연결'): Promise<Incident> {
+  return apiFetch(`/api/v1/admin/control/incident-mode/${id}/events`,
+    { method: 'POST', body: JSON.stringify(request) },
+    { target: `인시던트 #${id}`, change, reason: request.summary })
 }

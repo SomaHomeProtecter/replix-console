@@ -43,10 +43,11 @@ describe('Incident Mode 화면(HP-343)', () => {
   })
 
   it('상태 전이 모달에서 관찰 지표와 성공 기준을 보낸다', async () => {
-    const user = userEvent.setup(); vi.mocked(admin.transitionIncident).mockResolvedValue({ ...incident, status: 'MONITORING' })
+    const user = userEvent.setup(); const mitigating = { ...incident, status: 'MITIGATING' as const }
+    vi.mocked(admin.listIncidents).mockResolvedValue([mitigating]); vi.mocked(admin.getIncident).mockResolvedValue(mitigating)
+    vi.mocked(admin.transitionIncident).mockResolvedValue({ ...incident, status: 'MONITORING' })
     render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><IncidentModePage /></MemoryRouter>)
     await user.click(await screen.findByRole('button', { name: '상태 변경' })); const dialog = screen.getByRole('dialog')
-    await user.selectOptions(within(dialog).getByRole('combobox', { name: '다음 상태' }), 'MONITORING')
     await user.type(within(dialog).getByRole('textbox', { name: '관찰 지표' }), '채팅 오류율과 Ready 수')
     await user.type(within(dialog).getByRole('textbox', { name: '성공 기준' }), '오류율 1퍼센트 미만 유지')
     await user.type(within(dialog).getByLabelText('관찰 종료'), '2026-08-25T03:00')
@@ -54,5 +55,22 @@ describe('Incident Mode 화면(HP-343)', () => {
     await user.click(within(dialog).getByRole('button', { name: '상태 변경' }))
     await waitFor(() => expect(admin.transitionIncident).toHaveBeenCalledWith(9, expect.objectContaining({
       expectedVersion: 2, targetStatus: 'MONITORING', observationMetrics: '채팅 오류율과 Ready 수' })))
+  })
+
+  it('현재 상태에서 허용된 다음 단계만 보이고 완화 리소스를 연결한다', async () => {
+    const user = userEvent.setup(); vi.mocked(admin.addIncidentEvent).mockResolvedValue({ ...incident, version: 3 })
+    render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><IncidentModePage /></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: '상태 변경' })); let dialog = screen.getByRole('dialog')
+    const options = within(dialog).getByRole('combobox', { name: '다음 상태' }).querySelectorAll('option')
+    expect([...options].map((option) => option.textContent)).toEqual(['완화', '취소'])
+    await user.click(within(dialog).getByRole('button', { name: '닫기' }))
+
+    await user.click(screen.getByRole('button', { name: '리소스 연결' })); dialog = screen.getByRole('dialog')
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: '리소스 유형' }), 'PRESET')
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: '리소스 ID' }), 'CHAT_BLOCK')
+    await user.type(within(dialog).getByRole('textbox', { name: '연결 사유' }), '채팅 차단 프리셋을 완화 근거로 연결합니다')
+    await user.click(within(dialog).getByRole('button', { name: '리소스 연결' }))
+    await waitFor(() => expect(admin.addIncidentEvent).toHaveBeenCalledWith(9, expect.objectContaining({
+      expectedVersion: 2, sourceType: 'PRESET', sourceId: 'CHAT_BLOCK' })))
   })
 })
