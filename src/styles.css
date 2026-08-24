@@ -178,7 +178,9 @@ button { font: inherit; }
 }
 .btn:hover { filter: brightness(0.97); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.btn:focus-visible, .btn-logout:focus-visible, .chip-f:focus-visible, a:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: 2px;
+}
 .btn-blind { background: var(--ink); color: #fff; border-color: var(--ink); }         /* 가림 — 기본(잉크) */
 .btn-susp { background: var(--red-soft); color: var(--red); border-color: var(--red-border); }
 .btn-danger-solid { background: var(--red); color: #fff; border-color: var(--red); }   /* 정지 확정 전용 */
@@ -804,4 +806,20 @@ table.action-table {
   .grafana-link { display: none; }
   .review-list li { grid-template-columns: 90px 112px minmax(160px, 1fr) 118px; }
   .review-category { display: none; }
+}
+
+/* 좁은 화면에서는 공통 톱바를 세 줄로 접는다. 탭과 기능 표는 각각 자기 영역에서만
+   가로 스크롤되어야 하며, 검색·로그아웃 때문에 문서 전체가 옆으로 밀리면 안 된다. */
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; }
+  .brand { order: 1; }
+  .env-selector { order: 2; }
+  .topbar-right { order: 3; margin-left: auto; }
+  .topnav {
+    order: 4; width: 100%; max-width: 100%; min-width: 0; margin-left: 0;
+    overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin;
+  }
+  .user-search { order: 5; width: 100%; margin-left: 0; }
+  .user-search-results { left: 0; right: auto; width: 100%; }
+  .content { padding: 12px; }
 }
