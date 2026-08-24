@@ -440,6 +440,8 @@ export interface IncidentTimelineEntry {
   jiraReference: string | null
   presetId: FeatureControlPreset['id'] | null
   linkedChangeSetId: number | null
+  linkedResourceType: IncidentResourceType | null
+  linkedResourceId: string | null
   revisions: IncidentRevisionReference[]
 }
 

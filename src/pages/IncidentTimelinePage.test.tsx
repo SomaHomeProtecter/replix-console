@@ -9,17 +9,22 @@ import IncidentTimelinePage from './IncidentTimelinePage'
 vi.mock('../api/admin')
 
 const timeline: IncidentTimeline = {
-  incidentReference: 'INC 42/CHAT', environment: 'DEV', jiraReferences: ['HP-343'], sourceCount: 2,
+  incidentReference: 'INC 42/CHAT', environment: 'DEV', jiraReferences: ['HP-343'], sourceCount: 3,
   entries: [
     { sourceType: 'CHANGE_SET', sourceId: 17, sourceTitle: '[프리셋] 채팅 차단',
       sourceStatus: 'SUCCEEDED', eventType: 'APPLIED', reason: '장애 확산 차단', actorUserId: 3,
       occurredAt: '2026-08-24T00:00:00Z', jiraReference: 'HP-343', presetId: 'CHAT_BLOCK',
-      linkedChangeSetId: null, revisions: [{ flagKey: 'chat.message.send.enabled',
+      linkedChangeSetId: null, linkedResourceType: null, linkedResourceId: null,
+      revisions: [{ flagKey: 'chat.message.send.enabled',
         expectedRevision: 4, appliedRevision: 5 }] },
     { sourceType: 'NOTICE', sourceId: 8, sourceTitle: '채팅 장애 안내', sourceStatus: 'PUBLISHED',
       eventType: 'PUBLISHED', reason: '사용자 공지 게시', actorUserId: 4,
       occurredAt: '2026-08-24T00:01:00Z', jiraReference: 'HP-343', presetId: 'CHAT_BLOCK',
-      linkedChangeSetId: 17, revisions: [] },
+      linkedChangeSetId: 17, linkedResourceType: null, linkedResourceId: null, revisions: [] },
+    { sourceType: 'INCIDENT', sourceId: 9, sourceTitle: '채팅 장애', sourceStatus: 'MITIGATING',
+      eventType: 'RESOURCE_LINKED', reason: '채팅 차단 프리셋 연결', actorUserId: 3,
+      occurredAt: '2026-08-24T00:02:00Z', jiraReference: 'HP-343', presetId: null,
+      linkedChangeSetId: null, linkedResourceType: 'PRESET', linkedResourceId: 'CHAT_BLOCK', revisions: [] },
   ],
 }
 
@@ -37,6 +42,7 @@ describe('인시던트 통합 타임라인(HP-343)', () => {
     expect(within(list).getByText('변경 세트')).toBeInTheDocument()
     expect(within(list).getByText('사용자 공지')).toBeInTheDocument()
     expect(within(list).getAllByText('프리셋 CHAT_BLOCK')).toHaveLength(2)
+    expect(within(list).getByText('연결 PRESET CHAT_BLOCK')).toBeInTheDocument()
     expect(within(list).getByText('r4 → r5')).toBeInTheDocument()
     expect(within(list).getAllByRole('link', { name: /변경 세트 #17/ })).toHaveLength(2)
   })

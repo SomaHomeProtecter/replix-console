@@ -69,6 +69,12 @@ export default function IncidentTimelinePage() {
                 {entry.linkedChangeSetId && <Link to={`/feature-control/change-sets?selected=${entry.linkedChangeSetId}`}>
                   연결 변경 세트 #{entry.linkedChangeSetId}</Link>}
                 {entry.presetId && <span>프리셋 {entry.presetId}</span>}
+                {entry.linkedResourceType === 'CHANGE_SET' && entry.linkedResourceId && <Link to={`/feature-control/change-sets?selected=${entry.linkedResourceId}`}>
+                  연결 변경 세트 #{entry.linkedResourceId}</Link>}
+                {entry.linkedResourceType === 'NOTICE' && entry.linkedResourceId && <Link to={`/feature-control/notices?selected=${entry.linkedResourceId}`}>
+                  연결 공지 #{entry.linkedResourceId}</Link>}
+                {entry.linkedResourceType && entry.linkedResourceId && !['CHANGE_SET', 'NOTICE'].includes(entry.linkedResourceType)
+                  && <span>연결 {entry.linkedResourceType} {entry.linkedResourceId}</span>}
                 {entry.jiraReference && <span>Jira {entry.jiraReference}</span>}
                 <span>운영자 #{entry.actorUserId}</span>
               </div>
