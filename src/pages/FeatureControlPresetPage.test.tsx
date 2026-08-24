@@ -26,7 +26,7 @@ const created: FeatureChangeSet = {
   rollbackOfChangeSetId: null, autoRollbackEnabled: true, verificationWindowSeconds: 60,
   approvalExpiresAt: null, requestedAt: null, approvedAt: null, scheduledAt: null,
   appliedAt: null, verificationDueAt: null, verificationCompletedAt: null, failureCode: null,
-  createdAt: '2026-08-24T00:00:00Z', updatedAt: '2026-08-24T00:00:00Z', items: [], events: [],
+  createdAt: '2026-08-24T00:00:00Z', updatedAt: '2026-08-24T00:00:00Z', items: [], events: [], findings: [],
 }
 
 beforeEach(() => {

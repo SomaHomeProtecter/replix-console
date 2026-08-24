@@ -27,7 +27,7 @@ const changeSet: FeatureChangeSet = {
   approvalExpiresAt: null, requestedAt: null, approvedAt: null,
   scheduledAt: null, appliedAt: null, verificationDueAt: null,
   verificationCompletedAt: null, failureCode: null, createdAt: '2026-08-24T00:00:00Z',
-  updatedAt: '2026-08-24T00:00:00Z', items: [{
+  updatedAt: '2026-08-24T00:00:00Z', findings: [], items: [{
     id: 1, sequence: 0, flagKey: flag.key, expectedRevision: 3,
     beforeState: JSON.stringify({ enabled: true, rolloutPercentage: 100 }),
     targetEnabled: true, targetRolloutPercentage: 25, targetExpiresAt: null,
@@ -71,6 +71,20 @@ describe('기능 변경 세트 화면(HP-343)', () => {
     renderSelectedPage()
     expect(await screen.findByRole('complementary', { name: '변경 세트 #7 상세' })).toBeInTheDocument()
     expect(admin.getFeatureChangeSet).toHaveBeenCalledWith(7)
+  })
+
+  it('runtime drift 경고와 적용 차단 사유를 상세에 함께 보여준다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.getFeatureChangeSet).mockResolvedValue({ ...changeSet, findings: [{
+      severity: 'BLOCKING', code: 'RUNTIME_DRIFT',
+      message: '관찰 구간 밖의 runtime revision 불일치가 남아 있습니다', flagKey: flag.key,
+    }] })
+    renderPage()
+    await user.click(await screen.findByText('채팅 점진 적용'))
+
+    const guard = await screen.findByLabelText('변경 안전 점검')
+    expect(guard).toHaveTextContent('적용 차단 · RUNTIME_DRIFT')
+    expect(guard).toHaveTextContent(flag.key)
   })
 
   it('여러 기능을 고를 수 있는 초안에서 rollout 프리셋을 API 계약으로 보낸다', async () => {

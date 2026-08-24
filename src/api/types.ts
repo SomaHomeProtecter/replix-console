@@ -388,6 +388,14 @@ export interface FeatureChangeSet {
   updatedAt: string
   items: FeatureChangeSetItem[]
   events: FeatureChangeSetEvent[]
+  findings: FeatureGuardFinding[]
+}
+
+export interface FeatureGuardFinding {
+  severity: 'WARNING' | 'BLOCKING'
+  code: string
+  message: string
+  flagKey: string | null
 }
 
 export interface FeatureChangeSetCreate {

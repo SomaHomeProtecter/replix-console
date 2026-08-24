@@ -219,6 +219,13 @@ function ChangeSetDetail({ changeSet, onReload }: {
       <div><dt>자동 롤백</dt><dd>{changeSet.autoRollbackEnabled ? `${changeSet.verificationWindowSeconds}초 관찰` : '사용 안 함'}</dd></div>
       <div><dt>검증 완료</dt><dd>{changeSet.verificationCompletedAt ? formatKstShort(changeSet.verificationCompletedAt) : changeSet.verificationDueAt ? `${formatKstShort(changeSet.verificationDueAt)} 이후` : '—'}</dd></div>
     </dl>
+    {changeSet.findings.length > 0 && <div className="guard-findings" aria-label="변경 안전 점검">
+      {changeSet.findings.map((finding) => <div className={`guard-${finding.severity.toLowerCase()}`}
+          key={`${finding.code}-${finding.flagKey ?? 'set'}`}>
+        <strong>{finding.severity === 'BLOCKING' ? '적용 차단' : '확인 필요'} · {finding.code}</strong>
+        <p>{finding.message}</p>{finding.flagKey && <code>{finding.flagKey}</code>}
+      </div>)}
+    </div>}
     <h3>변경 diff</h3>
     <div className="change-diffs">{changeSet.items.map((item) => {
       const before = JSON.parse(item.beforeState) as { enabled: boolean; rolloutPercentage: number }
