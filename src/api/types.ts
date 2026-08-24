@@ -301,6 +301,8 @@ export interface FeatureFlagRow {
   expiresAt: string | null
   owner: string
   risk: FeatureRisk
+  dependencies: string[]
+  conflicts: string[]
   allowlistedUserIds: number[]
   revision: number
   connected: boolean

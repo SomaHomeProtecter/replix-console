@@ -13,7 +13,7 @@ const row = (overrides: Partial<FeatureFlagRow> = {}): FeatureFlagRow => ({
   key: 'chat.message.send.enabled', displayName: '채팅 전송',
   description: '새 공개 채팅과 답글 전송을 제어합니다.', environment: 'DEV',
   enabled: true, effectiveEnabled: true, rolloutPercentage: 100,
-  expiresAt: null, owner: 'Chat', risk: 'HIGH', allowlistedUserIds: [],
+  expiresAt: null, owner: 'Chat', risk: 'HIGH', dependencies: [], conflicts: [], allowlistedUserIds: [],
   revision: 3, connected: true, registryDigest: 'abcdef0123456789',
   updatedAt: '2026-08-24T03:00:00Z', activeInstances: 2, mismatchedInstances: 0,
   converged: true, lastReportedAt: '2026-08-24T03:01:00Z', ...overrides,
