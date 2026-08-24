@@ -7,6 +7,7 @@ import type {
   EnvironmentMetadata,
   FeatureChangeSet, FeatureChangeSetCreate, FeatureControlPreset, FeatureControlPresetApply,
   FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
+  ServiceNotice, ServiceNoticeCreate,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -275,4 +276,39 @@ export function createPresetChangeSet(
     target: `기능 제어 프리셋 ${preset.displayName}`,
     change: `변경 세트 초안 생성 · ${preset.targets.length}개 플래그`, reason: request.reason,
   })
+}
+
+export function listServiceNotices(): Promise<ServiceNotice[]> {
+  return apiFetch('/api/v1/admin/control/notices')
+}
+
+export function getServiceNotice(id: number): Promise<ServiceNotice> {
+  return apiFetch(`/api/v1/admin/control/notices/${id}`)
+}
+
+export function createServiceNotice(notice: ServiceNoticeCreate): Promise<ServiceNotice> {
+  return apiFetch('/api/v1/admin/control/notices', {
+    method: 'POST', body: JSON.stringify(notice),
+  }, { target: `사용자 공지 ${notice.title}`, change: '초안 생성', reason: notice.internalNote })
+}
+
+function noticeWorkflow(id: number, action: string, version: number, reason: string) {
+  return apiFetch<ServiceNotice>(`/api/v1/admin/control/notices/${id}/${action}`, {
+    method: 'POST', body: JSON.stringify({ expectedVersion: version, reason }),
+  }, { target: `사용자 공지 #${id}`, change: action, reason })
+}
+
+export const publishServiceNotice = (id: number, version: number, reason: string) =>
+  noticeWorkflow(id, 'publish', version, reason)
+export const endServiceNotice = (id: number, version: number, reason: string) =>
+  noticeWorkflow(id, 'end', version, reason)
+export const cancelServiceNotice = (id: number, version: number, reason: string) =>
+  noticeWorkflow(id, 'cancel', version, reason)
+
+export function scheduleServiceNotice(
+  id: number, version: number, startsAt: string, endsAt: string | null, reason: string,
+): Promise<ServiceNotice> {
+  return apiFetch(`/api/v1/admin/control/notices/${id}/schedule`, {
+    method: 'POST', body: JSON.stringify({ expectedVersion: version, startsAt, endsAt, reason }),
+  }, { target: `사용자 공지 #${id}`, change: `예약 게시 → ${startsAt}`, reason })
 }

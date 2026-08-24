@@ -431,6 +431,54 @@ export interface FeatureControlPresetApply {
   autoRollbackEnabled: boolean
   verificationWindowSeconds: number
 }
+
+export type ServiceNoticeKind = 'NOTICE' | 'MAINTENANCE' | 'INCIDENT'
+export type ServiceNoticeStatus = 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'ENDED' | 'CANCELLED'
+
+export interface ServiceNoticeEvent {
+  id: number
+  type: string
+  actorUserId: number
+  reason: string
+  payload: string
+  createdAt: string
+}
+
+export interface ServiceNotice {
+  id: number
+  environment: FeatureFlagRow['environment']
+  kind: ServiceNoticeKind
+  title: string
+  publicMessage: string
+  internalNote: string
+  status: ServiceNoticeStatus
+  linkedChangeSetId: number | null
+  presetId: FeatureControlPreset['id'] | null
+  jiraReference: string | null
+  incidentReference: string | null
+  version: number
+  createdByUserId: number
+  publishedByUserId: number | null
+  endedByUserId: number | null
+  startsAt: string | null
+  endsAt: string | null
+  publishedAt: string | null
+  endedAt: string | null
+  createdAt: string
+  updatedAt: string
+  events: ServiceNoticeEvent[]
+}
+
+export interface ServiceNoticeCreate {
+  kind: ServiceNoticeKind
+  title: string
+  publicMessage: string
+  internalNote: string
+  linkedChangeSetId: number | null
+  presetId: FeatureControlPreset['id'] | null
+  jiraReference: string | null
+  incidentReference: string | null
+}
 import type { EnvironmentMetadata } from '../environment'
 
 export type { EnvironmentMetadata }
