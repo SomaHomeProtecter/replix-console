@@ -1,27 +1,32 @@
-import { type FormEvent, useState } from 'react'
-import { Link } from 'react-router'
+import { type FormEvent, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import { getIncidentTimeline } from '../api/admin'
 import type { IncidentTimeline } from '../api/types'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { formatKstShort } from '../format'
 
-const SOURCE_LABEL = { CHANGE_SET: '변경 세트', NOTICE: '사용자 공지' } as const
+const SOURCE_LABEL = { CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', INCIDENT: '인시던트' } as const
 
 export default function IncidentTimelinePage() {
+  const [params] = useSearchParams()
   const [reference, setReference] = useState('')
   const [timeline, setTimeline] = useState<IncidentTimeline | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const search = async (event: FormEvent) => {
-    event.preventDefault()
-    const incident = reference.trim()
-    if (!incident) { setError('인시던트 참조를 입력하세요'); return }
+  const load = async (incident: string) => {
     setLoading(true); setError(null)
     try { setTimeline(await getIncidentTimeline(incident)) }
     catch (failure) { setTimeline(null); setError(failure instanceof Error ? failure.message : String(failure)) }
     finally { setLoading(false) }
   }
+  const search = (event: FormEvent) => {
+    event.preventDefault(); const incident = reference.trim()
+    if (!incident) { setError('인시던트 참조를 입력하세요'); return }
+    void load(incident)
+  }
+  useEffect(() => { const incident = params.get('reference')?.trim()
+    if (incident) { setReference(incident); void load(incident) } }, []) // eslint-disable-line
 
   return <section className="feature-control incident-page" aria-label="인시던트 통합 타임라인">
     <div className="board-head"><div><h1>기능 제어</h1>
@@ -29,7 +34,7 @@ export default function IncidentTimelinePage() {
       {timeline && <span className="filter-note">연결 소스 {timeline.sourceCount} · 이벤트 {timeline.entries.length}</span>}
     </div>
     <FeatureControlTabs />
-    <form className="incident-search" role="search" onSubmit={(event) => void search(event)}>
+    <form className="incident-search" role="search" onSubmit={search}>
       <label htmlFor="incident-reference">인시던트 참조</label>
       <input id="incident-reference" value={reference} maxLength={100} placeholder="예: INC-42"
           disabled={loading} onChange={(event) => setReference(event.target.value)} />
@@ -59,6 +64,8 @@ export default function IncidentTimelinePage() {
                   변경 세트 #{entry.sourceId}</Link>}
                 {entry.sourceType === 'NOTICE' && <Link to={`/feature-control/notices?selected=${entry.sourceId}`}>
                   공지 #{entry.sourceId}</Link>}
+                {entry.sourceType === 'INCIDENT' && <Link to={`/feature-control/incident-mode?selected=${entry.sourceId}`}>
+                  인시던트 #{entry.sourceId}</Link>}
                 {entry.linkedChangeSetId && <Link to={`/feature-control/change-sets?selected=${entry.linkedChangeSetId}`}>
                   연결 변경 세트 #{entry.linkedChangeSetId}</Link>}
                 {entry.presetId && <span>프리셋 {entry.presetId}</span>}

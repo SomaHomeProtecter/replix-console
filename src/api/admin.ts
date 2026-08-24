@@ -7,7 +7,7 @@ import type {
   EnvironmentMetadata,
   FeatureChangeSet, FeatureChangeSetCreate, FeatureControlPreset, FeatureControlPresetApply,
   FeatureDriftReapply, FeatureDriftState, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
-  IncidentTimeline, ServiceNotice, ServiceNoticeCreate,
+  Incident, IncidentDeclare, IncidentTimeline, IncidentTransition, IncidentUpdate, ServiceNotice, ServiceNoticeCreate,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -330,4 +330,26 @@ export function createDriftReapplyChangeSet(
 
 export function getIncidentTimeline(reference: string): Promise<IncidentTimeline> {
   return apiFetch(`/api/v1/admin/control/incidents/timeline${qs({ reference })}`)
+}
+
+export const listIncidents = (): Promise<Incident[]> => apiFetch('/api/v1/admin/control/incident-mode')
+export const getIncident = (id: number): Promise<Incident> => apiFetch(`/api/v1/admin/control/incident-mode/${id}`)
+export function declareIncident(request: IncidentDeclare): Promise<Incident> {
+  return apiFetch('/api/v1/admin/control/incident-mode', { method: 'POST', body: JSON.stringify(request) },
+    { target: `인시던트 ${request.reference}`, change: `${request.severity} 선언`, reason: request.reason })
+}
+export function transitionIncident(id: number, request: IncidentTransition): Promise<Incident> {
+  return apiFetch(`/api/v1/admin/control/incident-mode/${id}/transitions`,
+    { method: 'POST', body: JSON.stringify(request) },
+    { target: `인시던트 #${id}`, change: `상태 → ${request.targetStatus}`, reason: request.reason })
+}
+export function updateIncident(id: number, request: IncidentUpdate): Promise<Incident> {
+  return apiFetch(`/api/v1/admin/control/incident-mode/${id}`, { method: 'PATCH', body: JSON.stringify(request) },
+    { target: `인시던트 #${id}`, change: `${request.severity} · 담당/영향 수정`, reason: request.reason })
+}
+export function addIncidentNote(id: number, version: number, summary: string): Promise<Incident> {
+  return apiFetch(`/api/v1/admin/control/incident-mode/${id}/events`, { method: 'POST', body: JSON.stringify({
+    expectedVersion: version, summary, sourceType: null, sourceId: null,
+    structuredPayload: '{}', requestId: crypto.randomUUID(),
+  }) }, { target: `인시던트 #${id}`, change: '운영 메모 추가', reason: summary })
 }

@@ -17,6 +17,8 @@ import FeatureControlPresetPage from './pages/FeatureControlPresetPage'
 import ServiceNoticePage from './pages/ServiceNoticePage'
 import FeatureDriftPage from './pages/FeatureDriftPage'
 import IncidentTimelinePage from './pages/IncidentTimelinePage'
+import IncidentModePage from './pages/IncidentModePage'
+import IncidentPrimaryBanner from './components/IncidentPrimaryBanner'
 
 /**
  * 주요 조치 화면 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 기능 제어 · 사용자 상세.
@@ -109,6 +111,7 @@ function AppContent() {
           PROD 운영 환경 · 실제 사용자 데이터에 즉시 반영됩니다
         </div>
       )}
+      <IncidentPrimaryBanner />
       <main className="content">
         <Routes>
           <Route path="/" element={<ReportQueuePage />} />
@@ -121,6 +124,7 @@ function AppContent() {
           <Route path="/feature-control/notices" element={<ServiceNoticePage />} />
           <Route path="/feature-control/drift" element={<FeatureDriftPage />} />
           <Route path="/feature-control/incidents" element={<IncidentTimelinePage />} />
+          <Route path="/feature-control/incident-mode" element={<IncidentModePage />} />
           <Route path="/users/:userId" element={<UserDetailPage />} />
         </Routes>
       </main>

@@ -429,7 +429,7 @@ export interface IncidentRevisionReference {
 }
 
 export interface IncidentTimelineEntry {
-  sourceType: 'CHANGE_SET' | 'NOTICE'
+  sourceType: 'CHANGE_SET' | 'NOTICE' | 'INCIDENT'
   sourceId: number
   sourceTitle: string
   sourceStatus: string
@@ -449,6 +449,42 @@ export interface IncidentTimeline {
   jiraReferences: string[]
   sourceCount: number
   entries: IncidentTimelineEntry[]
+}
+
+export type IncidentSeverity = 'SEV1' | 'SEV2' | 'SEV3' | 'SEV4'
+export type IncidentStatus = 'DECLARED' | 'INVESTIGATING' | 'MITIGATING' | 'MONITORING' | 'RESOLVED' | 'CANCELLED'
+
+export interface IncidentEvent {
+  id: number; type: string; actorUserId: number; summary: string
+  sourceType: string | null; sourceId: string | null; structuredPayload: string
+  requestId: string | null; occurredAt: string
+}
+
+export interface Incident {
+  id: number; environment: FeatureFlagRow['environment']; reference: string; title: string
+  severity: IncidentSeverity; status: IncidentStatus; primary: boolean; impactSummary: string
+  ownerUserId: number | null; nextUpdateAt: string | null; observationMetrics: string | null
+  successCriteria: string | null; monitoringEndsAt: string | null; recoveryRevisions: string | null
+  impactEndedAt: string | null; residualRisk: string | null; followUpJira: string | null
+  version: number; createdByUserId: number; createdAt: string; updatedAt: string; events: IncidentEvent[]
+}
+
+export interface IncidentDeclare {
+  reference: string; title: string; severity: IncidentSeverity; primary: boolean
+  impactSummary: string; reason: string; requestId: string
+}
+
+export interface IncidentUpdate {
+  expectedVersion: number; title: string; severity: IncidentSeverity; primary: boolean
+  impactSummary: string; ownerUserId: number | null; nextUpdateAt: string | null
+  reason: string; requestId: string
+}
+
+export interface IncidentTransition {
+  expectedVersion: number; targetStatus: IncidentStatus; ownerUserId: number | null
+  nextUpdateAt: string | null; observationMetrics: string | null; successCriteria: string | null
+  monitoringEndsAt: string | null; recoveryRevisions: string | null; impactEndedAt: string | null
+  residualRisk: string | null; followUpJira: string | null; reason: string; requestId: string
 }
 
 export interface FeatureChangeSetCreate {
