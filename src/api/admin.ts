@@ -261,6 +261,10 @@ export function rollbackFeatureChangeSet(
 export function dryRunFeatureChangeSet(id: number, userIds: number[]): Promise<FeatureDryRunRow[]> {
   return apiFetch(`/api/v1/admin/control/change-sets/${id}/dry-run`, {
     method: 'POST', body: JSON.stringify({ userIds }),
+  }, {
+    target: `기능 변경 세트 #${id}`,
+    change: `dry-run · 사용자 ${userIds.length}명 · 상태 변경 없음`,
+    reason: '승인 전 사용자별 적용 결과 확인',
   })
 }
 
