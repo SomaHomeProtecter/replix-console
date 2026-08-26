@@ -67,6 +67,11 @@ describe('사용자 공지 화면(HP-343)', () => {
     renderPage()
     await user.click(await screen.findByRole('button', { name: '새 공지' }))
     const dialog = screen.getByRole('dialog')
+    const presetOptions = within(dialog).getByRole('combobox', { name: '연결 프리셋' })
+      .querySelectorAll('option')
+    expect([...presetOptions].map((option) => option.textContent)).toEqual(expect.arrayContaining([
+      '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리',
+    ]))
     await user.selectOptions(within(dialog).getByRole('combobox', { name: '유형' }), 'MAINTENANCE')
     await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '서비스 점검 안내')
     await user.type(within(dialog).getByRole('textbox', { name: '공개 메시지' }),

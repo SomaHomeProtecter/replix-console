@@ -22,6 +22,10 @@ const PRESETS: { value: FeatureControlPreset['id']; label: string }[] = [
   { value: 'NORMAL_OPERATION', label: '정상 운영' }, { value: 'READ_ONLY', label: '읽기 전용' },
   { value: 'CHAT_BLOCK', label: '채팅 차단' }, { value: 'REPORT_LIMIT', label: '신고 제한' },
   { value: 'STAGE2_BYPASS', label: '2차 모더레이션 우회' },
+  { value: 'PUBLIC_CONTENT_STOP', label: '외부 공개 콘텐츠 중지' },
+  { value: 'PRIVACY_TRANSMISSION_STOP', label: '개인정보 전송 중지' },
+  { value: 'VIDEO_OVERLAY_MINIMIZE', label: '비디오 오버레이 최소화' },
+  { value: 'DISNEY_PLUS_ISOLATION', label: 'Disney+ 격리' },
 ]
 
 function canOperate() {
