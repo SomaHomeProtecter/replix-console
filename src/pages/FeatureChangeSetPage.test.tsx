@@ -13,7 +13,8 @@ vi.mock('../auth', () => ({ realmRoles: () => ['admin'] }))
 const flag: FeatureFlagRow = {
   key: 'chat.message.send.enabled', displayName: '채팅 전송', description: '채팅 제어',
   environment: 'DEV', enabled: true, effectiveEnabled: true, rolloutPercentage: 100,
-  expiresAt: null, owner: 'Chat', risk: 'HIGH', dependencies: [], conflicts: [],
+  expiresAt: null, owner: 'Chat', risk: 'HIGH', policyClass: 'AVAILABLE', globalOnly: false,
+  dependencies: [], conflicts: [],
   allowlistedUserIds: [], revision: 3, connected: true, registryDigest: 'abc',
   updatedAt: '2026-08-24T00:00:00Z', activeInstances: 2, mismatchedInstances: 0,
   converged: true, lastReportedAt: '2026-08-24T00:00:00Z',
@@ -102,6 +103,31 @@ describe('기능 변경 세트 화면(HP-343)', () => {
     await waitFor(() => expect(admin.createFeatureChangeSet).toHaveBeenCalledWith(expect.objectContaining({
       title: '채팅 점진 적용', items: [expect.objectContaining({
         flagKey: flag.key, rolloutPercentage: 25, expectedRevision: 3,
+      })],
+    })))
+  })
+
+  it('전역 정책은 변경 세트에서도 rollout 100%와 빈 allowlist로 고정한다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.listFeatureFlags).mockResolvedValue([{
+      ...flag, key: 'overlay.danmaku.enabled', displayName: '탄막 모드',
+      enabled: false, effectiveEnabled: false, rolloutPercentage: 50,
+      allowlistedUserIds: [17], policyClass: 'COMPLIANCE', globalOnly: true,
+    }])
+    vi.mocked(admin.createFeatureChangeSet).mockResolvedValue(changeSet)
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: '새 변경 세트' }))
+    const dialog = screen.getByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '탄막 전역 정책 변경')
+    await user.type(within(dialog).getByRole('textbox', { name: /변경 목적/ }), '저작권 정책에 따라 탄막 기능을 전역 제어합니다')
+    await user.click(within(dialog).getByRole('checkbox', { name: /탄막 모드/ }))
+    expect(within(dialog).getByText('전역 적용 · Rollout 100%')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: '25%' })).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: '초안 생성 (1)' }))
+
+    await waitFor(() => expect(admin.createFeatureChangeSet).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({
+        flagKey: 'overlay.danmaku.enabled', rolloutPercentage: 100, allowlistedUserIds: [],
       })],
     })))
   })

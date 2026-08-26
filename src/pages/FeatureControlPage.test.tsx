@@ -14,7 +14,8 @@ const row = (overrides: Partial<FeatureFlagRow> = {}): FeatureFlagRow => ({
   key: 'chat.message.send.enabled', displayName: '채팅 전송',
   description: '새 공개 채팅과 답글 전송을 제어합니다.', environment: 'DEV',
   enabled: true, effectiveEnabled: true, rolloutPercentage: 100,
-  expiresAt: null, owner: 'Chat', risk: 'HIGH', dependencies: [], conflicts: [], allowlistedUserIds: [],
+  expiresAt: null, owner: 'Chat', risk: 'HIGH', policyClass: 'AVAILABLE', globalOnly: false,
+  dependencies: [], conflicts: [], allowlistedUserIds: [],
   revision: 3, connected: true, registryDigest: 'abcdef0123456789',
   updatedAt: '2026-08-24T03:00:00Z', activeInstances: 2, mismatchedInstances: 0,
   converged: true, lastReportedAt: '2026-08-24T03:01:00Z', ...overrides,
@@ -74,5 +75,30 @@ describe('기능 제어 운영 화면(HP-340)', () => {
     await user.click(screen.getByRole('button', { name: '새로고침' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('변경을 잠갔습니다')
     expect(screen.getByRole('button', { name: '변경' })).toBeDisabled()
+  })
+
+  it('전역 정책은 rollout과 allowlist를 잠그고 안전한 목표만 보낸다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.listFeatureFlags).mockResolvedValue([row({
+      key: 'overlay.danmaku.enabled', displayName: '탄막 모드', owner: 'Experience & Legal',
+      enabled: false, effectiveEnabled: false, rolloutPercentage: 50,
+      allowlistedUserIds: [17], policyClass: 'COMPLIANCE', globalOnly: true,
+    })])
+    vi.mocked(admin.changeFeatureFlag).mockResolvedValue(row())
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '변경' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('spinbutton', { name: 'Rollout' })).toBeDisabled()
+    expect(within(dialog).getByRole('textbox', { name: 'Allowlist 사용자 ID' })).toBeDisabled()
+    expect(within(dialog).getByText(/모든 사용자에게 즉시 동일하게 적용/)).toBeInTheDocument()
+    await user.type(within(dialog).getByRole('textbox', { name: /변경 사유/ }), '저작권 정책에 따라 기능을 전역 제어합니다')
+    await user.click(within(dialog).getByRole('button', { name: '변경 적용' }))
+
+    await waitFor(() => expect(admin.changeFeatureFlag).toHaveBeenCalledWith(
+      'overlay.danmaku.enabled', expect.objectContaining({
+        rolloutPercentage: 100, allowlistedUserIds: [],
+      }),
+    ))
   })
 })

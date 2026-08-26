@@ -55,9 +55,11 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
       const next = { ...current }
       if (next[flag.key]) delete next[flag.key]
       else next[flag.key] = {
-        flagKey: flag.key, enabled: flag.enabled, rolloutPercentage: flag.rolloutPercentage,
+        flagKey: flag.key, enabled: flag.enabled,
+        rolloutPercentage: flag.globalOnly ? 100 : flag.rolloutPercentage,
         expiresAt: flag.expiresAt, owner: flag.owner,
-        allowlistedUserIds: flag.allowlistedUserIds, expectedRevision: flag.revision,
+        allowlistedUserIds: flag.globalOnly ? [] : flag.allowlistedUserIds,
+        expectedRevision: flag.revision,
       }
       return next
     })
@@ -121,17 +123,19 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
                 <input type="checkbox" checked={Boolean(item)} disabled={busy || !flag.connected}
                     onChange={() => toggle(flag)} />
                 <span><strong>{flag.displayName}</strong><code>{flag.key}</code></span>
-                <small>{flag.risk}</small>
+                <small>{flag.risk}{flag.globalOnly ? ' · 전역' : ''}</small>
               </label>
               {item && <div className="change-target">
                 <button type="button" className="chip-f" aria-pressed={item.enabled}
                     onClick={() => patchItem(flag.key, { enabled: true })}>ON</button>
                 <button type="button" className="chip-f" aria-pressed={!item.enabled}
                     onClick={() => patchItem(flag.key, { enabled: false })}>OFF</button>
-                <span className="preset-label">Rollout</span>
-                {ROLLOUT_PRESETS.map((preset) => <button key={preset} type="button" className="chip-f"
-                    aria-pressed={item.rolloutPercentage === preset}
-                    onClick={() => patchItem(flag.key, { rolloutPercentage: preset })}>{preset}%</button>)}
+                {flag.globalOnly
+                  ? <span className="preset-label">전역 적용 · Rollout 100%</span>
+                  : <><span className="preset-label">Rollout</span>
+                    {ROLLOUT_PRESETS.map((preset) => <button key={preset} type="button" className="chip-f"
+                        aria-pressed={item.rolloutPercentage === preset}
+                        onClick={() => patchItem(flag.key, { rolloutPercentage: preset })}>{preset}%</button>)}</>}
                 <input aria-label={`${flag.displayName} 만료 시각`} type="datetime-local"
                     value={item.expiresAt ? item.expiresAt.slice(0, 16) : ''}
                     onChange={(event) => patchItem(flag.key, { expiresAt: localInputToIso(event.target.value) })} />

@@ -336,6 +336,7 @@ export interface ModerationDecisionResult {
 }
 
 export type FeatureRisk = 'MEDIUM' | 'HIGH'
+export type FeaturePolicyClass = 'AVAILABLE' | 'COMPLIANCE' | 'PRIVACY' | 'PLATFORM' | 'MODERATION'
 
 export interface FeatureFlagRow {
   key: string
@@ -348,6 +349,8 @@ export interface FeatureFlagRow {
   expiresAt: string | null
   owner: string
   risk: FeatureRisk
+  policyClass: FeaturePolicyClass
+  globalOnly: boolean
   dependencies: string[]
   conflicts: string[]
   allowlistedUserIds: number[]
