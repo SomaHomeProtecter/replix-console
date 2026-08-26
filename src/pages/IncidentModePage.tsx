@@ -126,6 +126,8 @@ function ResourceLinkDialog({ incident, close, done }: { incident: Incident; clo
       {sourceType === 'PRESET' ? <label><span>리소스 ID</span><select value={sourceId} onChange={(event) => setSourceId(event.target.value)}>
         <option value="">선택</option><option value="NORMAL_OPERATION">정상 운영</option><option value="READ_ONLY">읽기 전용</option>
         <option value="CHAT_BLOCK">채팅 차단</option><option value="REPORT_LIMIT">신고 제한</option><option value="STAGE2_BYPASS">2차 모더레이션 우회</option>
+        <option value="PUBLIC_CONTENT_STOP">외부 공개 콘텐츠 중지</option><option value="PRIVACY_TRANSMISSION_STOP">개인정보 전송 중지</option>
+        <option value="VIDEO_OVERLAY_MINIMIZE">비디오 오버레이 최소화</option><option value="DISNEY_PLUS_ISOLATION">Disney+ 격리</option>
       </select></label> : <label><span>리소스 ID</span><input value={sourceId} placeholder={sourceType === 'CHANGE_SET' || sourceType === 'NOTICE' ? '숫자 ID' : 'URL 또는 식별자'} onChange={(event) => setSourceId(event.target.value)} /></label>}
       <label className="span2"><span>연결 사유</span><textarea rows={3} value={summary} maxLength={500} onChange={(event) => setSummary(event.target.value)} /></label>
     </div><div className="dialog-actions"><button className="btn" onClick={close}>취소</button>

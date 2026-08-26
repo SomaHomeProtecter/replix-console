@@ -67,10 +67,15 @@ describe('Incident Mode 화면(HP-343)', () => {
 
     await user.click(screen.getByRole('button', { name: '리소스 연결' })); dialog = screen.getByRole('dialog')
     await user.selectOptions(within(dialog).getByRole('combobox', { name: '리소스 유형' }), 'PRESET')
-    await user.selectOptions(within(dialog).getByRole('combobox', { name: '리소스 ID' }), 'CHAT_BLOCK')
-    await user.type(within(dialog).getByRole('textbox', { name: '연결 사유' }), '채팅 차단 프리셋을 완화 근거로 연결합니다')
+    const presetSelect = within(dialog).getByRole('combobox', { name: '리소스 ID' })
+    expect([...presetSelect.querySelectorAll('option')].map((option) => option.textContent))
+      .toEqual(expect.arrayContaining([
+        '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리',
+      ]))
+    await user.selectOptions(presetSelect, 'DISNEY_PLUS_ISOLATION')
+    await user.type(within(dialog).getByRole('textbox', { name: '연결 사유' }), 'Disney+ 격리 프리셋을 완화 근거로 연결합니다')
     await user.click(within(dialog).getByRole('button', { name: '리소스 연결' }))
     await waitFor(() => expect(admin.addIncidentEvent).toHaveBeenCalledWith(9, expect.objectContaining({
-      expectedVersion: 2, sourceType: 'PRESET', sourceId: 'CHAT_BLOCK' })))
+      expectedVersion: 2, sourceType: 'PRESET', sourceId: 'DISNEY_PLUS_ISOLATION' })))
   })
 })
