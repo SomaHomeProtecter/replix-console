@@ -13,6 +13,11 @@ const VIEW_LABELS: Record<View, string> = {
   ALL: '전체', ON: 'ON', OFF: 'OFF', PARTIAL: '부분 적용', ATTENTION: '확인 필요',
 }
 
+const POLICY_LABELS: Record<FeatureFlagRow['policyClass'], string> = {
+  AVAILABLE: '가용성', COMPLIANCE: '컴플라이언스', PRIVACY: '개인정보',
+  PLATFORM: '플랫폼', MODERATION: '모더레이션',
+}
+
 function canChange() {
   const roles = realmRoles()
   return roles.includes('admin') || roles.includes('feature_flag_operator')
@@ -39,10 +44,10 @@ function ChangeDialog({ row, onClose, onChanged }: {
   onChanged: () => Promise<void>
 }) {
   const [enabled, setEnabled] = useState(row.enabled)
-  const [rollout, setRollout] = useState(row.rolloutPercentage)
+  const [rollout, setRollout] = useState(row.globalOnly ? 100 : row.rolloutPercentage)
   const [expiresAt, setExpiresAt] = useState(toLocalInput(row.expiresAt))
   const [owner, setOwner] = useState(row.owner)
-  const [allowlist, setAllowlist] = useState(row.allowlistedUserIds.join(', '))
+  const [allowlist, setAllowlist] = useState(row.globalOnly ? '' : row.allowlistedUserIds.join(', '))
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -57,7 +62,8 @@ function ChangeDialog({ row, onClose, onChanged }: {
   }, [busy, onClose])
 
   const apply = async () => {
-    const ids = allowlist.trim() === '' ? [] : allowlist.split(',').map((part) => Number(part.trim()))
+    const ids = row.globalOnly || allowlist.trim() === ''
+      ? [] : allowlist.split(',').map((part) => Number(part.trim()))
     if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
       setError('allowlist는 쉼표로 구분한 양의 사용자 ID여야 합니다')
       return
@@ -71,7 +77,7 @@ function ChangeDialog({ row, onClose, onChanged }: {
       return
     }
     const change: FeatureFlagChange = {
-      enabled, rolloutPercentage: rollout,
+      enabled, rolloutPercentage: row.globalOnly ? 100 : rollout,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       owner: owner.trim(), allowlistedUserIds: [...new Set(ids)],
       expectedRevision: row.revision, reason: reason.trim(),
@@ -98,6 +104,7 @@ function ChangeDialog({ row, onClose, onChanged }: {
         <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
         <h2 id="feature-title">{row.displayName} 변경</h2>
         <p className="sub"><code>{row.key}</code> · revision {row.revision}</p>
+        {row.globalOnly && <div className="warnline">전역 정책 기능은 모든 사용자에게 즉시 동일하게 적용됩니다. Rollout은 100%, Allowlist는 비워 둡니다.</div>}
         {error && <div className="error-box" role="alert">{error}</div>}
         <div className="feature-toggle" aria-label="기능 상태">
           <button type="button" className="chip-f" aria-pressed={enabled} disabled={busy}
@@ -107,13 +114,14 @@ function ChangeDialog({ row, onClose, onChanged }: {
         </div>
         <div className="feature-form-grid">
           <label><span>Rollout</span><input type="number" min="0" max="100" value={rollout}
-              disabled={busy} onChange={(e) => setRollout(Math.min(100, Math.max(0, Number(e.target.value))))} /></label>
+              disabled={busy || row.globalOnly} onChange={(e) => setRollout(Math.min(100, Math.max(0, Number(e.target.value))))} /></label>
           <label><span>만료 시각</span><input type="datetime-local" value={expiresAt}
               disabled={busy} onChange={(e) => setExpiresAt(e.target.value)} /></label>
           <label className="span2"><span>Owner</span><input value={owner} maxLength={100}
               disabled={busy} onChange={(e) => setOwner(e.target.value)} /></label>
           <label className="span2"><span>Allowlist 사용자 ID</span><input value={allowlist}
-              placeholder="예: 17, 29" disabled={busy} onChange={(e) => setAllowlist(e.target.value)} /></label>
+              placeholder={row.globalOnly ? '전역 정책에서는 사용할 수 없습니다' : '예: 17, 29'}
+              disabled={busy || row.globalOnly} onChange={(e) => setAllowlist(e.target.value)} /></label>
           <label className="span2"><span>변경 사유 <b>필수</b></span><textarea value={reason}
               maxLength={500} rows={3} disabled={busy} onChange={(e) => setReason(e.target.value)} /></label>
         </div>
@@ -196,7 +204,9 @@ export default function FeatureControlPage() {
                   <td className="feature-name"><strong>{row.displayName}</strong><code>{row.key}</code><span>{row.description}</span></td>
                   <td><span className={`feature-state ${status.className}`}>{status.label}</span></td>
                   <td className="mono">{row.rolloutPercentage}%</td>
-                  <td><strong>{row.owner}</strong><span className="feature-meta">{row.risk}</span></td>
+                  <td><strong>{row.owner}</strong><span className="feature-meta">
+                    {row.risk} · {POLICY_LABELS[row.policyClass]}{row.globalOnly ? ' · 전역' : ''}
+                  </span></td>
                   <td className="feature-runtime">
                     <strong>{row.activeInstances}개 활성 · 불일치 {row.mismatchedInstances}</strong>
                     <span>rev {row.revision} · {row.lastReportedAt ? formatKstShort(row.lastReportedAt) : '보고 없음'}</span>
