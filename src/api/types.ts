@@ -614,6 +614,8 @@ export interface ServiceNotice {
   presetId: FeatureControlPreset['id'] | null
   jiraReference: string | null
   incidentReference: string | null
+  /** 공지 전문 링크(HP-425) — 없으면 null. https:// 로 시작하는 500자 이하만 서버가 받는다. */
+  linkUrl: string | null
   version: number
   createdByUserId: number
   publishedByUserId: number | null
@@ -636,6 +638,8 @@ export interface ServiceNoticeCreate {
   presetId: FeatureControlPreset['id'] | null
   jiraReference: string | null
   incidentReference: string | null
+  /** 빈 문자열은 서버가 400으로 거절한다 — 입력이 비었으면 반드시 null로 보낸다. */
+  linkUrl: string | null
 }
 import type { EnvironmentMetadata } from '../environment'
 

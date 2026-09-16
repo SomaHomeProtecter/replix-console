@@ -684,6 +684,8 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .notice-preview.notice-maintenance > span { color: var(--amber-ink); }
 .notice-preview.notice-incident { border-color: #e4b7b7; border-left-color: var(--red); background: var(--red-soft); }
 .notice-preview.notice-incident > span { color: var(--red); }
+/* 전문 보기 링크(HP-425) — 3열 그리드에 끼지 않게 한 줄을 통째로 쓴다. 색은 유형별 배경 위에서 모두 읽히도록 본문색 + 밑줄. */
+.notice-preview > .notice-link { grid-column: 1 / -1; color: var(--ink); font-size: 11px; font-weight: 700; text-decoration: underline; }
 .notice-detail .notice-preview { margin-top: 13px; }
 .internal-note { margin-top: 12px; border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 9px 10px; background: var(--panel-2); }
 .internal-note strong { color: var(--amber-ink); font-size: 10.5px; }

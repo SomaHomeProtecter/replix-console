@@ -37,12 +37,15 @@ function localInputToIso(value: string) {
   return value ? new Date(value).toISOString() : null
 }
 
-function NoticePreview({ kind, title, message }: {
-  kind: ServiceNoticeKind; title: string; message: string
+function NoticePreview({ kind, title, message, linkUrl }: {
+  kind: ServiceNoticeKind; title: string; message: string; linkUrl?: string | null
 }) {
   return <div className={`notice-preview notice-${kind.toLowerCase()}`} aria-label="사용자 노출 미리보기">
     <span>{KIND_LABEL[kind]}</span><strong>{title || '공지 제목이 표시됩니다'}</strong>
     <p>{message || '사용자에게 공개할 메시지가 표시됩니다.'}</p>
+    {/* 작성 중 미리보기도 같은 컴포넌트를 쓰므로, 아직 검증 전인 값이 href에 실리지 않게 여기서 한 번 더 막는다. */}
+    {linkUrl?.startsWith('https://') &&
+      <a className="notice-link" href={linkUrl} target="_blank" rel="noopener noreferrer">전문 보기 ↗</a>}
   </div>
 }
 
@@ -55,6 +58,7 @@ function NoticeCreateDialog({ onClose, onCreated }: {
   const [internalNote, setInternalNote] = useState('')
   const [changeSetId, setChangeSetId] = useState('')
   const [presetId, setPresetId] = useState<FeatureControlPreset['id'] | ''>('')
+  const [linkUrl, setLinkUrl] = useState('')
   const [jira, setJira] = useState('HP-343')
   const [incident, setIncident] = useState('')
   const [busy, setBusy] = useState(false)
@@ -63,16 +67,22 @@ function NoticeCreateDialog({ onClose, onCreated }: {
 
   const submit = async () => {
     const linkedId = changeSetId ? Number(changeSetId) : null
+    const trimmedLink = linkUrl.trim()
     if (!title.trim() || !message.trim() || internalNote.trim().length < 10) {
       setError('제목, 공개 메시지, 10자 이상의 내부 메모를 입력하세요'); return
     }
     if (linkedId !== null && (!Number.isSafeInteger(linkedId) || linkedId <= 0)) {
       setError('변경 세트 ID는 양의 정수로 입력하세요'); return
     }
+    if (trimmedLink && !trimmedLink.startsWith('https://')) {
+      setError('링크 URL은 https:// 로 시작해야 합니다'); return
+    }
     const request: ServiceNoticeCreate = {
       kind, title: title.trim(), publicMessage: message.trim(), internalNote: internalNote.trim(),
       linkedChangeSetId: linkedId, presetId: presetId || null,
       jiraReference: jira.trim() || null, incidentReference: incident.trim() || null,
+      // 빈 문자열은 서버가 400으로 거절한다 — 비었으면 null.
+      linkUrl: trimmedLink || null,
     }
     setBusy(true); setWriting(true); setError(null)
     try { onCreated(await createServiceNotice(request)) }
@@ -85,7 +95,7 @@ function NoticeCreateDialog({ onClose, onCreated }: {
       <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
       <h2 id="notice-create-title">새 사용자 공지</h2>
       <p className="sub">공개될 내용과 내부 운영 근거를 분리해 작성합니다.</p>
-      <NoticePreview kind={kind} title={title} message={message} />
+      <NoticePreview kind={kind} title={title} message={message} linkUrl={linkUrl.trim()} />
       {error && <div className="error-box" role="alert">{error}</div>}
       <div className="feature-form-grid">
         <label><span>유형</span><select value={kind} disabled={busy}
@@ -104,6 +114,9 @@ function NoticeCreateDialog({ onClose, onCreated }: {
             rows={2} maxLength={1000} disabled={busy} onChange={(event) => setInternalNote(event.target.value)} /></label>
         <label><span>변경 세트 ID</span><input inputMode="numeric" value={changeSetId} placeholder="선택"
             disabled={busy} onChange={(event) => setChangeSetId(event.target.value)} /></label>
+        <label className="span2"><span>링크 URL <b>선택</b></span><input type="url" value={linkUrl}
+            maxLength={500} disabled={busy} placeholder="https://replix.tv/terms"
+            onChange={(event) => setLinkUrl(event.target.value)} /></label>
         <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
             onChange={(event) => setJira(event.target.value)} /></label>
         <label className="span2"><span>인시던트</span><input value={incident} maxLength={100} placeholder="선택"
@@ -142,7 +155,8 @@ function NoticeDetail({ notice, onReload }: {
       <span className={`feature-state status-${notice.status.toLowerCase()}`}>{STATUS_LABEL[notice.status]}</span>
       <h2>{notice.title}</h2><p>#{notice.id} · {notice.environment} · {KIND_LABEL[notice.kind]}</p>
     </div><button type="button" className="btn" disabled={busy} onClick={() => void onReload(notice.id)}>새로고침</button></div>
-    <NoticePreview kind={notice.kind} title={notice.title} message={notice.publicMessage} />
+    <NoticePreview kind={notice.kind} title={notice.title} message={notice.publicMessage}
+      linkUrl={notice.linkUrl} />
     <dl className="change-summary">
       <div><dt>게시 시작</dt><dd>{notice.startsAt ? formatKstShort(notice.startsAt) : '—'}</dd></div>
       <div><dt>게시 종료</dt><dd>{notice.endsAt ? formatKstShort(notice.endsAt) : '—'}</dd></div>
