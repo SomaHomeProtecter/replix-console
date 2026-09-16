@@ -185,7 +185,9 @@ export default function FeedbackPage() {
 
       {error && <div className="error-box" role="alert">{error}</div>}
       {loading && items.length === 0 && <div className="page-status">불러오는 중…</div>}
-      {!loading && !error && items.length === 0 && (
+      {/* 커서가 남아 있으면 "없다"가 아니라 "이 페이지에 없다"이다 — 다음 장을 부르기 전에
+          빈 화면 문구를 띄우면 아직 읽지 않은 결과를 없는 것처럼 보이게 한다. */}
+      {!loading && !error && items.length === 0 && !nextCursor && (
         <div className="empty-hint">조건에 맞는 피드백이 없습니다</div>
       )}
 

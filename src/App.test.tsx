@@ -63,7 +63,7 @@ describe('환경 표시와 전환(HP-337)', () => {
  * 링크가 아닌 글자였다 — 화면이 하나뿐일 때는 맞았지만, 지금은 그대로 두면 새 화면에 갈 길이 없다.
  */
 describe('톱바 탭 — 화면 사이를 오간다', () => {
-  it('다섯 화면이 각자의 경로로 걸려 있다', () => {
+  it('여섯 화면이 각자의 경로로 걸려 있다', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
 
     expect(screen.getByRole('link', { name: '신고 큐' })).toHaveAttribute('href', '/')
