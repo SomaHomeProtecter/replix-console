@@ -21,6 +21,7 @@ import IncidentModePage from './pages/IncidentModePage'
 import IncidentPrimaryBanner from './components/IncidentPrimaryBanner'
 import OperationCasesPage from './pages/OperationCasesPage'
 import CleanbotPolicyPage from './pages/CleanbotPolicyPage'
+import FeedbackPage from './pages/FeedbackPage'
 
 /**
  * 주요 조치 화면 — 신고 큐(홈) · 정지 현황판 · 전역 조치 로그 · 클린봇 검토 · 기능 제어 · 사용자 상세.
@@ -97,6 +98,11 @@ function AppContent() {
               title={writingTitle} onClick={preventWhileWriting}>
             기능 제어
           </NavLink>
+          <NavLink
+              to="/feedback" aria-disabled={writing || undefined}
+              title={writingTitle} onClick={preventWhileWriting}>
+            피드백
+          </NavLink>
         </nav>
         <UserSearch disabled={writing} disabledTitle={writingTitle} />
         <div className="topbar-right">
@@ -132,6 +138,7 @@ function AppContent() {
           <Route path="/moderation-reviews" element={<ModerationReviewPage />} />
           <Route path="/operation-cases" element={<OperationCasesPage />} />
           <Route path="/moderation-policies" element={<CleanbotPolicyPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/feature-control" element={<FeatureControlPage />} />
           <Route path="/feature-control/change-sets" element={<FeatureChangeSetPage />} />
           <Route path="/feature-control/presets" element={<FeatureControlPresetPage />} />

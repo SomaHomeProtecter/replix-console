@@ -995,6 +995,59 @@ table.action-table {
 .review-load-error span { flex: 1; }
 .stale-box { border-color: var(--amber); background: var(--amber-soft); color: var(--amber-ink); }
 
+/* ── 사용자 피드백 (HP-426) ──
+   조치 콘솔이 아니라 읽는 화면이다 — 상태 뱃지·판정 색을 두지 않고, 빨강은 삭제 확인
+   버튼에만 쓴다(조치 콘솔 전역 규칙: 빨강 = 되돌릴 수 없는 행동). 필터·표 골격은 조치
+   로그(.action-filters)를 그대로 재사용해 두 화면의 조작감이 갈리지 않게 한다. */
+.feedback-page { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.feedback-page > .board-head .filter-note { margin-left: auto; }
+table.feedback-table {
+  width: 100%; border-collapse: collapse; background: var(--panel); table-layout: fixed;
+}
+.feedback-table th:nth-child(1), .feedback-table td:nth-child(1) { width: 112px; }
+.feedback-table th:nth-child(2), .feedback-table td:nth-child(2) { width: 72px; }
+.feedback-table th:nth-child(3), .feedback-table td:nth-child(3) { width: 72px; }
+.feedback-table th:nth-child(4), .feedback-table td:nth-child(4) { width: 132px; }
+.feedback-table th:nth-child(6), .feedback-table td:nth-child(6) { width: 150px; }
+.feedback-table th {
+  text-align: left; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase; padding: 10px 16px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel-2);
+}
+.feedback-table td {
+  padding: 10px 16px; border-bottom: 1px solid var(--line-2);
+  vertical-align: middle; font-size: 12.5px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.feedback-row { cursor: pointer; }
+.feedback-row:hover { background: var(--blue-soft); }
+.feedback-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.feedback-row.open { background: var(--panel-2); }
+.feedback-table .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.feedback-table .surface { color: var(--label); font-weight: 650; }
+.feedback-table .score { color: var(--amber-ink); font-weight: 700; }
+.feedback-table .category { color: var(--ink); font-weight: 700; }
+.feedback-table .excerpt { color: var(--body); }
+.feedback-table .who { color: var(--muted-2); }
+.feedback-detail-row > td { padding: 0; white-space: normal; background: var(--panel-2); }
+.feedback-detail {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px;
+  border-left: 3px solid var(--blue);
+}
+/* 사용자가 쓴 원문 그대로 — 줄바꿈을 보존하고 긴 단어는 칸 안에서 접는다. */
+.feedback-body {
+  margin: 0; color: var(--body); font-size: 12.5px; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word;
+}
+.feedback-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
+.feedback-meta > div { display: flex; align-items: baseline; gap: 6px; }
+.feedback-meta dt { color: var(--muted-2); font-size: 11px; font-weight: 750; }
+.feedback-meta dd {
+  margin: 0; color: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.feedback-actions { display: flex; align-items: center; gap: 10px; }
+.feedback-warn { color: var(--red); font-size: 11.5px; font-weight: 650; }
+
 @media (max-width: 1120px) {
   .topbar-right .operator { display: none; }
   .review-list li { grid-template-columns: 96px 116px minmax(180px, 1fr) 120px 118px; gap: 8px; }

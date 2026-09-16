@@ -104,6 +104,9 @@ export async function apiFetch<T>(
       }
       throw new ApiHttpError(res.status, code, message)
     }
+    // 본문 없는 성공(204) — json() 파싱을 시도하면 성공한 요청이 SyntaxError로 뒤집힌다.
+    // DELETE는 보통 204라(HP-426 피드백 삭제) 여기서 끊어 주지 않으면 화면이 실패로 읽는다.
+    if (res.status === 204) return undefined as T
     return (await res.json()) as T
   } catch (e) {
     // <b>우리가</b> 끊은 것만 TIMEOUT으로 바꾼다. 호출자가 끊은 것(화면 이탈 등)까지 타임아웃이라

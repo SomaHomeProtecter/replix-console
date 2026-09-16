@@ -37,6 +37,7 @@ beforeEach(() => {
     },
   })
   vi.mocked(admin.listFeatureFlags).mockResolvedValue([])
+  vi.mocked(admin.listFeedback).mockResolvedValue({ items: [], nextCursor: null })
 })
 
 describe('환경 표시와 전환(HP-337)', () => {
@@ -70,6 +71,7 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     expect(screen.getByRole('link', { name: '조치 로그' })).toHaveAttribute('href', '/actions')
     expect(screen.getByRole('link', { name: '오탐 검토' })).toHaveAttribute('href', '/moderation-reviews')
     expect(screen.getByRole('link', { name: '기능 제어' })).toHaveAttribute('href', '/feature-control')
+    expect(screen.getByRole('link', { name: '피드백' })).toHaveAttribute('href', '/feedback')
   })
 
   it('지금 보는 화면을 탭이 표시한다', () => {
@@ -102,6 +104,13 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
 
     expect(await screen.findByRole('region', { name: '조치 로그' })).toBeInTheDocument()
     expect(admin.listActions).toHaveBeenCalled()
+  })
+
+  it('/feedback는 사용자 피드백 목록을 연다', async () => {
+    render(<MemoryRouter initialEntries={['/feedback']}><App /></MemoryRouter>)
+
+    expect(await screen.findByRole('region', { name: '피드백' })).toBeInTheDocument()
+    expect(admin.listFeedback).toHaveBeenCalled()
   })
 
   it('/moderation-reviews는 클린봇 오탐 검토를 연다', async () => {

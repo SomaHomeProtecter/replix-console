@@ -11,6 +11,7 @@ import type {
   ServiceNotice, ServiceNoticeCreate,
   OperationCaseDetail, OperationCasePage, OperationCaseView, CaseNoteType, UserTimeline,
   CleanbotPolicy, CleanbotPolicyUpsert, CleanbotSimulation,
+  FeedbackFilters, FeedbackPage,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -423,4 +424,28 @@ export function addIncidentEvent(id: number, request: IncidentEventCreate, chang
   return apiFetch(`/api/v1/admin/control/incident-mode/${id}/events`,
     { method: 'POST', body: JSON.stringify(request) },
     { target: `인시던트 #${id}`, change, reason: request.summary })
+}
+
+/**
+ * 사용자 피드백 목록(HP-426) — id DESC 커서 페이징. 필터 셋은 AND로 결합되고 빈 값은 전체다.
+ * 신고 큐와 달리 Redis 실황 enrich가 없어 서버 응답을 그대로 그린다.
+ */
+export function listFeedback(
+  filters: FeedbackFilters, cursor: string | null, size = 20,
+): Promise<FeedbackPage> {
+  return apiFetch(`/api/v1/admin/feedback${qs({
+    surface: filters.surface, category: filters.category, score: filters.score, cursor, size,
+  })}`)
+}
+
+/**
+ * 피드백 삭제 — 되돌릴 수 없다(감사 로그가 아니라 행 자체를 지운다). 서버는 204를 준다.
+ *
+ * <p>PROD 쓰기 확인 문구에 <b>본문을 싣지 않는다</b>: 지우려는 개인정보가 확인 대화상자·스크린샷
+ * 으로 옮겨 가면 삭제의 의미가 옅어진다(A4가 같은 이유로 서버 로그에서 본문을 뺐다).
+ */
+export function deleteFeedback(id: number): Promise<void> {
+  return apiFetch(`/api/v1/admin/feedback/${id}`, { method: 'DELETE' }, {
+    target: `피드백 #${id}`, change: '행 삭제(복구 불가)', reason: '운영자 삭제 판정',
+  })
 }

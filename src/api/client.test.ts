@@ -74,6 +74,17 @@ describe('apiFetch', () => {
     expect((error as ApiHttpError).status).toBe(403)
     expect((error as ApiHttpError).message).toContain('권한')
   })
+
+  /**
+   * 본문 없는 성공을 json()으로 읽으면 SyntaxError가 나 <b>성공한 요청이 실패로 뒤집힌다</b>.
+   * 삭제류는 204가 정상 응답이라(HP-426 피드백 삭제) 화면이 "지웠는데 실패했다"고 말하게 된다.
+   */
+  it('204는 본문을 읽지 않고 그대로 끝낸다', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+
+    await expect(apiFetch('/api/v1/admin/feedback/12', { method: 'DELETE' }))
+        .resolves.toBeUndefined()
+  })
 })
 
 describe('qs', () => {

@@ -641,6 +641,45 @@ export interface ServiceNoticeCreate {
   /** 빈 문자열은 서버가 400으로 거절한다 — 입력이 비었으면 반드시 null로 보낸다. */
   linkUrl: string | null
 }
+/**
+ * 사용자 피드백(HP-426) — 원천은 Replix-be의 `AdminFeedbackPageResponse`.
+ * 확장·웹이 보내는 공개 계약(`POST /api/v1/feedback`)과 값 집합이 같다.
+ */
+export type FeedbackSurface = 'EXT' | 'WEB'
+export type FeedbackCategory = 'ANNOY' | 'BUG' | 'IDEA' | 'PRAISE'
+/** 어디서 열려 제출됐는지 — 자동 프롬프트(PROMPT)인지 사용자가 직접 연 것(MANUAL)인지. */
+export type FeedbackTrigger = 'PROMPT' | 'MANUAL'
+
+export interface FeedbackItem {
+  id: number
+  surface: FeedbackSurface
+  /** 별점 1~5. 본문만 적고 보낼 수 있어 null이 정상이다. */
+  score: number | null
+  category: FeedbackCategory | null
+  body: string | null
+  appVersion: string | null
+  platform: string | null
+  /** 서버 발급 식별자만 싣는다 — 작품명·재생 시각은 계약상 오지 않는다(준수 §7). */
+  contentId: number | null
+  episodeId: number | null
+  trigger: FeedbackTrigger
+  createdAt: string
+  /** 비로그인 제출·탈퇴 detach면 null. 없음이 오류가 아니다. */
+  user: UserSummary | null
+}
+
+export interface FeedbackPage {
+  items: FeedbackItem[]
+  nextCursor: string | null
+}
+
+/** 빈 문자열 = 그 축은 전체(BE의 "미지정 = 전체"와 맞춤). */
+export interface FeedbackFilters {
+  surface: FeedbackSurface | ''
+  category: FeedbackCategory | ''
+  score: number | ''
+}
+
 import type { EnvironmentMetadata } from '../environment'
 
 export type { EnvironmentMetadata }

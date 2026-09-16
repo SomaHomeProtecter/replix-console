@@ -1,5 +1,6 @@
 import type {
-  AdminActionRow, AuthorMessage, ReceivedReport, ReportItem, SuspendedUserRow, UserDetail,
+  AdminActionRow, AuthorMessage, FeedbackItem, ReceivedReport, ReportItem, SuspendedUserRow,
+  UserDetail,
 } from '../api/types'
 
 /** 테스트 픽스처 — BE 계약(api/types.ts) 형태의 대표값. 필요한 칸만 overrides로 바꾼다. */
@@ -105,6 +106,28 @@ export function makeSuspendedRow(overrides: Partial<SuspendedUserRow> = {}): Sus
     status: 'SUSPENDED',
     suspendedUntil: null,
     suspendReason: '반복 스포일러',
+    ...overrides,
+  }
+}
+
+/**
+ * 사용자 피드백 한 행(HP-426). 기본값은 <b>전 칸이 찬</b> 로그인 제출이다 — 비어 올 수 있는
+ * 칸(score·category·body·user)은 그 없음이 갈래를 만드는 테스트에서만 overrides로 비운다.
+ */
+export function makeFeedbackItem(overrides: Partial<FeedbackItem> = {}): FeedbackItem {
+  return {
+    id: 12,
+    surface: 'EXT',
+    score: 4,
+    category: 'IDEA',
+    body: '자막이 한 박자 늦게 떠요',
+    appVersion: '1.2.3',
+    platform: 'chrome',
+    contentId: 101,
+    episodeId: 202,
+    trigger: 'PROMPT',
+    createdAt: '2026-09-16T12:53:33.830Z',
+    user: { id: 7, displayName: '리플러', status: 'ACTIVE', profileImageUrl: null },
     ...overrides,
   }
 }
