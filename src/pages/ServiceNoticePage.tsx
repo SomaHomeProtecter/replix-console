@@ -28,6 +28,10 @@ const PRESETS: { value: FeatureControlPreset['id']; label: string }[] = [
   { value: 'DISNEY_PLUS_ISOLATION', label: 'Disney+ 격리' },
 ]
 
+// 서버(DTO·엔티티)와 같은 규칙 — 미리보기 href 가드와 제출 검증이 갈라지면 한쪽만 통과한 값이
+// 서버에서 400으로 되돌아온다. 규칙을 한 곳에 두어 둘이 항상 같은 값을 받아들이게 한다.
+const HTTPS_LINK = /^https:\/\/\S+$/
+
 function canOperate() {
   const roles = realmRoles()
   return roles.includes('admin') || roles.includes('feature_flag_operator')
@@ -44,7 +48,7 @@ function NoticePreview({ kind, title, message, linkUrl }: {
     <span>{KIND_LABEL[kind]}</span><strong>{title || '공지 제목이 표시됩니다'}</strong>
     <p>{message || '사용자에게 공개할 메시지가 표시됩니다.'}</p>
     {/* 작성 중 미리보기도 같은 컴포넌트를 쓰므로, 아직 검증 전인 값이 href에 실리지 않게 여기서 한 번 더 막는다. */}
-    {linkUrl?.startsWith('https://') &&
+    {linkUrl && HTTPS_LINK.test(linkUrl) &&
       <a className="notice-link" href={linkUrl} target="_blank" rel="noopener noreferrer">전문 보기 ↗</a>}
   </div>
 }
@@ -74,8 +78,8 @@ function NoticeCreateDialog({ onClose, onCreated }: {
     if (linkedId !== null && (!Number.isSafeInteger(linkedId) || linkedId <= 0)) {
       setError('변경 세트 ID는 양의 정수로 입력하세요'); return
     }
-    if (trimmedLink && !trimmedLink.startsWith('https://')) {
-      setError('링크 URL은 https:// 로 시작해야 합니다'); return
+    if (trimmedLink && !HTTPS_LINK.test(trimmedLink)) {
+      setError('링크 URL은 https:// 로 시작하는 공백 없는 주소여야 합니다'); return
     }
     const request: ServiceNoticeCreate = {
       kind, title: title.trim(), publicMessage: message.trim(), internalNote: internalNote.trim(),

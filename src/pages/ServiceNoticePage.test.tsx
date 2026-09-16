@@ -140,6 +140,22 @@ describe('사용자 공지 화면(HP-343)', () => {
     expect(admin.createServiceNotice).not.toHaveBeenCalled()
   })
 
+  it('스킴만 있는 링크 URL은 생성 요청을 보내지 않고 알린다', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: '새 공지' }))
+    const dialog = screen.getByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '약관 개정 안내')
+    await user.type(within(dialog).getByRole('textbox', { name: '공개 메시지' }), '9/18 시행됩니다.')
+    await user.type(within(dialog).getByRole('textbox', { name: /내부 메모/ }),
+      '스킴만 남은 링크를 막는지 확인하는 내부 메모입니다')
+    await user.type(within(dialog).getByRole('textbox', { name: /링크 URL/ }), 'https://')
+    await user.click(within(dialog).getByRole('button', { name: '공지 초안 생성' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('https://')
+    expect(admin.createServiceNotice).not.toHaveBeenCalled()
+  })
+
   it('링크가 있는 공지 상세에 전문 보기 링크가 보인다', async () => {
     vi.mocked(admin.getServiceNotice).mockResolvedValue({ ...notice, linkUrl: 'https://replix.tv/terms' })
     renderSelectedPage()
