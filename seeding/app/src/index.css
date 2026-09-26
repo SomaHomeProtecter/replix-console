@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/* 시딩 도구(HP-435/436) — 관리자용 작업 화면. 장식 없이 상태(대기·진행·완료·실패)를 색으로 읽게 하고,
+   시각·수량은 tabular-nums 모노로 맞춘다. 2026-09-26 전면 재설계: 한 회차를 네 단계(수집 → 싱크와 장면 → AI 계획 → 주입)로
+   위에서 아래로 진행하며, 각 단계 카드는 "무엇을 하는 단계인지"와 "지금 상태"를 먼저 말한다. */
+@theme {
+  --color-warm: #f7f7f8;
+  --color-soft: #eeeef1;
+  --color-raise: #ffffff;
+  --color-sink: #e6e6ea;
+  --color-ink: #121218;
+  --color-ink2: #3d3d48;
+  --color-muted: #666672;
+  --color-faint: #9a9aa6;
+  --color-line: rgba(18, 18, 24, 0.10);
+  --color-line2: rgba(18, 18, 24, 0.18);
+  --color-accent: #e50914;
+  --color-accentd: #a3060f;
+  --color-accentw: #fdf1f1;
+  --color-ok: #23704a;
+  --color-okw: #e3f3ea;
+  --color-warn: #8a5a08;
+  --color-warnw: #fff1d6;
+  --color-bad: #a82a2a;
+  --color-badw: #fce9e9;
+  --color-info: #2b66a3;
+  --color-infod: #224f80;
+  --color-infow: #eef4fb;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Cascadia Mono", monospace;
+}
+
+html { background: var(--color-warm); color: var(--color-ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+body { margin: 0; }
+button, input, select, textarea { font: inherit; }
+.mono { font-family: var(--font-mono); }
+
+@layer components {
+  .btn { @apply inline-flex items-center h-9 px-3.5 rounded-md border border-line2 bg-raise text-sm text-ink2 hover:bg-soft disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
+  .btn-sm { @apply h-7 px-2.5 text-xs; }
+  .btn-primary { @apply inline-flex items-center h-9 px-3.5 rounded-md border border-info bg-info text-sm font-semibold text-white hover:bg-infod disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
+  .btn-danger { @apply inline-flex items-center h-9 px-3.5 rounded-md border border-bad/40 bg-raise text-sm text-bad hover:bg-badw disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
+  .input { @apply h-9 px-2.5 rounded-md border border-line2 bg-raise text-sm text-ink disabled:bg-soft disabled:text-muted; }
+  .card { @apply bg-raise border border-line rounded-xl; }
+  .card-head { @apply px-6 pt-5 pb-4 border-b border-line; }
+  .card-body { @apply px-6 py-5; }
+  .step-no { @apply inline-flex items-center justify-center w-7 h-7 rounded-full bg-ink text-white text-xs font-bold mr-3 shrink-0; }
+  .lead { @apply text-sm text-ink2 leading-relaxed max-w-3xl; }
+  .note { @apply text-xs text-muted leading-relaxed; }
+  .pill { @apply inline-flex items-center h-6 px-2 rounded-full text-[11px] font-semibold whitespace-nowrap; }
+  .kv { @apply grid grid-cols-[120px_1fr] items-center gap-x-3 gap-y-2 text-sm; }
+  .table { @apply w-full text-sm; }
+  .table th { @apply text-left text-[11px] font-semibold text-muted px-3 py-2 bg-soft sticky top-0; }
+  .table td { @apply px-3 py-2 border-t border-line align-top; }
+  .stat { @apply flex flex-col gap-0.5 min-w-[96px]; }
+  .stat b { @apply text-lg font-bold leading-tight; }
+  .stat span { @apply text-[11px] text-muted; }
+}

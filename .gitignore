@@ -1,0 +1,3 @@
+node_modules/
+seeding/app/dist/
+.DS_Store
