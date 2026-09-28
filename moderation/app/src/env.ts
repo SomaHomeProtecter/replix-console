@@ -1,11 +1,11 @@
 import { CONSOLE_ENVIRONMENTS, resolveEnvironment, restoreDeepLink } from './environment'
 import type { ConsoleEnvironment, ConsoleProfile, EnvironmentRoute } from './environment'
 
-/** 콘솔 환경(개발 서버 .env.local · 호스팅 빌드 .env.production) — 고를 수 있는 환경의 누락 검증을 부트스트랩 시점에 끝낸다. */
+/** 콘솔 환경(개발 서버 .env.local · 호스팅 빌드 hosted-env/.env.production) — 고를 수 있는 환경의 누락 검증을 부트스트랩 시점에 끝낸다. */
 function required(name: string): string {
   const value = import.meta.env[name] as string | undefined
   if (!value) {
-    throw new Error(`${name} 값이 없습니다 — 개발 서버는 .env.local(.env.example 참조), 호스팅 빌드는 .env.production 을 확인하세요`)
+    throw new Error(`${name} 값이 없습니다 — 개발 서버는 .env.local(.env.example 참조), 호스팅 빌드는 hosted-env/.env.production 을 확인하세요`)
   }
   return value
 }

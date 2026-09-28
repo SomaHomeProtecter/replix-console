@@ -4,7 +4,13 @@ import { BrowserRouter } from 'react-router'
 import { isFramed } from './bootGuards'
 import './styles.css'
 
-const root = createRoot(document.getElementById('root')!)
+// 부팅 뒤 렌더 오류는 React가 루트를 비운다(에러 경계가 없다) — 흰 화면 대신 무엇이 났는지 알린다(HP-456).
+const root = createRoot(document.getElementById('root')!, {
+  onUncaughtError: (error) => root.render(
+      <div className="boot-error">
+        화면을 그리다 오류가 났습니다 — 새로고침하세요. 계속되면 이 문구를 알려 주세요. ({String(error)})
+      </div>),
+})
 
 // 연결 환경은 부팅 안에서 initEnv()가 정한다 — 모듈 평가 시점에는 어떤 모듈도 던지지 않으므로, 싱글파일
 // 빌드(동적 import까지 한 파일로 합쳐 즉시 평가)에서도 부팅 중 예외가 모두 아래 catch에 닿는다(HP-456).

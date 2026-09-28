@@ -262,6 +262,22 @@ describe('쓰기 도중 페이지 이탈 경고(HP-456)', () => {
     expect(leave()).toBe(false)
   })
 
+  // 토큰 갱신이 실패하면 getToken이 로그인하러 떠난다. 그 이동까지 붙잡으면 보내지도 않은 요청 때문에
+  // "떠나시겠습니까?"가 뜨고, 머무르면 15초 뒤 서버 탓을 하는 문구가 뜬다(재검토 지적).
+  it('토큰을 받기 전에는 붙잡지 않는다 — 요청을 실제로 보낼 때부터다', async () => {
+    let issue!: (token: string) => void
+    vi.mocked(getToken).mockImplementationOnce(() => new Promise<string>((ok) => { issue = ok }))
+    fetchMock.mockResolvedValue(new Response('{}', { status: 200 }))
+
+    const pending = apiFetch('/api/v1/admin/x', { method: 'POST', body: '{}' })
+    await Promise.resolve()
+    expect(leave()).toBe(false)
+
+    issue('test-token')
+    await pending
+    expect(leave()).toBe(false)
+  })
+
   it('실패로 끝나도 풀어 준다', async () => {
     fetchMock.mockResolvedValue(new Response('', { status: 500 }))
     await expect(apiFetch('/api/v1/admin/x', { method: 'POST', body: '{}' })).rejects.toThrow()

@@ -103,9 +103,12 @@ describe('깊은 주소 복원(HP-456)', () => {
         .toEqual({ pathname: '/moderation/', search: '?selected=1' })
   })
 
-  it('다른 호스트를 가리키는 값(//…)은 받지 않는다', () => {
+  // 남기면 로그인 복귀 주소에 실려 GitHub Pages가 다시 404를 주고, 로그인 뒤 404 안내에 갇힌다(재검토 지적).
+  it('되살릴 수 없는 값(//… 다른 호스트, / 없이 시작)은 받지 않고 떼어 낸다', () => {
     expect(restoreDeepLink('/moderation/', '/moderation/', '?p=%2F%2Fevil.example%2Fx'))
-        .toEqual({ pathname: '/moderation/', search: '?p=%2F%2Fevil.example%2Fx' })
+        .toEqual({ pathname: '/moderation/', search: '' })
+    expect(restoreDeepLink('/moderation/', '/moderation/', '?p=users&selected=1'))
+        .toEqual({ pathname: '/moderation/', search: '?selected=1' })
   })
 })
 

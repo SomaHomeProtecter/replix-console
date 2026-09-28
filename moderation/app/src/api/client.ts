@@ -93,7 +93,6 @@ export async function apiFetch<T>(
     await confirmProductionWrite(writeSummary)
   }
 
-  if (isWrite) beginWrite()
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -105,9 +104,13 @@ export async function apiFetch<T>(
   if (init?.signal?.aborted) controller.abort()
   else init?.signal?.addEventListener('abort', relayAbort, { once: true })
 
+  let guarding = false
   try {
     // 토큰 갱신도 상한 안에 둔다 — 여기가 새면 아래 signal이 아무리 촘촘해도 소용없다.
     const token = await untilAborted(getToken(), controller.signal)
+    // 이탈 경고는 요청을 실제로 보낼 때부터 건다 — 토큰 갱신이 실패해 로그인하러 떠나는 이동까지
+    // 붙잡으면, 보내지도 않은 요청 때문에 "떠나시겠습니까?"가 뜨고 머무르면 15초 뒤 서버 탓을 한다.
+    if (isWrite) { beginWrite(); guarding = true }
     const res = await fetch(`${env.apiBaseUrl}${path}`, {
       ...init,
       signal: controller.signal,
@@ -149,7 +152,7 @@ export async function apiFetch<T>(
     // 끝난 요청의 타이머를 남기면 나중에 깨어나 <b>다음</b> 일과 무관하게 abort를 때린다.
     clearTimeout(timer)
     init?.signal?.removeEventListener('abort', relayAbort)
-    if (isWrite) endWrite()
+    if (guarding) endWrite()
   }
 }
 

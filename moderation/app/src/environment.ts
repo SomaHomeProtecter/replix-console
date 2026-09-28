@@ -59,6 +59,11 @@ export interface EnvironmentRoute {
   search: string
 }
 
+/** 환경 경로의 basename — '/moderation/' + 'DEV' → '/moderation/dev'. 전환 주소와 주소 해석이 같은 규칙을 쓴다. */
+export function environmentBasename(basePath: string, environment: ConsoleEnvironment): string {
+  return `${basePath.replace(/\/$/, '')}/${environment.toLowerCase()}`
+}
+
 function isAvailable(
   value: string | null, available: readonly ConsoleEnvironment[],
 ): value is ConsoleEnvironment {
@@ -109,22 +114,27 @@ export function resolveEnvironment(request: EnvironmentRequest): EnvironmentRout
     else if (request.hostname === HOSTED_CONSOLE_HOSTNAME && available.includes('PROD')) environment = 'PROD'
     else environment = request.fallback.toUpperCase() as ConsoleEnvironment
   }
-  const basename = `${base}/${environment.toLowerCase()}`
+  const basename = environmentBasename(request.basePath, environment)
   const search = params.toString()
   return { environment, basename, pathname: `${basename}${remainder}`, search: search ? `?${search}` : '' }
 }
 
 /**
  * 깊은 주소 복원(HP-456). GitHub Pages는 없는 경로에 docs/404.html을 주고, 404.html은 원래 경로(와 search)를
- * ?p= 에 실어 앱 루트로 보낸다. 앱 루트에 p가 있을 때만 되살린다. 다른 호스트를 가리키는 값(//…)은 받지 않는다.
+ * ?p= 에 실어 앱 루트로 보낸다. 앱 루트에 p가 있을 때만 되살린다. 다른 호스트를 가리키는 값(//…)처럼
+ * 되살릴 수 없는 p는 받지 않고 떼어 낸다 — 남기면 로그인 복귀 주소에 실려 다시 404로 떨어진다.
  */
 export function restoreDeepLink(
   basePath: string, pathname: string, search: string,
 ): { pathname: string, search: string } {
   const base = basePath.replace(/\/$/, '')
-  const p = new URLSearchParams(search).get('p')
-  if (pathname !== `${base}/` || !p || !p.startsWith('/') || p.startsWith('//')) {
-    return { pathname, search }
+  const params = new URLSearchParams(search)
+  const p = params.get('p')
+  if (pathname !== `${base}/` || p === null) return { pathname, search }
+  if (!p.startsWith('/') || p.startsWith('//')) {
+    params.delete('p')
+    const rest = params.toString()
+    return { pathname, search: rest ? `?${rest}` : '' }
   }
   const original = new URL(p, 'https://restore.invalid')
   return { pathname: `${base}${original.pathname}`, search: original.search }

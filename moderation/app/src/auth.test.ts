@@ -15,6 +15,7 @@ vi.mock('./env', () => ({
 }))
 
 import { environmentSwitchUrl, initAuth, logout, switchEnvironment } from './auth'
+import { resolveEnvironment } from './environment'
 
 describe('환경 전환(HP-456)', () => {
   it('고른 환경의 조치 콘솔 첫 화면으로 간다 — 콘솔 홈(/)으로 튕기지 않는다', () => {
@@ -22,6 +23,15 @@ describe('환경 전환(HP-456)', () => {
       'https://console.replix.tv/moderation/prod/users/42?selected=1#frag', 'DEV', '/moderation/',
     )
     expect(next.toString()).toBe('https://console.replix.tv/moderation/dev/')
+  })
+
+  // 전환 주소와 주소 해석은 따로 만들어져 서로 어긋나도 각자의 테스트는 초록이다 — 한 바퀴를 돌려 본다.
+  it.each(['DEV', 'PROD'] as const)('%s로 전환한 주소를 다시 해석하면 그 환경이다', (target) => {
+    const next = environmentSwitchUrl('https://console.replix.tv/moderation/prod/', target, '/moderation/')
+    expect(resolveEnvironment({
+      basePath: '/moderation/', pathname: next.pathname, search: next.search,
+      hostname: 'console.replix.tv', fallback: 'DEV', available: ['DEV', 'PROD'],
+    }).environment).toBe(target)
   })
 
   // keycloak-js 26의 clearToken()은 login-required로 init했으면 곧바로 login()을 부른다. 그 비동기

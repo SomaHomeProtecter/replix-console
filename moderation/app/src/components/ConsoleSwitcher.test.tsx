@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import ConsoleSwitcher from './ConsoleSwitcher'
@@ -44,6 +44,18 @@ describe('운영 콘솔 도구 전환(HP-456)', () => {
 
     expect(screen.queryByRole('navigation', { name: '운영 콘솔 도구' })).not.toBeInTheDocument()
     expect(toggle).toHaveFocus()
+  })
+
+  // Safari는 버튼을 눌러도 초점을 주지 않아 메뉴를 마우스로 열면 초점이 body에 남는다 — 그때도 Esc로 닫혀야
+  // 한다. 감싼 요소의 keydown만 받으면 이 경우를 놓친다(재검토 지적, WebKit으로 재현).
+  it('초점이 body에 남은 채(Safari 마우스 열기) Esc를 눌러도 닫는다', () => {
+    render(<ConsoleSwitcher disabled={false} />)
+    fireEvent.click(screen.getByRole('button', { name: /조치 콘솔/ })) // 초점을 옮기지 않는 클릭
+    expect(document.activeElement).toBe(document.body)
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+
+    expect(screen.queryByRole('navigation', { name: '운영 콘솔 도구' })).not.toBeInTheDocument()
   })
 
   // 목록이 열린 채 남으면 다른 곳의 Esc(검색창 지우기·대화상자 닫기)까지 가로채 초점을 빼앗았다(코드 리뷰 지적).

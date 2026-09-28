@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { FocusEvent, KeyboardEvent, MouseEvent } from 'react'
+import type { FocusEvent, MouseEvent } from 'react'
 
 /**
  * console.replix.tv 아래 다른 도구(HP-456). 다른 앱이라 라우터 링크가 아니라 페이지 이동이다.
@@ -18,8 +18,8 @@ const OTHER_TOOLS = [
  * 페이지를 떠나면 조치 성패를 알릴 곳이 사라진다. 열려 있던 목록도 그때 닫는다. 전역 잠금을 쓰지 않는
  * 화면의 쓰기는 api/client.ts가 이탈 직전에 붙잡는다.
  *
- * <p>목록은 초점이 이 안에 있을 때만 연다 — 밖으로 나가면 닫고, Esc도 이 안에서 누른 것만 받는다.
- * 문서 전체에서 Esc를 받으면 검색창 지우기·대화상자 닫기의 Esc까지 가로채 초점을 빼앗는다.
+ * <p>초점이 밖으로 나가면 목록을 닫는다. Esc는 이 안이나 초점 없는 곳에서 누른 것만 받는다 — 문서 전체의
+ * Esc를 받으면 검색창 지우기·대화상자 닫기의 Esc까지 가로채 초점을 빼앗는다.
  */
 export default function ConsoleSwitcher({ disabled, disabledTitle }: {
   disabled: boolean
@@ -34,24 +34,32 @@ export default function ConsoleSwitcher({ disabled, disabledTitle }: {
     if (disabled) setOpen(false)
   }, [disabled])
 
-  // 바깥을 눌러도 닫는다 — Safari는 버튼을 눌러도 초점을 주지 않아, 초점 기준 닫기만으로는 안 닫힌다.
+  // Safari는 버튼을 눌러도 초점을 주지 않아, 메뉴를 마우스로 열면 초점이 body에 남는다. 그래서 바깥 누름과
+  // Esc를 문서에서 받는다. Esc는 이 안이나 초점 없는 곳(body)에서 누른 것만 받는다 — 다른 입력칸·대화상자의
+  // Esc까지 가로채면 검색어 지우기·대화상자 닫기에서 초점을 빼앗는다.
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: PointerEvent) => {
       if (!wrapRef.current?.contains(event.target as Node)) setOpen(false)
     }
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const target = event.target as Node | null
+      const inside = !!target && !!wrapRef.current?.contains(target)
+      if (!inside && target !== document.body && target !== document.documentElement) return
+      setOpen(false)
+      toggleRef.current?.focus()
+    }
     document.addEventListener('pointerdown', closeOutside)
-    return () => document.removeEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
   }, [open])
 
   const blockWhileWriting = (event: MouseEvent<HTMLAnchorElement>) => {
     if (disabled) event.preventDefault()
-  }
-  const closeOnEscape = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!open || event.key !== 'Escape') return
-    event.stopPropagation()
-    setOpen(false)
-    toggleRef.current?.focus()
   }
   const closeWhenFocusLeaves = (event: FocusEvent<HTMLDivElement>) => {
     if (open && !wrapRef.current?.contains(event.relatedTarget as Node | null)) setOpen(false)
@@ -59,8 +67,7 @@ export default function ConsoleSwitcher({ disabled, disabledTitle }: {
 
   return (
     <div
-        className="console-switcher" ref={wrapRef}
-        onKeyDown={closeOnEscape} onBlur={closeWhenFocusLeaves}>
+        className="console-switcher" ref={wrapRef} onBlur={closeWhenFocusLeaves}>
       <a
           href="/" className="brand" aria-disabled={disabled || undefined}
           title={disabled ? disabledTitle : '운영 콘솔 홈'} onClick={blockWhileWriting}>

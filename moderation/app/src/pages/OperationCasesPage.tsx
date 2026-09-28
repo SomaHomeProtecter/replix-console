@@ -59,7 +59,8 @@ export default function OperationCasesPage() {
   }
   useEffect(() => {
     // 앱은 /moderation/<env>/ 아래에서 돈다(HP-456) — 루트 기준 경로와 같은지가 아니라 끝을 본다.
-    if (!window.location.pathname.endsWith('/operation-cases')) return
+    // 라우터가 끝 슬래시·대소문자 차이도 같은 화면으로 그리므로 판정도 그만큼 느슨하게 한다.
+    if (!/\/operation-cases\/?$/i.test(window.location.pathname)) return
     const selectedParam = new URLSearchParams(window.location.search).get('selected')
     const id = Number(selectedParam)
     if (Number.isInteger(id) && id > 0) void open(id, false)

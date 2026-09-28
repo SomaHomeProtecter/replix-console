@@ -13,9 +13,9 @@
   (function () {
     var base = '/moderation';
     var path = location.pathname;
-    // 앱 루트 자체가 404이거나(배포 누락·도구 이름 변경) 이미 한 번 넘긴 주소면 넘기지 않는다 —
-    // 넘기면 자기 자신으로 끝없이 돈다(HP-456 코드 리뷰).
-    if (path.indexOf(base + '/') === 0 && path !== base + '/' && !/[?&]p=/.test(location.search)) {
+    // 앱 루트 자체가 404면(배포 누락·도구 이름 변경) 넘기지 않는다 — 넘기면 자기 자신으로 끝없이 돈다.
+    // 되살릴 수 없는 p 는 앱(restoreDeepLink)이 떼어 내므로 여기서 p 로 막지 않는다(HP-456 코드 리뷰).
+    if (path.indexOf(base + '/') === 0 && path !== base + '/') {
       location.replace(base + '/?p=' + encodeURIComponent(path.slice(base.length) + location.search) + location.hash);
     }
   })();

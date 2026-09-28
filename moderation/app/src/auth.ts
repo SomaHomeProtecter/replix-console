@@ -1,7 +1,7 @@
 import Keycloak from 'keycloak-js'
 import { env } from './env'
 import type { ConsoleEnvironment } from './environment'
-import { validateTokenClaims } from './environment'
+import { environmentBasename, validateTokenClaims } from './environment'
 
 /**
  * Keycloak 싱글턴(HP-227) — Authorization Code + PKCE(S256), 기존 replix-web client 재사용.
@@ -88,7 +88,7 @@ export function environmentSwitchUrl(
   current: string, target: ConsoleEnvironment, basePath: string,
 ): URL {
   const redirect = new URL(current)
-  redirect.pathname = `${basePath.replace(/\/$/, '')}/${target.toLowerCase()}/`
+  redirect.pathname = `${environmentBasename(basePath, target)}/`
   redirect.search = ''
   redirect.hash = ''
   return redirect
