@@ -71,13 +71,24 @@ export function logout(): void {
   })
 }
 
+/**
+ * 환경 전환 뒤 돌아올 주소 — 고른 환경을 붙여 조치 콘솔 첫 화면(Vite base)으로 간다. 루트('/')로 보내면
+ * console.replix.tv에서는 조치 콘솔이 아니라 운영 콘솔 홈이 열린다(HP-456).
+ */
+export function environmentSwitchUrl(
+  current: string, target: ConsoleEnvironment, basePath: string,
+): URL {
+  const redirect = new URL(current)
+  redirect.searchParams.set('environment', target)
+  redirect.pathname = basePath
+  redirect.hash = ''
+  return redirect
+}
+
 /** 환경 전환은 기존 토큰을 폐기하고 대상 프로필 URL로 돌아온 뒤 새 Keycloak에서 재인증한다. */
 export function switchEnvironment(target: ConsoleEnvironment): void {
   if (target === env.environment) return
-  const redirect = new URL(window.location.href)
-  redirect.searchParams.set('environment', target)
-  redirect.pathname = '/'
-  redirect.hash = ''
+  const redirect = environmentSwitchUrl(window.location.href, target, import.meta.env.BASE_URL)
   // post_logout_redirect_uri 등록 상태에 기대지 않는다. 메모리 토큰을 먼저 폐기하고 새 issuer로
   // 완전 재로딩하면 initAuth(login-required)가 대상 Keycloak 인증을 새로 수행한다.
   keycloak.clearToken()

@@ -1,20 +1,25 @@
-# Replix 조치 콘솔 (admin-ui)
+# Replix 조치 콘솔 (moderation/app)
 
 신고 큐를 보고 **가림 · 계정 정지 · 기각**을 수행하는 운영 콘솔이다(HP-227, 화면 정본 = HP-227 코멘트 11343).
 
-**현재는 배포하지 않는다** — 팀원이 로컬에서 `npm run dev`로 열되 한 화면에서 LOCAL/DEV/PROD를 전환한다. 환경을 바꾸면 기존 토큰과 화면 상태를 폐기하고 해당 Keycloak에서 다시 인증한다. 서버의 환경·issuer·audience·azp 자기 선언과 콘솔 프로필이 하나라도 다르면 데이터를 그리기 전에 차단한다(HP-337).
+**https://console.replix.tv/moderation/ 에서 연다**(HP-456). 한 화면에서 DEV/PROD를 전환하고(개발 서버는 LOCAL까지), 환경을 바꾸면 기존 토큰과 화면 상태를 폐기하고 해당 Keycloak에서 다시 인증한다. 서버의 환경·issuer·audience·azp 자기 선언과 콘솔 프로필이 하나라도 다르면 데이터를 그리기 전에 차단한다(HP-337).
 
-## 왜 BE 레포에 있나 · 언제 분리하나 (HP-267)
+## 왜 replix-console에 있나 (HP-267 → HP-456)
 
-이 SPA는 별도 레포가 아니라 `Replix-be/admin-ui/`에 있다. **빌드·런타임 결합은 0**이다 — `settings.gradle`에 서브프로젝트로 없어 `./gradlew build`가 건드리지 않고, `Dockerfile`도 `gradlew · settings.gradle · build.gradle · gradle/ · src/`만 COPY해서 **런타임 이미지에 들어가지 않는다**. 같이 두는 이득은 BE API와 콘솔이 함께 바뀔 때 **한 PR·한 리뷰로 원자적으로** 나간다는 것이다(HP-227에서 BE 2건 + SPA가 그렇게 나갔다 — 레포가 갈렸으면 매번 두 PR + 버전 스큐).
+2026-09-28까지는 `Replix-be/admin-ui/`에 있었다. BE API와 콘솔이 함께 바뀔 때 **한 PR·한 리뷰로 원자적으로** 나가는 이득 때문이었고(HP-267), 분리 조건 셋 중 첫째가 "**자체 배포 대상이 생길 때** — 호스팅을 붙이는 순간 BE와 릴리즈 단위가 갈린다"였다. console.replix.tv(운영 도구를 한 호스트 아래 경로로 모으는 GitHub Pages)가 그 배포 대상이라, 커밋 이력째(git subtree) 이 저장소로 옮겼다(HP-456, 김지호 결정).
 
-유일한 실제 비용이던 **CI 헛돌기**(admin-ui만 바꿔도 BE 풀 빌드 + ECR push + dev 재배포가 돌아 내용이 같은 이미지를 새 태그로 올리던 문제)는 `Jenkinsfile`의 경로 필터로 막았다 — 그러니 **"레포에 섞여 지저분하다"는 이유만으로 쪼개지 말 것.** 3인 팀에 이미 레포가 4개(be·extension·AI·site)라 5번째의 동기화 비용이 결합도 0인 현 상태의 불편보다 크다.
+- **치른 값**: BE API와 화면을 함께 바꾸면 PR이 두 저장소로 갈린다. **BE를 먼저 배포하고 콘솔을 나중에 머지**한다 — 콘솔이 먼저 나가면 아직 없는 API를 부른다. 관리 API는 필드를 더하는 쪽으로 바꾼다.
+- **공개 저장소다**: Replix-be(비공개)와 달리 replix-console은 공개다. 소스·주석·테스트·이력이 공개되는 것을 알고 옮겼다. 비밀값은 원래 없다(브라우저에 실리는 공개 값뿐) — 앞으로도 넣지 않는다.
 
-**아래 셋 중 하나라도 성립하면 그때 분리한다:**
+## 배포
 
-1. **자체 배포 대상이 생길 때** — 지금은 로컬 `npm run dev` 전용이라 배포 파이프라인이 아예 없다(아래 "배포하지 않는다"). S3+CloudFront 같은 호스팅을 붙이는 순간 BE와 릴리즈 단위가 갈린다.
-2. **오너가 갈리거나 릴리즈 주기가 달라질 때** — 콘솔과 BE API를 서로 다른 사람이 다른 주기로 내보내기 시작하면, 한 PR로 묶이는 이득이 사라지고 남의 레포를 건드리는 비용만 남는다.
-3. **콘솔 자체 CI 게이트(lint·vitest)가 BE 파이프라인을 막을 때** — 프런트 테스트 실패로 BE 배포가 막히기 시작하면 파이프라인을 갈라야 한다.
+`npm run build`가 `../../docs/moderation/index.html` 한 장을 만든다(싱글파일 — 시딩과 같은 방식). 이 파일을 함께 커밋하고 **main 머지가 곧 배포**다. GitHub Pages 캐시가 `max-age=600`이라 반영까지 최대 10분 걸린다.
+
+- **호스팅 프로필** = `.env.production`(커밋). DEV·PROD만 싣는다 — 공개 호스트에서 개인 PC의 LOCAL을 겨누는 선택지는 쓸 곳이 없다.
+- **기본 환경은 주소가 정한다**: console.replix.tv 로 처음 열면 PROD(시딩 `env.ts`와 같은 규칙), 그 밖의 주소는 `VITE_DEFAULT_ENVIRONMENT`. 우선순위 = 주소의 `?environment=` → 이 탭에서 고른 값(sessionStorage) → 주소 규칙 → 빌드 기본값. 탭을 옮기면 `?environment=`가 주소에서 빠지므로, 탭 저장소가 없으면 DEV에서 일하던 사람이 새로고침 한 번에 PROD로 넘어간다.
+- **깊은 주소**: GitHub Pages는 없는 경로에 404를 준다. `/moderation/users/42`에서 새로고침하거나 로그인에서 돌아오면 `docs/404.html`이 원래 경로를 `?p=`에 실어 보내고, `index.html` 머리의 스크립트가 모듈 평가 전에 주소를 되돌린다(해시의 로그인 응답은 유지).
+- **프레임 차단**: GitHub Pages는 X-Frame-Options·CSP 헤더를 못 붙인다. Keycloak 세션이 살아 있으면 프레임 안에서도 화면 없이 로그인이 끝나므로 `main.tsx`가 프레임 안에서는 부팅하지 않는다.
+- ⚠️ `vite-plugin-singlefile`은 빌드 때 `base`를 `./`로 바꾼다. 그러면 라우터 basename과 환경 전환 복귀 경로가 깨져 `overrideConfig`로 되돌려 둔다(`vite.config.ts`).
 
 ## 요구 사항
 
@@ -28,25 +33,25 @@
 ## 시작하기
 
 ```bash
-cd admin-ui
+cd moderation/app
 npm install
 cp .env.example .env.local   # 기본값 = dev 환경. 로컬 BE 대상이면 아래 표 참조
-npm run dev                  # http://localhost:5173
+npm run dev                  # http://localhost:5173/moderation/
 ```
 
-브라우저에서 `http://localhost:5173` → Keycloak 로그인 → 신고 큐. 포트는 **5173 고정**(strictPort — redirect URI 등록과 일치해야 해서, 포트가 밀리면 기동을 실패시킨다). 톱바 환경 선택에서 전환하며 URL에는 `?environment=DEV|PROD|LOCAL`이 남는다.
+브라우저에서 `http://localhost:5173/moderation/` → Keycloak 로그인 → 신고 큐. 포트는 **5173 고정**(strictPort — redirect URI 등록과 일치해야 해서, 포트가 밀리면 기동을 실패시킨다). 톱바 환경 선택에서 전환하며 URL에는 `?environment=DEV|PROD|LOCAL`이 남는다. 톱바 왼쪽 "Replix / 조치 콘솔 ▾"은 운영 콘솔 홈(`/`)과 시딩 도구(`/seeding/`)로 가는 전환 메뉴라 개발 서버에서는 열리지 않는다.
 
-## 환경 변수 (.env.local)
+## 환경 변수 (.env.local · .env.production)
 
 환경마다 `VITE_<LOCAL|DEV|PROD>_API_BASE_URL`, `KC_URL`, `KC_REALM`, `KC_CLIENT_ID`,
-`EXPECTED_AUDIENCE`, `EXPECTED_AZP`를 각각 둔다. 전체 예시는 `.env.example`이 정본이다.
-`VITE_DEFAULT_ENVIRONMENT`는 URL 선택값이 없을 때만 사용한다.
+`EXPECTED_AUDIENCE`, `EXPECTED_AZP`를 각각 둔다. 개발 서버 예시는 `.env.example`, 호스팅 빌드 값은 `.env.production`이 정본이다.
+`VITE_DEFAULT_ENVIRONMENT`는 주소·탭 선택이 모두 없을 때만 쓴다(위 "배포" 우선순위).
 
 client는 **기존 `replix-web`을 그대로 쓴다**. BE는 issuer·audience·azp를 독립 검증하므로 어느 하나라도 다른 토큰은 401이다.
 
 ## Keycloak redirect URI
 
-`replix-web` client의 redirect URI에 `http://localhost:5173/*`가 등록돼 있어야 한다.
+`replix-web` client의 redirect URI에 `https://console.replix.tv/*`(호스팅, dev·prod 모두 — 2026-09-27 시딩 도구와 함께 등록)와 `http://localhost:5173/*`(개발 서버)가 있어야 한다.
 
 - **dev**: 반영 확인 완료(2026-08-04, kcadm 실측). realm import 파일(`keycloak/import/replix-realm.json`)에도 포함돼 있어 새 환경은 자동이다.
 - **기존(영속) Keycloak에 없는 경우**: import는 기존 DB를 건너뛰므로(IGNORE_EXISTING) 재기동으로는 안 들어간다. 관리 콘솔에서 직접 추가하거나 kcadm으로 반영한다(기존 URI를 보존해 병합할 것).

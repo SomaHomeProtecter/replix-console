@@ -14,7 +14,16 @@ vi.mock('./env', () => ({
   },
 }))
 
-import { initAuth, logout } from './auth'
+import { environmentSwitchUrl, initAuth, logout } from './auth'
+
+describe('환경 전환 복귀 주소(HP-456)', () => {
+  it('고른 환경을 붙여 조치 콘솔 첫 화면으로 돌아온다 — 콘솔 홈(/)으로 튕기지 않는다', () => {
+    const next = environmentSwitchUrl(
+      'https://console.replix.tv/moderation/users/42?selected=1#frag', 'DEV', '/moderation/',
+    )
+    expect(next.toString()).toBe('https://console.replix.tv/moderation/?selected=1&environment=DEV')
+  })
+})
 
 describe('계정 전환 로그아웃(HP-353)', () => {
   beforeEach(() => {

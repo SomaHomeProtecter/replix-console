@@ -1,5 +1,5 @@
 {
-  "name": "replix-admin-ui",
+  "name": "replix-moderation",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -26,6 +26,7 @@
     "jsdom": "^26.1.0",
     "typescript": "~5.8.3",
     "vite": "^7.1.0",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^3.2.0"
   }
 }

@@ -1,9 +1,21 @@
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { viteSingleFile } from 'vite-plugin-singlefile'
 
-export default defineConfig({
-  plugins: [react()],
+// console.replix.tv/moderation/ 아래에서 돈다(HP-456). 라우터 basename과 환경 전환 복귀 경로가
+// 이 값 하나를 따른다(import.meta.env.BASE_URL). 깊은 주소 복원은 docs/404.html + index.html.
+const BASE = '/moderation/'
+
+export default defineConfig(({ command }) => ({
+  base: BASE,
+  // 시딩 도구(seeding/app)와 같은 방식 — 자기완결 HTML 한 장으로 빌드해 docs/moderation/index.html을
+  // 커밋한다. GitHub Pages는 빌드 단계가 없어 커밋한 산출물이 곧 배포물이다. 여러 파일로 나누면 Pages
+  // 캐시(max-age=600) 동안 옛 index.html이 이미 지워진 옛 청크를 불러 화면이 깨질 수 있다.
+  // ⚠️ 이 플러그인은 빌드 때 base를 './'로 바꾼다 — 그러면 BASE_URL이 './'가 되어 라우터와 환경 전환
+  // 복귀 경로가 깨진다. overrideConfig로 base를 되돌린다(2026-09-28 빌드 결과로 확인).
+  plugins: [react(), ...(command === 'build' ? [viteSingleFile({ overrideConfig: { base: BASE } })] : [])],
+  build: { outDir: '../../docs/moderation', emptyOutDir: true },
   // KC redirect URI가 http://localhost:5173/* 로 등록돼 있다 — 포트가 밀려 5174로 뜨면
   // 로그인이 조용히 깨지므로 차라리 기동을 실패시킨다.
   server: { port: 5173, strictPort: true },
@@ -34,4 +46,4 @@ export default defineConfig({
       VITE_PROD_EXPECTED_AZP: 'replix-web',
     },
   },
-})
+}))
