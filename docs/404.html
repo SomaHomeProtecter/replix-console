@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>없는 주소 — Replix 운영 콘솔</title>
+<script>
+  /* GitHub Pages는 없는 경로에 이 파일을 준다(SPA용 대체 경로가 없다). 조치 콘솔(/moderation/)은 주소마다
+     화면이 달라서, 새로고침이나 로그인 복귀가 /moderation/users/42 같은 깊은 주소로 오면 여기로 떨어진다.
+     원래 경로를 ?p= 에 싣고 해시(Keycloak 로그인 응답)는 그대로 붙여 조치 콘솔로 넘긴다. 되살리는 쪽은
+     moderation/app/index.html(HP-456). 그 밖의 경로는 평범한 404 안내다. */
+  (function () {
+    var base = '/moderation';
+    var path = location.pathname;
+    if (path.indexOf(base + '/') === 0) {
+      location.replace(base + '/?p=' + encodeURIComponent(path.slice(base.length) + location.search) + location.hash);
+    }
+  })();
+</script>
+<style>
+  body { margin: 0; background: #f7f7f8; color: #121218; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  main { max-width: 720px; margin: 80px auto; padding: 0 24px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { color: #666672; margin: 0; line-height: 1.6; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>없는 주소입니다</h1>
+  <p><a href="/">Replix 운영 콘솔</a>에서 도구를 고르세요.</p>
+</main>
+</body>
+</html>
