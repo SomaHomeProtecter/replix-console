@@ -156,7 +156,9 @@ button { font: inherit; }
 }
 .topbar-right { display: flex; align-items: center; gap: 8px; color: var(--top-muted); font-size: 12px; min-width: 0; }
 .topbar-right .operator { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; }
+/* 줄바꿈 금지(HP-456) — 도구 전환 메뉴가 종전 브랜드보다 넓어 1240px 안팎에서 "로그/아웃"으로 꺾였다.
+   자리가 모자라면 옆 계정 이름(.operator)이 말줄임으로 줄어든다. */
+.btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; white-space: nowrap; }
 .btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
 .content { flex: 1; min-height: 0; padding: 18px; display: flex; flex-direction: column; }
 .sr-only {
