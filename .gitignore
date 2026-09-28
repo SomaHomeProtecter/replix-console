@@ -1,3 +1,6 @@
 node_modules/
 seeding/app/dist/
 .DS_Store
+
+# 에이전트 도구 상태(세션 로그·스로틀) — 소스 트리 어디에나 생긴다. 공개 저장소라 절대 올리지 않는다(HP-456).
+.omc/

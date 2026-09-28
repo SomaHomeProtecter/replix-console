@@ -53,7 +53,8 @@ client는 **기존 `replix-web`을 그대로 쓴다**. BE는 issuer·audience·a
 
 `replix-web` client의 redirect URI에 `https://console.replix.tv/*`(호스팅, dev·prod 모두 — 2026-09-27 시딩 도구와 함께 등록)와 `http://localhost:5173/*`(개발 서버)가 있어야 한다.
 
-- **dev**: 반영 확인 완료(2026-08-04, kcadm 실측). realm import 파일(`keycloak/import/replix-realm.json`)에도 포함돼 있어 새 환경은 자동이다.
+- **dev**: `localhost:5173` 반영 확인 완료(2026-08-04, kcadm 실측). Replix-be realm import 정본(`keycloak/import/replix-realm.json`)에는 두 주소가 다 있다.
+- ⚠️ **EKS가 실제로 읽는 사본**(`Replix-be/k8s/overlays/{dev,prod}/replix-realm.json`)에는 `https://console.replix.tv/*`가 없다(2026-09-28 기준 드리프트). 지금 운영·개발 Keycloak은 kcadm으로 넣어 둬서 문제없지만, **빈 DB로 재구축하면 콘솔 로그인이 `invalid redirect_uri`로 깨진다** — 그때는 아래처럼 kcadm으로 다시 넣는다. 사본을 고치면 configMapGenerator 해시가 바뀌어 다음 배포 때 Keycloak이 재시작된다.
 - **기존(영속) Keycloak에 없는 경우**: import는 기존 DB를 건너뛰므로(IGNORE_EXISTING) 재기동으로는 안 들어간다. 관리 콘솔에서 직접 추가하거나 kcadm으로 반영한다(기존 URI를 보존해 병합할 것).
 
 ## 테스트 · 빌드
