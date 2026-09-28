@@ -26,9 +26,11 @@ export type SceneNote = { id: number; seedEpisodeId: number; minuteAt: string; n
 export type NewSceneNote = { minuteAt: string; note: string; confidence: string | null; tag: string | null }
 export type InjectionKind = 'VERBATIM' | 'LIGHT_EDIT' | 'VARIANT' | 'MANUAL'
 export type Plan = { id: number; seedEpisodeId: number; label: string | null; source: string | null; status: 'DRAFT' | 'RUNNING' | 'EXECUTED'; createdBy: string | null; createdAt: string; executedAt: string | null }
-export type PlanItem = { id: number; planId: number; seq: number; seedPostId: number | null; ghostKey: string | null; wallclockAt: string | null; playbackSec: number | null; message: string; kind: InjectionKind; spoiler: boolean; scene: string | null; reason: string | null; accepted: boolean; injectionId: number | null; error: string | null }
+export type PlanItem = { id: number; planId: number; seq: number; seedPostId: number | null; ghostKey: string | null; wallclockAt: string | null; playbackSec: number | null; message: string; kind: InjectionKind; spoiler: boolean; scene: string | null; reason: string | null; accepted: boolean; injectionId: number | null; error: string | null; external: string | null }
 export type PlanItemView = { item: PlanItem; previewSec: number | null; gap: boolean }
-export type PlanView = { plan: Plan; items: PlanItemView[]; anchorCount: number }
+export type PlanView = { plan: Plan; items: PlanItemView[]; anchorCount: number; platformCode: string | null; platformEpisodeId: string | null }
+export type ExternalItem = { ref: string; ghostKey: string | null; message: string; playbackSec: number; spoiler: boolean; kind: InjectionKind }
+export type ExternalResult = { ref: string; injectionId: number | null; error: string | null }
 export type NewPlanItem = { seedPostId?: number | null; ghostKey?: string | null; wallclockAt?: string | null; playbackSec?: number | null; message: string; kind?: InjectionKind; spoiler?: boolean; scene?: string | null; reason?: string | null }
 export type SyncAnchor = { id: number; seedEpisodeId: number; playbackSec: number; wallclockAt: string; note: string | null }
 export type Injection = { id: number; seedEpisodeId: number; episodeId: number; seedPostId: number | null; ghostUserId: number; ghostName: string; msgId: string; playbackSec: number; message: string; kind: InjectionKind; spoiler: boolean; createdBy: string | null; createdAt: string }
@@ -82,6 +84,8 @@ export const api = {
   promptVersions: (key: string) => call<PromptVersion[]>('GET', `/api/v1/admin/seeding/prompts/${key}/versions`),
   revertPrompt: (key: string, version: number) => call<Prompt>('POST', `/api/v1/admin/seeding/prompts/${key}/revert/${version}`),
   resetPrompt: (key: string) => call<Prompt>('POST', `/api/v1/admin/seeding/prompts/${key}/reset`),
+  recordExternal: (planId: number, env: string, batchKey: string, results: { itemId: number; remoteInjectionId: number | null }[]) => call<PlanView>('PUT', `/api/v1/admin/seeding/plans/${planId}/external/${env}`, { batchKey, results }),
+  clearExternal: (planId: number, env: string) => call<PlanView>('DELETE', `/api/v1/admin/seeding/plans/${planId}/external/${env}`),
   plans: (episodeId: number) => call<Plan[]>('GET', `/api/v1/admin/seeding/episodes/${episodeId}/plans`),
   createPlan: (episodeId: number, body: { label: string | null; source: string | null; items: NewPlanItem[] }) => call<PlanView>('POST', `/api/v1/admin/seeding/episodes/${episodeId}/plans`, body),
   plan: (planId: number) => call<PlanView>('GET', `/api/v1/admin/seeding/plans/${planId}`),
@@ -118,4 +122,13 @@ export const api = {
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   },
+}
+
+/* 다른 환경 서버 호출 — 정본이 아닌 쪽에 채팅을 넣거나 되돌릴 때. 토큰은 그 환경의 것을 받는다(secondaryAuth). */
+export async function callOther(base: string, token: string, method: string, path: string, body?: unknown) {
+  const res = await fetch(`${base}${path}`, { method, headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
+  const text = await res.text(); let json: unknown = null
+  try { json = text ? JSON.parse(text) : null } catch { /* 본문 없음 */ }
+  if (!res.ok) { const e = json as { code?: string; message?: string } | null; throw new ApiError(res.status, e?.code ?? null, e?.message ?? `${res.status} ${res.statusText}`) }
+  return json
 }

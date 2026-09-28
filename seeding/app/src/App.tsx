@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
 import { canRead, canWrite, login, logout, useAuth } from './auth'
-import { ENV } from './env'
+import { ENV, OTHER, WORKSPACE } from './env'
+import { callOther, type ExternalItem, type ExternalResult, type PlanItem } from './api'
+import { secondaryToken, secondarySignedIn, secondaryLogout } from './secondaryAuth'
 
 /* 시딩 도구 화면(HP-435/436) — 2026-09-26 전면 재설계.
    원칙(조현빈): 함축·생략보다 각 기능의 용도가 문장으로 이해돼야 한다. 직관적인 것은 단순한 것이 아니고, 친절한 것은 장황한 것이
@@ -779,9 +781,50 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
   const rollback = async () => { if (!view || !confirm('이 계획이 넣은 채팅을 모두 지우고 검수 대기 상태로 되돌립니다.')) return; setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
   const remove = async () => { if (!view || !confirm('이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return; setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
 
-  const stats = view ? { total: view.items.length, accepted: view.items.filter((x) => x.item.accepted).length, done: view.items.filter((x) => x.item.injectionId).length, failed: view.items.filter((x) => x.item.error).length,
+  /* 다른 환경에 넣기(HP-436): 수락했고 그 환경에 아직 안 넣은 행을, 정본 서버가 환산한 재생 초와 함께 그 서버의 외부 넣기 API 로
+     보낸다(500건씩). 결과를 정본 서버에 행별로 기록해 표에 "개발 넣음"이 보이게 한다. */
+  const extOf = (it: PlanItem): Record<string, { id: number; batchKey: string }> => { try { return it.external ? JSON.parse(it.external) : {} } catch { return {} } }
+  const [extProgress, setExtProgress] = useState<string | null>(null)
+  const injectOther = async () => {
+    if (!view) return
+    if (!view.platformEpisodeId || !view.platformCode) { onError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
+    const rows = view.items.filter((x) => x.item.accepted && !x.item.error && !extOf(x.item)[OTHER.env] && x.previewSec != null)
+    if (rows.length === 0) { onError(`${OTHER.label} 서버에 넣을 행이 없습니다.`); return }
+    if (!confirm(`수락한 ${rows.length.toLocaleString()}건을 ${OTHER.label} 서버(${OTHER.api})의 같은 회차 채팅에 넣습니다. ${OTHER.label} 서버에 그 회차가 없으면 실패합니다.`)) return
+    setBusy(true)
+    try {
+      const token = await secondaryToken(OTHER)
+      const batchKey = `plan:${WORKSPACE.env}:${view.plan.id}:${Date.now().toString(36)}`
+      const results: { itemId: number; remoteInjectionId: number | null }[] = []
+      const errors: string[] = []
+      for (let i = 0; i < rows.length; i += 500) {
+        const chunk = rows.slice(i, i + 500)
+        setExtProgress(`${OTHER.label} 서버에 넣는 중 ${Math.min(i + 500, rows.length)} / ${rows.length}`)
+        const items: ExternalItem[] = chunk.map((x) => ({ ref: String(x.item.id), ghostKey: x.item.ghostKey ?? (x.item.seedPostId != null ? `post:${x.item.seedPostId}` : null), message: x.item.message, playbackSec: x.previewSec!, spoiler: x.item.spoiler, kind: x.item.kind }))
+        const r = await callOther(OTHER.api, token, 'POST', '/api/v1/admin/seeding/external-injections', { platformCode: view.platformCode, platformEpisodeId: view.platformEpisodeId, batchKey, origin: `${WORKSPACE.env}:plan:${view.plan.id}`, items }) as { results: ExternalResult[] }
+        for (const x of r.results) { if (x.injectionId) results.push({ itemId: Number(x.ref), remoteInjectionId: x.injectionId }); else if (x.error) errors.push(x.error) }
+        setView(await api.recordExternal(view.plan.id, OTHER.env, batchKey, results))
+      }
+      setExtProgress(null)
+      if (errors.length) onError(`${OTHER.label} 서버에 ${results.length}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`)
+      reload()
+    } catch (e) { setExtProgress(null); onError(errText(e)) } finally { setBusy(false) }
+  }
+  const rollbackOther = async () => {
+    if (!view) return
+    const batches = Array.from(new Set(view.items.map((x) => extOf(x.item)[OTHER.env]?.batchKey).filter(Boolean))) as string[]
+    if (batches.length === 0 || !confirm(`${OTHER.label} 서버에 넣은 이 계획의 채팅을 모두 지웁니다.`)) return
+    setBusy(true)
+    try {
+      const token = await secondaryToken(OTHER)
+      for (const b of batches) await callOther(OTHER.api, token, 'DELETE', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(b)}`)
+      setView(await api.clearExternal(view.plan.id, OTHER.env)); reload()
+    } catch (e) { onError(errText(e)) } finally { setBusy(false) }
+  }
+
+  const stats = view ? { total: view.items.length, accepted: view.items.filter((x) => x.item.accepted).length, done: view.items.filter((x) => x.item.injectionId).length, failed: view.items.filter((x) => x.item.error).length, otherDone: view.items.filter((x) => !!extOf(x.item)[OTHER.env]).length,
     kinds: (Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => [k, view.items.filter((x) => x.item.kind === k).length] as const) } : null
-  const rows = (view?.items ?? []).filter((x) => (kindFilter ? x.item.kind === kindFilter : true) && (filter === 'all' ? true : filter === 'accepted' ? x.item.accepted && !x.item.error && !x.item.injectionId : filter === 'rejected' ? !x.item.accepted : filter === 'failed' ? !!x.item.error : !!x.item.injectionId))
+  const rows = (view?.items ?? []).filter((x) => (kindFilter ? x.item.kind === kindFilter : true) && (filter === 'all' ? true : filter === 'accepted' ? x.item.accepted && !x.item.error && !x.item.injectionId : filter === 'rejected' ? !x.item.accepted : filter === 'failed' ? !!x.item.error : (!!x.item.injectionId || !!extOf(x.item)[OTHER.env])))
   const running = view?.plan.status === 'RUNNING'
 
   return (
@@ -822,7 +865,8 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
                 <div className="stat"><b>{stats.total.toLocaleString()}</b><span>전체 행</span></div>
                 <div className="stat"><b>{stats.accepted.toLocaleString()}</b><span>수락</span></div>
                 <div className="stat"><b>{(stats.total - stats.accepted).toLocaleString()}</b><span>거부</span></div>
-                <div className="stat"><b className={stats.done ? 'text-ok' : ''}>{stats.done.toLocaleString()}</b><span>채팅에 넣음</span></div>
+                <div className="stat"><b className={stats.done ? 'text-ok' : ''}>{stats.done.toLocaleString()}</b><span>{WORKSPACE.label}에 넣음</span></div>
+                <div className="stat"><b className={stats.otherDone ? 'text-ok' : ''}>{stats.otherDone.toLocaleString()}</b><span>{OTHER.label}에 넣음</span></div>
                 {stats.failed > 0 && <div className="stat"><b className="text-bad">{stats.failed}</b><span>실패</span></div>}
                 <div className="w-px h-8 bg-line" />
                 {stats.kinds.map(([k, n]) => <div key={k} className="stat min-w-[72px]"><b>{n.toLocaleString()}</b><span>{KIND_LABEL[k]}</span></div>)}
@@ -831,7 +875,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="input h-8 text-xs">
-                  <option value="all">모든 행</option><option value="accepted">수락했고 아직 넣지 않음</option><option value="rejected">거부함</option><option value="done">채팅에 넣음</option><option value="failed">넣기 실패</option>
+                  <option value="all">모든 행</option><option value="accepted">수락했고 아직 넣지 않음</option><option value="rejected">거부함</option><option value="done">어느 서버든 넣음</option><option value="failed">넣기 실패</option>
                 </select>
                 <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value as InjectionKind | '')} className="input h-8 text-xs">
                   <option value="">모든 종류</option>{(Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
@@ -849,7 +893,10 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
                         <td>{item.message}</td>
                         <td className="text-xs text-muted">{item.scene}{item.reason && <div className="text-faint">{item.reason}</div>}{item.error && <div className="text-bad">{item.error}</div>}</td>
                         <td className="text-right whitespace-nowrap">
-                          {item.injectionId ? <span className="text-xs text-ok">넣음</span> : item.error ? <span className="text-xs text-bad">실패</span>
+                          {item.injectionId && <span className="text-xs text-ok mr-1">{WORKSPACE.label} 넣음</span>}
+                          {extOf(item)[OTHER.env] && <span className="text-xs text-ok mr-1">{OTHER.label} 넣음</span>}
+                          {item.error ? <span className="text-xs text-bad">실패</span>
+                            : item.injectionId ? null
                             : writable && !running ? <button className="btn btn-sm" onClick={() => toggle(item.id, !item.accepted)}>{item.accepted ? '거부' : '다시 수락'}</button> : <span className="text-xs text-muted">{item.accepted ? '수락' : '거부'}</span>}
                         </td>
                       </tr>
@@ -867,21 +914,40 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
         <div className="card-head flex items-start justify-between gap-4">
           <div>
             <h2 className="font-bold flex items-center"><span className="step-no">4</span>채팅 넣기</h2>
-            <p className="lead mt-2">검수를 마친 계획의 수락 행을 이 회차의 채팅으로 넣습니다. 각 행은 시딩 전용 계정(유령 계정) 이름으로 저장되어 다른 사용자 채팅과 똑같이 보이고, 접속자 수나 활동 통계에는 잡히지 않습니다. 넷플릭스 회차가 연결되어 있어야 하며, 서버가 뒤에서 처리하므로 진행률이 여기와 확장의 시딩 도구에 표시됩니다. 잘못 넣었으면 계획 단위로 모두 지우거나 확장의 시딩 도구에서 한 건씩 지울 수 있습니다.</p>
+            <p className="lead mt-2">검수를 마친 계획의 수락 행을 회차의 채팅으로 넣습니다. 넣을 서버를 고를 수 있습니다. <b>{WORKSPACE.label}</b>은 이 콘솔이 붙은 서버라 바로 넣고, <b>{OTHER.label}</b>은 완성된 행을 그 서버로 보내 넣습니다(처음 한 번 {OTHER.label} 로그인 창이 뜹니다). 각 행은 시딩 전용 계정(유령 계정) 이름으로 저장되어 다른 사용자 채팅과 똑같이 보이고, 접속자 수나 활동 통계에는 잡히지 않습니다. 넷플릭스 회차가 연결되어 있어야 하며, 잘못 넣었으면 서버별로 계획 단위로 모두 지울 수 있습니다.</p>
           </div>
         </div>
-        <div className="card-body flex flex-wrap items-center gap-4">
-          <div className="stat"><b>{injections.length.toLocaleString()}</b><span>이 회차에 넣은 채팅</span></div>
-          <span className="flex-1" />
-          {!episode.episodeId && <span className="text-sm text-warn">넷플릭스 회차가 연결되지 않아 채팅을 넣을 수 없습니다.</span>}
+        <div className="card-body flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="stat"><b>{injections.length.toLocaleString()}</b><span>{WORKSPACE.label} 서버에 넣은 채팅</span></div>
+            {stats && <div className="stat"><b>{stats.otherDone.toLocaleString()}</b><span>{OTHER.label} 서버에 넣은 채팅 (이 계획)</span></div>}
+            <span className="flex-1" />
+            {!episode.episodeId && <span className="text-sm text-warn">넷플릭스 회차가 연결되지 않아 채팅을 넣을 수 없습니다.</span>}
+            {view && writable && view.plan.status === 'DRAFT' && <button className="btn-danger" disabled={busy} onClick={remove}>계획 #{view.plan.id} 지우기</button>}
+          </div>
           {view && writable && stats && (
-            <>
-              {view.plan.status === 'DRAFT' && <button className="btn-danger" disabled={busy} onClick={remove}>계획 #{view.plan.id} 지우기</button>}
-              {stats.done > 0 && !running && <button className="btn-danger" disabled={busy} onClick={rollback}>계획 #{view.plan.id}이 넣은 채팅 모두 지우기</button>}
-              <button className="btn-primary" disabled={busy || running || !episode.episodeId || stats.accepted - stats.done <= 0} onClick={execute}>
-                {running ? `넣는 중 ${(stats.done + stats.failed).toLocaleString()} / ${stats.accepted.toLocaleString()}` : `계획 #${view.plan.id}의 수락 ${(stats.accepted - stats.done).toLocaleString()}건을 채팅에 넣기`}
-              </button>
-            </>
+            <div className="grid grid-cols-2 gap-4">
+              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${WORKSPACE.env === 'prod' ? 'border-accent/40 bg-accentw' : 'border-line bg-soft/60'}`}>
+                <div className="font-semibold">{WORKSPACE.label} 서버 <span className="text-xs font-normal text-muted mono">{WORKSPACE.api}</span></div>
+                <p className="note">{WORKSPACE.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 서버가 뒤에서 처리하며 진행률이 여기와 확장의 시딩 도구에 표시됩니다.</p>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <button className="btn-primary" disabled={busy || running || !episode.episodeId || stats.accepted - stats.done <= 0} onClick={execute}>
+                    {running ? `넣는 중 ${(stats.done + stats.failed).toLocaleString()} / ${stats.accepted.toLocaleString()}` : `${WORKSPACE.label}에 ${(stats.accepted - stats.done).toLocaleString()}건 넣기`}
+                  </button>
+                  {stats.done > 0 && !running && <button className="btn-danger" disabled={busy} onClick={rollback}>{WORKSPACE.label}에 넣은 것 모두 지우기</button>}
+                </div>
+              </div>
+              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${OTHER.env === 'prod' ? 'border-accent/40 bg-accentw' : 'border-line bg-soft/60'}`}>
+                <div className="font-semibold">{OTHER.label} 서버 <span className="text-xs font-normal text-muted mono">{OTHER.api}</span>{secondarySignedIn(OTHER) && <button className="btn btn-sm ml-2" onClick={() => { secondaryLogout(OTHER); reload() }}>로그아웃</button>}</div>
+                <p className="note">{OTHER.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 이 콘솔이 환산한 재생 시각과 문장을 {OTHER.label} 서버로 보내 넣습니다. {OTHER.label} 서버에 이 회차가 있어야 합니다(그 환경에서 회차를 한 번 열면 생깁니다).</p>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  <button className="btn-primary" disabled={busy || !episode.episodeId || stats.accepted - stats.otherDone <= 0} onClick={injectOther}>
+                    {extProgress ?? `${OTHER.label}에 ${Math.max(0, stats.accepted - stats.otherDone).toLocaleString()}건 넣기`}
+                  </button>
+                  {stats.otherDone > 0 && <button className="btn-danger" disabled={busy} onClick={rollbackOther}>{OTHER.label}에 넣은 것 모두 지우기</button>}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

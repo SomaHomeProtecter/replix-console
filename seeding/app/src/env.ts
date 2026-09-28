@@ -15,3 +15,13 @@ export const API_BASE = ENV === 'prod' ? 'https://api.replix.tv' : 'https://api.
 export const AUTH = ENV === 'prod'
   ? { url: 'https://auth.replix.tv', realm: 'replix', clientId: 'replix-web' }
   : { url: 'https://auth.replix-dev.site', realm: 'replix', clientId: 'replix-web' }
+
+/* 주입 환경 선택(HP-436, 2026-09-28): 작업물은 이 콘솔이 붙은 서버(WORKSPACE)에 있고, 채팅 넣기는 두 환경 중 고른다.
+   OTHER 는 정본이 아닌 쪽 — 완성된 행을 그 서버의 "외부 넣기" API 로 보낸다. */
+export type EnvConfig = { env: Env; label: string; api: string; auth: { url: string; realm: string; clientId: string } }
+export const ENVS: Record<Env, EnvConfig> = {
+  prod: { env: 'prod', label: '운영', api: 'https://api.replix.tv', auth: { url: 'https://auth.replix.tv', realm: 'replix', clientId: 'replix-web' } },
+  dev: { env: 'dev', label: '개발', api: 'https://api.replix-dev.site', auth: { url: 'https://auth.replix-dev.site', realm: 'replix', clientId: 'replix-web' } },
+}
+export const WORKSPACE: EnvConfig = ENVS[ENV]
+export const OTHER: EnvConfig = ENVS[ENV === 'prod' ? 'dev' : 'prod']
