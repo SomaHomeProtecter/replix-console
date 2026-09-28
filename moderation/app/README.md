@@ -15,11 +15,14 @@
 
 `npm run build`가 `../../docs/moderation/index.html` 한 장을 만든다(싱글파일 — 시딩과 같은 방식). 이 파일을 함께 커밋하고 **main 머지가 곧 배포**다. GitHub Pages 캐시가 `max-age=600`이라 반영까지 최대 10분 걸린다.
 
-- **호스팅 프로필** = `.env.production`(커밋). DEV·PROD만 싣는다 — 공개 호스트에서 개인 PC의 LOCAL을 겨누는 선택지는 쓸 곳이 없다.
-- **기본 환경은 주소가 정한다**: console.replix.tv 로 처음 열면 PROD(시딩 `env.ts`와 같은 규칙), 그 밖의 주소는 `VITE_DEFAULT_ENVIRONMENT`. 우선순위 = 주소의 `?environment=` → 이 탭에서 고른 값(sessionStorage) → 주소 규칙 → 빌드 기본값. 탭을 옮기면 `?environment=`가 주소에서 빠지므로, 탭 저장소가 없으면 DEV에서 일하던 사람이 새로고침 한 번에 PROD로 넘어간다.
-- **깊은 주소**: GitHub Pages는 없는 경로에 404를 준다. `/moderation/users/42`에서 새로고침하거나 로그인에서 돌아오면 `docs/404.html`이 원래 경로를 `?p=`에 실어 보내고, `index.html` 머리의 스크립트가 모듈 평가 전에 주소를 되돌린다(해시의 로그인 응답은 유지).
+- **호스팅 프로필** = `hosted-env/.env.production`(커밋). 빌드는 이 폴더만 읽는다(`envDir`) — 루트의 `.env.local`까지 읽으면 만든 사람의 PC 설정이 공개 번들에 섞인다. 셸에서 export한 `VITE_*`는 여전히 가장 앞서니 빌드 전에 비워 둔다. DEV·PROD만 싣는다 — 공개 호스트에서 개인 PC의 LOCAL을 겨누는 선택지는 쓸 곳이 없다.
+- **환경은 주소 경로에 싣는다**: `/moderation/prod/…`, `/moderation/dev/…`(개발 서버는 `/moderation/local/…`까지). 링크·새 탭·북마크·복사한 주소가 늘 자기 환경을 말한다 — 탭 저장소에 들고 다니면 새 탭과 복사한 주소가 환경을 잃고 PROD로 열려, DEV에서 보던 `/users/42`가 운영의 다른 사람으로 뜬다. 조각이 없는 주소(`/moderation/`, 옛 깊은 주소)는 옛 `?environment=` → console.replix.tv면 PROD → `VITE_DEFAULT_ENVIRONMENT` 순으로 정해 조각을 넣은 주소로 바꾼다(`environment.ts`의 `resolveEnvironment`).
+- **깊은 주소**: GitHub Pages는 없는 경로에 404를 준다. `/moderation/prod/users/42`에서 새로고침하거나 로그인에서 돌아오면 `docs/404.html`이 원래 경로를 `?p=`에 실어 앱 루트로 보내고, 부팅 첫 단계(`env.ts`의 `initEnv`)가 주소를 되돌린다(해시의 로그인 응답은 유지).
+- **부팅 순서**: `initEnv`(주소 정본화·환경 결정) → Keycloak 로그인 → 서버 환경 대조(HP-337) → 렌더. 환경은 모듈을 평가할 때가 아니라 부팅 안에서 정한다 — 싱글파일 빌드는 동적 import까지 즉시 평가해서, 모듈 평가 중 예외는 부팅의 catch에 닿지 않는다.
 - **프레임 차단**: GitHub Pages는 X-Frame-Options·CSP 헤더를 못 붙인다. Keycloak 세션이 살아 있으면 프레임 안에서도 화면 없이 로그인이 끝나므로 `main.tsx`가 프레임 안에서는 부팅하지 않는다.
-- ⚠️ `vite-plugin-singlefile`은 빌드 때 `base`를 `./`로 바꾼다. 그러면 라우터 basename과 환경 전환 복귀 경로가 깨져 `overrideConfig`로 되돌려 둔다(`vite.config.ts`).
+- **쓰기 중 이탈**: 도구 전환 메뉴는 페이지를 통째로 옮긴다. 쓰기 요청이 도는 동안에는 `api/client.ts`가 브라우저의 "떠나시겠습니까?"로 붙잡는다(새로고침·탭 닫기 포함).
+- ⚠️ `vite-plugin-singlefile`은 빌드 때 `base`를 `./`로 바꾼다. 그러면 환경 경로와 전환 복귀 경로가 깨져 `overrideConfig`로 되돌려 둔다(`vite.config.ts`).
+- ⚠️ 환경 전환에서 `keycloak.clearToken()`을 부르지 말 것 — keycloak-js 26은 login-required로 init했으면 거기서 곧바로 로그인 이동을 시작해 전환 이동을 취소한다(`auth.ts`).
 
 ## 요구 사항
 
@@ -39,13 +42,13 @@ cp .env.example .env.local   # 기본값 = dev 환경. 로컬 BE 대상이면 �
 npm run dev                  # http://localhost:5173/moderation/
 ```
 
-브라우저에서 `http://localhost:5173/moderation/` → Keycloak 로그인 → 신고 큐. 포트는 **5173 고정**(strictPort — redirect URI 등록과 일치해야 해서, 포트가 밀리면 기동을 실패시킨다). 톱바 환경 선택에서 전환하며 URL에는 `?environment=DEV|PROD|LOCAL`이 남는다. 톱바 왼쪽 "Replix / 조치 콘솔 ▾"은 운영 콘솔 홈(`/`)과 시딩 도구(`/seeding/`)로 가는 전환 메뉴라 개발 서버에서는 열리지 않는다.
+브라우저에서 `http://localhost:5173/moderation/` → 기본 환경 경로(`/moderation/dev/` 등)로 바뀜 → Keycloak 로그인 → 신고 큐. 포트는 **5173 고정**(strictPort — redirect URI 등록과 일치해야 해서, 포트가 밀리면 기동을 실패시킨다). 톱바 환경 선택에서 전환하면 주소 경로의 환경 조각이 바뀐다(`/moderation/local|dev|prod/`). 톱바 왼쪽 "Replix / 조치 콘솔 ▾"은 운영 콘솔 홈(`/`)과 시딩 도구(`/seeding/`)로 가는 전환 메뉴라 개발 서버에서는 열리지 않는다.
 
-## 환경 변수 (.env.local · .env.production)
+## 환경 변수 (.env.local · hosted-env/.env.production)
 
 환경마다 `VITE_<LOCAL|DEV|PROD>_API_BASE_URL`, `KC_URL`, `KC_REALM`, `KC_CLIENT_ID`,
-`EXPECTED_AUDIENCE`, `EXPECTED_AZP`를 각각 둔다. 개발 서버 예시는 `.env.example`, 호스팅 빌드 값은 `.env.production`이 정본이다.
-`VITE_DEFAULT_ENVIRONMENT`는 주소·탭 선택이 모두 없을 때만 쓴다(위 "배포" 우선순위).
+`EXPECTED_AUDIENCE`, `EXPECTED_AZP`를 각각 둔다. 개발 서버 예시는 `.env.example`, 호스팅 빌드 값은 `hosted-env/.env.production`이 정본이다.
+`VITE_DEFAULT_ENVIRONMENT`는 주소에 환경이 없을 때(옛 `?environment=`도 없고 console.replix.tv도 아닐 때) 쓰며, 값은 부팅 때마다 검증한다.
 
 client는 **기존 `replix-web`을 그대로 쓴다**. BE는 issuer·audience·azp를 독립 검증하므로 어느 하나라도 다른 토큰은 401이다.
 

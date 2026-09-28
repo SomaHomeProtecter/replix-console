@@ -1,5 +1,5 @@
-import { CONSOLE_ENVIRONMENTS, selectEnvironment } from './environment'
-import type { ConsoleEnvironment, ConsoleProfile } from './environment'
+import { CONSOLE_ENVIRONMENTS, resolveEnvironment, restoreDeepLink } from './environment'
+import type { ConsoleEnvironment, ConsoleProfile, EnvironmentRoute } from './environment'
 
 /** 콘솔 환경(개발 서버 .env.local · 호스팅 빌드 .env.production) — 고를 수 있는 환경의 누락 검증을 부트스트랩 시점에 끝낸다. */
 function required(name: string): string {
@@ -43,31 +43,46 @@ function profile(environment: ConsoleEnvironment, grafanaBaseUrl: string | null)
   }
 }
 
-const grafanaBaseUrl = optional('VITE_GRAFANA_URL')
-// 호스팅 빌드는 LOCAL을 싣지 않으므로(HP-456) 고를 수 있는 환경의 프로필만 만든다.
-export const profiles = Object.fromEntries(
-    CONSOLE_ENVIRONMENTS.map((environment) => [environment, profile(environment, grafanaBaseUrl)]),
-) as Partial<Record<ConsoleEnvironment, ConsoleProfile>>
+/**
+ * 지금 연결한 환경의 프로필 — {@link initEnv}가 채운다.
+ *
+ * <p>모듈을 평가하는 순간에는 채우지 않는다(HP-456). 싱글파일 빌드는 동적 import까지 한 파일로 합쳐 즉시
+ * 평가하므로, 여기서 예외가 나면 main.tsx의 catch에 닿지 않고 엉뚱한 초기화 오류로 바뀌었다. 부팅 안에서
+ * 채우면 예외가 모두 그 catch로 간다. 소비자는 모두 부팅 뒤(렌더·요청 시점)에 읽는다.
+ */
+export const env = {} as ConsoleProfile
 
-/** 이 탭에서 고른 환경 — 새로고침해도 유지한다(HP-456). 탭을 닫으면 사라진다. */
-const ENVIRONMENT_STORAGE_KEY = 'replix_moderation_environment'
+let route: EnvironmentRoute | null = null
 
-function storedEnvironment(): string | null {
-  try { return window.sessionStorage.getItem(ENVIRONMENT_STORAGE_KEY) } catch { return null }
+/**
+ * 주소를 정본으로 맞추고 연결 환경을 정한다 — 부팅 첫 단계에서 한 번(HP-456).
+ *
+ * <p>① 404.html이 ?p= 에 실어 보낸 깊은 주소를 되살리고 ② 환경 조각을 넣은 주소(/moderation/&lt;env&gt;/…)로
+ * 바꾼다. Keycloak 로그인 복귀 주소와 라우터가 이 주소를 쓰므로 둘보다 먼저 돈다. 해시(로그인 응답의
+ * code)는 그대로 둔다.
+ */
+export function initEnv(): EnvironmentRoute {
+  if (route) return route
+  const basePath = import.meta.env.BASE_URL
+  const restored = restoreDeepLink(basePath, window.location.pathname, window.location.search)
+  const resolved = resolveEnvironment({
+    basePath,
+    pathname: restored.pathname,
+    search: restored.search,
+    hostname: window.location.hostname,
+    fallback: required('VITE_DEFAULT_ENVIRONMENT'),
+    available: CONSOLE_ENVIRONMENTS,
+  })
+  // 고를 수 있는 모든 환경의 값을 부팅 때 검증한다 — 전환한 뒤에야 누락이 드러나지 않게.
+  // 호스팅 빌드는 LOCAL을 싣지 않으므로 그 값은 요구하지 않는다.
+  const grafanaBaseUrl = optional('VITE_GRAFANA_URL')
+  const profiles = CONSOLE_ENVIRONMENTS.map((environment) => profile(environment, grafanaBaseUrl))
+  Object.assign(env, profiles.find((candidate) => candidate.environment === resolved.environment))
+
+  const canonical = `${resolved.pathname}${resolved.search}${window.location.hash}`
+  if (canonical !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+    window.history.replaceState(window.history.state, '', canonical)
+  }
+  route = resolved
+  return route
 }
-
-function rememberEnvironment(environment: ConsoleEnvironment): void {
-  try { window.sessionStorage.setItem(ENVIRONMENT_STORAGE_KEY, environment) } catch { /* 저장 불가 환경 */ }
-}
-
-const selected = selectEnvironment({
-  search: window.location.search,
-  stored: storedEnvironment(),
-  hostname: window.location.hostname,
-  fallback: required('VITE_DEFAULT_ENVIRONMENT'),
-  available: CONSOLE_ENVIRONMENTS,
-})
-rememberEnvironment(selected)
-
-// selectEnvironment는 고를 수 있는 환경만 돌려주므로 해당 프로필이 반드시 있다.
-export const env = profiles[selected] as ConsoleProfile

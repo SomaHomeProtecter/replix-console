@@ -16,6 +16,10 @@ export default defineConfig(({ command }) => ({
   // 복귀 경로가 깨진다. overrideConfig로 base를 되돌린다(2026-09-28 빌드 결과로 확인).
   plugins: [react(), ...(command === 'build' ? [viteSingleFile({ overrideConfig: { base: BASE } })] : [])],
   build: { outDir: '../../docs/moderation', emptyOutDir: true },
+  // 공개 산출물은 커밋된 호스팅 프로필(hosted-env/.env.production)만 읽는다. 루트의 .env.local(개발 서버용)을
+  // 빌드가 함께 읽으면 만든 사람의 PC 설정이 공개 번들에 섞이고, 누가 빌드하느냐에 따라 결과가 달라진다
+  // (HP-456 코드 리뷰). 셸에서 export한 VITE_* 는 여전히 가장 앞선다 — 빌드 전에 비워 둘 것.
+  envDir: command === 'build' ? 'hosted-env' : '.',
   // KC redirect URI가 http://localhost:5173/* 로 등록돼 있다 — 포트가 밀려 5174로 뜨면
   // 로그인이 조용히 깨지므로 차라리 기동을 실패시킨다.
   server: { port: 5173, strictPort: true },

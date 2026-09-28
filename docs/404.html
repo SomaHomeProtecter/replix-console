@@ -9,11 +9,13 @@
   /* GitHub Pages는 없는 경로에 이 파일을 준다(SPA용 대체 경로가 없다). 조치 콘솔(/moderation/)은 주소마다
      화면이 달라서, 새로고침이나 로그인 복귀가 /moderation/users/42 같은 깊은 주소로 오면 여기로 떨어진다.
      원래 경로를 ?p= 에 싣고 해시(Keycloak 로그인 응답)는 그대로 붙여 조치 콘솔로 넘긴다. 되살리는 쪽은
-     moderation/app/index.html(HP-456). 그 밖의 경로는 평범한 404 안내다. */
+     moderation/app/src/env.ts 의 initEnv(HP-456). 그 밖의 경로는 평범한 404 안내다. */
   (function () {
     var base = '/moderation';
     var path = location.pathname;
-    if (path.indexOf(base + '/') === 0) {
+    // 앱 루트 자체가 404이거나(배포 누락·도구 이름 변경) 이미 한 번 넘긴 주소면 넘기지 않는다 —
+    // 넘기면 자기 자신으로 끝없이 돈다(HP-456 코드 리뷰).
+    if (path.indexOf(base + '/') === 0 && path !== base + '/' && !/[?&]p=/.test(location.search)) {
       location.replace(base + '/?p=' + encodeURIComponent(path.slice(base.length) + location.search) + location.hash);
     }
   })();

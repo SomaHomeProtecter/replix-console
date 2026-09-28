@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  availableEnvironments, selectEnvironment, validateEnvironmentMetadata, validateTokenClaims,
+  availableEnvironments, resolveEnvironment, restoreDeepLink, validateEnvironmentMetadata,
+  validateTokenClaims,
 } from './environment'
-import type { ConsoleProfile, EnvironmentSources } from './environment'
+import type { ConsoleProfile, EnvironmentRequest } from './environment'
 
 const profile: ConsoleProfile = {
   environment: 'PROD',
@@ -17,63 +18,94 @@ const profile: ConsoleProfile = {
 
 const HOSTED = ['DEV', 'PROD'] as const
 
-function sources(changed: Partial<EnvironmentSources> = {}): EnvironmentSources {
+function request(changed: Partial<EnvironmentRequest> = {}): EnvironmentRequest {
   return {
-    search: '', stored: null, hostname: 'localhost', fallback: 'DEV',
-    available: ['LOCAL', 'DEV', 'PROD'], ...changed,
+    basePath: '/moderation/', pathname: '/moderation/', search: '', hostname: 'localhost',
+    fallback: 'DEV', available: ['LOCAL', 'DEV', 'PROD'], ...changed,
   }
 }
 
-describe('콘솔 환경 선택', () => {
-  it('URL 선택값을 빌드 기본값보다 우선한다', () => {
-    expect(selectEnvironment(sources({ search: '?environment=PROD' }))).toBe('PROD')
+/**
+ * 환경을 주소 경로에 싣는다(HP-456) — /moderation/<prod|dev|local>/…
+ * 탭 저장소로 들고 다니면 새 탭·복사한 링크·북마크가 환경을 잃고 호스팅 기본값(PROD)으로 열려,
+ * DEV에서 보던 /users/42 가 운영의 다른 사람으로 뜬다(코드 리뷰 지적).
+ */
+describe('콘솔 환경 — 주소 경로', () => {
+  it('경로의 환경 조각을 그대로 쓰고 basename에 넣는다', () => {
+    expect(resolveEnvironment(request({
+      pathname: '/moderation/dev/users/42', hostname: 'console.replix.tv', available: HOSTED,
+    }))).toEqual({
+      environment: 'DEV', basename: '/moderation/dev', pathname: '/moderation/dev/users/42', search: '',
+    })
   })
 
-  it('지원하지 않는 URL 환경은 기본값으로 추측하지 않고 중단한다', () => {
-    expect(() => selectEnvironment(sources({ search: '?environment=staging' })))
+  it('처음 연 호스팅 콘솔은 PROD 경로로 맞춘다 — 빌드 기본값과 무관하다', () => {
+    const route = resolveEnvironment(request({
+      pathname: '/moderation/', hostname: 'console.replix.tv', fallback: 'DEV', available: HOSTED,
+    }))
+    expect(route.environment).toBe('PROD')
+    expect(route.pathname).toBe('/moderation/prod/')
+  })
+
+  it('다른 주소는 빌드 기본값의 경로로 맞춘다', () => {
+    expect(resolveEnvironment(request({ fallback: 'dev' })).pathname).toBe('/moderation/dev/')
+  })
+
+  it('환경 조각이 없는 옛 깊은 주소는 기본 환경 아래로 옮긴다', () => {
+    expect(resolveEnvironment(request({
+      pathname: '/moderation/users/42', hostname: 'console.replix.tv', available: HOSTED,
+    })).pathname).toBe('/moderation/prod/users/42')
+  })
+
+  it('옛 ?environment= 는 경로로 옮기고 주소에서 뗀다', () => {
+    expect(resolveEnvironment(request({
+      search: '?environment=dev&selected=3', hostname: 'console.replix.tv', available: HOSTED,
+    }))).toEqual({
+      environment: 'DEV', basename: '/moderation/dev', pathname: '/moderation/dev/', search: '?selected=3',
+    })
+  })
+
+  it('끝 슬래시가 없는 환경 루트도 같은 화면이다', () => {
+    expect(resolveEnvironment(request({ pathname: '/moderation/dev' })).pathname)
+        .toBe('/moderation/dev/')
+  })
+
+  it('지원하지 않는 환경은 기본값으로 추측하지 않고 중단한다', () => {
+    expect(() => resolveEnvironment(request({ search: '?environment=staging' })))
         .toThrow('지원하지 않는')
   })
 
-  it('URL 선택값은 이 탭에서 고른 값과 주소 규칙보다 앞선다', () => {
-    expect(selectEnvironment(sources({
-      search: '?environment=DEV', stored: 'PROD', hostname: 'console.replix.tv', available: HOSTED,
-    }))).toBe('DEV')
+  it('호스팅 빌드에 없는 LOCAL은 경로로도 주소 값으로도 막는다', () => {
+    expect(() => resolveEnvironment(request({ pathname: '/moderation/local/', available: HOSTED })))
+        .toThrow('지원하지 않는 콘솔 환경입니다: LOCAL')
+    expect(() => resolveEnvironment(request({ search: '?environment=LOCAL', available: HOSTED })))
+        .toThrow('지원하지 않는 콘솔 환경입니다: LOCAL')
   })
 
-  it('호스팅 빌드에 없는 LOCAL을 URL로 요구하면 막는다(HP-456)', () => {
-    expect(() => selectEnvironment(sources({
-      search: '?environment=LOCAL', hostname: 'console.replix.tv', available: HOSTED,
-    }))).toThrow('지원하지 않는')
+  // 호스팅 주소 규칙이 먼저 걸리면 빌드 기본값의 오타가 운영에서 드러나지 않는다(코드 리뷰 지적).
+  it('빌드 기본값은 주소와 무관하게 늘 검증한다', () => {
+    expect(() => resolveEnvironment(request({
+      pathname: '/moderation/prod/', hostname: 'console.replix.tv', fallback: 'PRD', available: HOSTED,
+    }))).toThrow('VITE_DEFAULT_ENVIRONMENT')
+  })
+})
+
+describe('깊은 주소 복원(HP-456)', () => {
+  it('404.html이 ?p= 에 실은 원래 경로와 search를 되살린다', () => {
+    expect(restoreDeepLink('/moderation/', '/moderation/', '?p=%2Fdev%2Fusers%2F42%3Fselected%3D1'))
+        .toEqual({ pathname: '/moderation/dev/users/42', search: '?selected=1' })
   })
 
-  // 탭을 옮기면 ?environment=가 주소에서 빠진다. 호스팅 기본값이 PROD라, 이 값이 없으면 DEV에서
-  // 일하던 사람이 새로고침 한 번에 PROD로 넘어간다(HP-456).
-  it('URL 값이 없으면 이 탭에서 고른 환경을 그대로 쓴다', () => {
-    expect(selectEnvironment(sources({
-      stored: 'DEV', hostname: 'console.replix.tv', available: HOSTED,
-    }))).toBe('DEV')
+  it('앱 루트가 아니거나 p가 없으면 그대로 둔다', () => {
+    expect(restoreDeepLink('/moderation/', '/moderation/dev/', '?p=%2Fx'))
+        .toEqual({ pathname: '/moderation/dev/', search: '?p=%2Fx' })
+    expect(restoreDeepLink('/moderation/', '/moderation/', '?selected=1'))
+        .toEqual({ pathname: '/moderation/', search: '?selected=1' })
   })
 
-  it('탭에 남은 값이 지금 고를 수 없는 환경이면 버리고 다음 규칙으로 간다', () => {
-    expect(selectEnvironment(sources({
-      stored: 'LOCAL', hostname: 'console.replix.tv', available: HOSTED,
-    }))).toBe('PROD')
-    expect(selectEnvironment(sources({ stored: 'staging' }))).toBe('DEV')
-  })
-
-  it('처음 연 호스팅 콘솔(console.replix.tv)은 빌드 기본값과 무관하게 PROD다', () => {
-    expect(selectEnvironment(sources({
-      hostname: 'console.replix.tv', fallback: 'DEV', available: HOSTED,
-    }))).toBe('PROD')
-  })
-
-  it('다른 주소는 빌드 기본값을 쓴다', () => {
-    expect(selectEnvironment(sources({ hostname: 'localhost', fallback: 'dev' }))).toBe('DEV')
-  })
-
-  it('빌드 기본값이 고를 수 없는 환경이면 추측하지 않고 막는다', () => {
-    expect(() => selectEnvironment(sources({ fallback: 'LOCAL', available: HOSTED })))
-        .toThrow('VITE_DEFAULT_ENVIRONMENT')
+  it('다른 호스트를 가리키는 값(//…)은 받지 않는다', () => {
+    expect(restoreDeepLink('/moderation/', '/moderation/', '?p=%2F%2Fevil.example%2Fx'))
+        .toEqual({ pathname: '/moderation/', search: '?p=%2F%2Fevil.example%2Fx' })
   })
 })
 

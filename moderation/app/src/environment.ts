@@ -11,7 +11,10 @@ export function availableEnvironments(devServer: boolean): readonly ConsoleEnvir
 
 export const CONSOLE_ENVIRONMENTS = availableEnvironments(import.meta.env.DEV)
 
-/** 운영 콘솔 호스트. 이 주소로 처음 열면 PROD다 — 시딩 도구(seeding/app/src/env.ts)와 같은 규칙. */
+/**
+ * 운영 콘솔 호스트. 환경을 고르지 않고 이 주소로 열면 PROD다 — 시딩 도구(seeding/app/src/env.ts)도 이
+ * 호스트를 운영으로 본다(시딩은 옛 배치인 replix.tv도 운영으로 치지만 조치 콘솔은 거기서 돈 적이 없다).
+ */
 export const HOSTED_CONSOLE_HOSTNAME = 'console.replix.tv'
 
 export interface ConsoleProfile {
@@ -32,16 +35,28 @@ export interface EnvironmentMetadata {
   azp: string
 }
 
-export interface EnvironmentSources {
-  /** location.search — 환경 전환이 붙이는 ?environment= */
+export interface EnvironmentRequest {
+  /** 앱이 도는 경로 — Vite base('/moderation/') */
+  basePath: string
+  /** location.pathname (깊은 주소 복원 뒤) */
+  pathname: string
+  /** location.search (깊은 주소 복원 뒤) */
   search: string
-  /** 이 탭에서 지난번에 고른 환경(sessionStorage). 없으면 null */
-  stored: string | null
   /** location.hostname */
   hostname: string
   /** 빌드 기본값(VITE_DEFAULT_ENVIRONMENT) */
   fallback: string
   available: readonly ConsoleEnvironment[]
+}
+
+export interface EnvironmentRoute {
+  environment: ConsoleEnvironment
+  /** 라우터 basename — '/moderation/dev' */
+  basename: string
+  /** 환경 조각을 넣은 정본 경로 — '/moderation/dev/users/42' */
+  pathname: string
+  /** ?environment= 를 뗀 search */
+  search: string
 }
 
 function isAvailable(
@@ -50,31 +65,69 @@ function isAvailable(
   return value !== null && available.includes(value as ConsoleEnvironment)
 }
 
+function requireAvailable(
+  value: string, available: readonly ConsoleEnvironment[],
+): ConsoleEnvironment {
+  const normalized = value.toUpperCase()
+  if (!isAvailable(normalized, available)) {
+    throw new Error(`지원하지 않는 콘솔 환경입니다: ${normalized}`)
+  }
+  return normalized
+}
+
 /**
- * 연결 환경을 고른다. 우선순위 = 주소의 ?environment= → 이 탭에서 고른 값 → 주소 규칙
- * (console.replix.tv면 PROD) → 빌드 기본값.
+ * 연결 환경을 주소 경로에서 정한다(HP-456) — /moderation/<prod|dev|local>/…
  *
- * <p>주소 값과 빌드 기본값이 이상하면 DEV로 추측하지 않고 막는다. 탭에 남은 값은 콘솔이 스스로 쓴 것이라
- * 이상하면 조용히 버린다 — 탭을 옮기면 ?environment=가 주소에서 빠지므로, 이 값이 없으면 호스팅
- * 기본값(PROD) 때문에 DEV에서 일하던 사람이 새로고침 한 번에 PROD로 넘어간다(HP-456).
+ * <p>환경을 경로에 싣는 이유: 링크·새 탭·북마크·복사한 주소가 자기 환경을 잃으면 호스팅 기본값(PROD)으로
+ * 열려, DEV에서 보던 /users/42가 운영의 다른 사람으로 뜬다. 탭 저장소로는 새 탭과 복사한 주소를 못 지킨다
+ * (코드 리뷰 지적). 경로 조각이 없으면(콘솔 홈의 링크·옛 주소) 옛 ?environment= → 주소 규칙
+ * (console.replix.tv면 PROD) → 빌드 기본값 순으로 정하고, 호출자가 돌려받은 정본 경로로 주소를 바꾼다.
+ *
+ * <p>이상한 값은 DEV로 추측하지 않고 막는다. 빌드 기본값은 주소와 무관하게 늘 검증한다 — 호스팅 주소
+ * 규칙이 먼저 걸리면 기본값의 오타가 운영에서는 드러나지 않는다.
  */
-export function selectEnvironment(sources: EnvironmentSources): ConsoleEnvironment {
-  const { available } = sources
-  const fromUrl = new URLSearchParams(sources.search).get('environment')?.toUpperCase() ?? null
-  if (fromUrl !== null) {
-    if (!isAvailable(fromUrl, available)) {
-      throw new Error(`지원하지 않는 콘솔 환경입니다: ${fromUrl}`)
-    }
-    return fromUrl
+export function resolveEnvironment(request: EnvironmentRequest): EnvironmentRoute {
+  const { available } = request
+  if (!isAvailable(request.fallback.toUpperCase(), available)) {
+    throw new Error(`VITE_DEFAULT_ENVIRONMENT 값이 올바르지 않습니다: ${request.fallback}`)
   }
-  const stored = sources.stored?.toUpperCase() ?? null
-  if (isAvailable(stored, available)) return stored
-  if (sources.hostname === HOSTED_CONSOLE_HOSTNAME && available.includes('PROD')) return 'PROD'
-  const fallback = sources.fallback.toUpperCase()
-  if (!isAvailable(fallback, available)) {
-    throw new Error(`VITE_DEFAULT_ENVIRONMENT 값이 올바르지 않습니다: ${sources.fallback}`)
+  const base = request.basePath.replace(/\/$/, '')
+  const rest = request.pathname.startsWith(`${base}/`) ? request.pathname.slice(base.length) : '/'
+  const [, head = '', ...tail] = rest.split('/')
+  const params = new URLSearchParams(request.search)
+  const fromQuery = params.get('environment')
+  params.delete('environment')
+
+  let environment: ConsoleEnvironment
+  let remainder: string
+  if ((ALL_CONSOLE_ENVIRONMENTS as readonly string[]).includes(head.toUpperCase())) {
+    environment = requireAvailable(head, available)
+    remainder = `/${tail.join('/')}`
+  } else {
+    remainder = rest
+    if (fromQuery !== null) environment = requireAvailable(fromQuery, available)
+    else if (request.hostname === HOSTED_CONSOLE_HOSTNAME && available.includes('PROD')) environment = 'PROD'
+    else environment = request.fallback.toUpperCase() as ConsoleEnvironment
   }
-  return fallback
+  const basename = `${base}/${environment.toLowerCase()}`
+  const search = params.toString()
+  return { environment, basename, pathname: `${basename}${remainder}`, search: search ? `?${search}` : '' }
+}
+
+/**
+ * 깊은 주소 복원(HP-456). GitHub Pages는 없는 경로에 docs/404.html을 주고, 404.html은 원래 경로(와 search)를
+ * ?p= 에 실어 앱 루트로 보낸다. 앱 루트에 p가 있을 때만 되살린다. 다른 호스트를 가리키는 값(//…)은 받지 않는다.
+ */
+export function restoreDeepLink(
+  basePath: string, pathname: string, search: string,
+): { pathname: string, search: string } {
+  const base = basePath.replace(/\/$/, '')
+  const p = new URLSearchParams(search).get('p')
+  if (pathname !== `${base}/` || !p || !p.startsWith('/') || p.startsWith('//')) {
+    return { pathname, search }
+  }
+  const original = new URL(p, 'https://restore.invalid')
+  return { pathname: `${base}${original.pathname}`, search: original.search }
 }
 
 export function expectedIssuer(profile: ConsoleProfile): string {

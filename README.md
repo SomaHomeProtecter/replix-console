@@ -24,11 +24,11 @@ cd moderation/app && npm install
 cp .env.example .env.local   # 개발 서버용 LOCAL/DEV/PROD 값
 npm run dev                  # http://localhost:5173/moderation/
 npm test                     # vitest
-npm run build                # docs/moderation/ 갱신 — 빌드 결과를 함께 커밋한다(.env.production 사용)
+npm run build                # docs/moderation/ 갱신 — 빌드 결과를 함께 커밋한다(hosted-env/.env.production 만 읽는다)
 ```
-환경은 화면 톱바에서 바꾼다. console.replix.tv 로 처음 열면 PROD이고, 고른 환경은 그 탭에서 새로고침해도 유지된다. LOCAL은 개발 서버에서만 고를 수 있다. 자세한 규칙은 `moderation/app/README.md`.
+환경은 주소 경로에 실린다 — `/moderation/prod/…`, `/moderation/dev/…`. 화면 톱바에서 바꾸고, 링크·새 탭·북마크도 그 환경으로 열린다. `/moderation/`으로 열면 console.replix.tv에서는 PROD다. LOCAL은 개발 서버에서만 고를 수 있다. 자세한 규칙은 `moderation/app/README.md`.
 
-`docs/404.html` 이 필요한 이유: GitHub Pages는 없는 경로에 404를 주는데, 조치 콘솔은 주소마다 화면이 달라 `/moderation/users/42` 같은 깊은 주소에서 새로고침하거나 로그인에서 돌아오면 그 404를 받는다. 404.html이 `/moderation/*` 경로만 조치 콘솔로 되돌린다. 시딩은 라우터가 없어 영향이 없다.
+`docs/404.html` 이 필요한 이유: GitHub Pages는 없는 경로에 404를 주는데, 조치 콘솔은 주소마다 화면이 달라 `/moderation/prod/users/42` 같은 깊은 주소에서 새로고침하거나 로그인에서 돌아오면 그 404를 받는다. 404.html이 `/moderation/*` 경로만 조치 콘솔로 되돌린다. 시딩은 라우터가 없어 영향이 없다.
 
 ## 도메인·인증
 - 가비아: `console` CNAME → `somahomeprotecter.github.io`

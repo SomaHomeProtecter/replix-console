@@ -14,14 +14,27 @@ vi.mock('./env', () => ({
   },
 }))
 
-import { environmentSwitchUrl, initAuth, logout } from './auth'
+import { environmentSwitchUrl, initAuth, logout, switchEnvironment } from './auth'
 
-describe('환경 전환 복귀 주소(HP-456)', () => {
-  it('고른 환경을 붙여 조치 콘솔 첫 화면으로 돌아온다 — 콘솔 홈(/)으로 튕기지 않는다', () => {
+describe('환경 전환(HP-456)', () => {
+  it('고른 환경의 조치 콘솔 첫 화면으로 간다 — 콘솔 홈(/)으로 튕기지 않는다', () => {
     const next = environmentSwitchUrl(
-      'https://console.replix.tv/moderation/users/42?selected=1#frag', 'DEV', '/moderation/',
+      'https://console.replix.tv/moderation/prod/users/42?selected=1#frag', 'DEV', '/moderation/',
     )
-    expect(next.toString()).toBe('https://console.replix.tv/moderation/?selected=1&environment=DEV')
+    expect(next.toString()).toBe('https://console.replix.tv/moderation/dev/')
+  })
+
+  // keycloak-js 26의 clearToken()은 login-required로 init했으면 곧바로 login()을 부른다. 그 비동기
+  // 로그인 이동이 몇 ms 뒤 지금 환경의 Keycloak으로 떠나며 전환 이동을 취소해, 전환이 한 번도 되지
+  // 않았다(코드 리뷰가 실제 keycloak-js로 재현). 페이지를 통째로 다시 불러오면 메모리 토큰은 어차피 사라진다.
+  it('토큰을 지우지 않고 곧바로 떠난다 — 지우면 지금 환경으로 다시 로그인하러 가며 전환을 취소한다', () => {
+    keycloakMock.clearToken.mockClear()
+    keycloakMock.login.mockClear()
+
+    switchEnvironment('DEV')
+
+    expect(keycloakMock.clearToken).not.toHaveBeenCalled()
+    expect(keycloakMock.login).not.toHaveBeenCalled()
   })
 })
 
