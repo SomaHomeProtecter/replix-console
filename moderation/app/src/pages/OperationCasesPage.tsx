@@ -58,7 +58,8 @@ export default function OperationCasesPage() {
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
   useEffect(() => {
-    if (window.location.pathname !== '/operation-cases') return
+    // 앱은 /moderation/<env>/ 아래에서 돈다(HP-456) — 루트 기준 경로와 같은지가 아니라 끝을 본다.
+    if (!window.location.pathname.endsWith('/operation-cases')) return
     const selectedParam = new URLSearchParams(window.location.search).get('selected')
     const id = Number(selectedParam)
     if (Number.isInteger(id) && id > 0) void open(id, false)

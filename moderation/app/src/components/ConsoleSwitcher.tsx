@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { MouseEvent } from 'react'
+import type { FocusEvent, KeyboardEvent, MouseEvent } from 'react'
 
 /**
  * console.replix.tv 아래 다른 도구(HP-456). 다른 앱이라 라우터 링크가 아니라 페이지 이동이다.
@@ -15,7 +15,11 @@ const OTHER_TOOLS = [
  * 공용 바를 한 겹 더 얹지 않고 각 도구 톱바 안에서 오간다.
  *
  * <p>조치를 처리하는 동안에는 종전 브랜드 링크처럼 이동 수단을 모두 잠근다(HP-300 쓰기 중 이탈 차단) —
- * 페이지를 떠나면 조치 성패를 알릴 곳이 사라진다. 열려 있던 목록도 그때 닫는다.
+ * 페이지를 떠나면 조치 성패를 알릴 곳이 사라진다. 열려 있던 목록도 그때 닫는다. 전역 잠금을 쓰지 않는
+ * 화면의 쓰기는 api/client.ts가 이탈 직전에 붙잡는다.
+ *
+ * <p>목록은 초점이 이 안에 있을 때만 연다 — 밖으로 나가면 닫고, Esc도 이 안에서 누른 것만 받는다.
+ * 문서 전체에서 Esc를 받으면 검색창 지우기·대화상자 닫기의 Esc까지 가로채 초점을 빼앗는다.
  */
 export default function ConsoleSwitcher({ disabled, disabledTitle }: {
   disabled: boolean
@@ -30,30 +34,33 @@ export default function ConsoleSwitcher({ disabled, disabledTitle }: {
     if (disabled) setOpen(false)
   }, [disabled])
 
+  // 바깥을 눌러도 닫는다 — Safari는 버튼을 눌러도 초점을 주지 않아, 초점 기준 닫기만으로는 안 닫힌다.
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: PointerEvent) => {
       if (!wrapRef.current?.contains(event.target as Node)) setOpen(false)
     }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      setOpen(false)
-      toggleRef.current?.focus()
-    }
     document.addEventListener('pointerdown', closeOutside)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOutside)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
+    return () => document.removeEventListener('pointerdown', closeOutside)
   }, [open])
 
   const blockWhileWriting = (event: MouseEvent<HTMLAnchorElement>) => {
     if (disabled) event.preventDefault()
   }
+  const closeOnEscape = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!open || event.key !== 'Escape') return
+    event.stopPropagation()
+    setOpen(false)
+    toggleRef.current?.focus()
+  }
+  const closeWhenFocusLeaves = (event: FocusEvent<HTMLDivElement>) => {
+    if (open && !wrapRef.current?.contains(event.relatedTarget as Node | null)) setOpen(false)
+  }
 
   return (
-    <div className="console-switcher" ref={wrapRef}>
+    <div
+        className="console-switcher" ref={wrapRef}
+        onKeyDown={closeOnEscape} onBlur={closeWhenFocusLeaves}>
       <a
           href="/" className="brand" aria-disabled={disabled || undefined}
           title={disabled ? disabledTitle : '운영 콘솔 홈'} onClick={blockWhileWriting}>
@@ -83,7 +90,8 @@ export default function ConsoleSwitcher({ disabled, disabledTitle }: {
               </span>
             </li>
           </ul>
-          <p>같은 Keycloak 계정이라 도구를 옮겨도 다시 입력하지 않습니다.</p>
+          {/* 시딩은 console.replix.tv에서 늘 운영에 붙는다(seeding/app/src/env.ts) — 여기가 DEV여도 그렇다. */}
+          <p>시딩 도구는 늘 운영 서버에 붙습니다. 운영 Keycloak에 로그인돼 있으면 다시 입력하지 않습니다.</p>
         </nav>
       )}
     </div>

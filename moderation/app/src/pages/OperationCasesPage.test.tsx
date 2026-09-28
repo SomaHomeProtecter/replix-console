@@ -21,6 +21,17 @@ describe('운영 협업 화면(HP-347)', () => {
     expect(await screen.findByText('내부 메모·인수인계')).toBeInTheDocument()
     expect(screen.getByText('감사 타임라인')).toBeInTheDocument()
   })
+  // 조치 콘솔은 /moderation/<env>/ 아래에서 돈다(HP-456). 루트 기준 경로('/operation-cases')와 비교하던
+  // 복원이 한 번도 맞지 않아, 공유한 주소·재로그인 복귀·사용자 상세의 '열기'가 빈 상세를 띄웠다(코드 리뷰 지적).
+  it('주소의 ?selected= 로 케이스를 연다 — 앱이 하위 경로에서 돌아도 그렇다', async () => {
+    window.history.replaceState(null, '', '/moderation/prod/operation-cases?selected=7')
+    try {
+      render(<OperationCasesPage />)
+      await waitFor(() => expect(admin.getOperationCase).toHaveBeenCalledWith(7))
+    } finally {
+      window.history.replaceState(null, '', '/')
+    }
+  })
   it('expected version과 사유를 포함해 담당자를 배정한다', async () => {
     const user = userEvent.setup(); vi.mocked(admin.assignOperationCase).mockResolvedValue({ ...detail, item: { ...item, assignee: { id: 3, displayName: '운영자' }, version: 1 } })
     render(<OperationCasesPage />); await user.click(await screen.findByText('신고 #7'))

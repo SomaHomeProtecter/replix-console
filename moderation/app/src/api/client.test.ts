@@ -225,3 +225,58 @@ describe('apiFetch — 토큰 갱신도 상한 안에 둔다(HP-298)', () => {
     expect(fetchMock).not.toHaveBeenCalled()   // 토큰이 없으니 요청도 안 나갔다
   })
 })
+
+/**
+ * 도구 전환 메뉴·브랜드는 페이지를 통째로 옮긴다(HP-456). 쓰기 요청이 도는 중에 떠나면 요청이 끊겨
+ * 조치가 서버에 닿았는지 모르게 된다 — 전역 writing 잠금을 쓰지 않는 화면(사용자 상세의 정지 해제 등)도
+ * 있어, 쓰기 요청 자체가 이탈을 붙잡는다(코드 리뷰 지적).
+ */
+describe('쓰기 도중 페이지 이탈 경고(HP-456)', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    envMock.environment = 'DEV'
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function leave(): boolean {
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    return event.defaultPrevented
+  }
+
+  it('쓰기 요청이 도는 동안에는 떠나기 전에 묻게 하고, 끝나면 풀어 준다', async () => {
+    let finish!: (res: Response) => void
+    fetchMock.mockReturnValue(new Promise<Response>((ok) => { finish = ok }))
+
+    const pending = apiFetch('/api/v1/admin/users/1/unsuspend', { method: 'POST', body: '{}' })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+    expect(leave()).toBe(true)
+    finish(new Response('{}', { status: 200 }))
+    await pending
+    expect(leave()).toBe(false)
+  })
+
+  it('실패로 끝나도 풀어 준다', async () => {
+    fetchMock.mockResolvedValue(new Response('', { status: 500 }))
+    await expect(apiFetch('/api/v1/admin/x', { method: 'POST', body: '{}' })).rejects.toThrow()
+    expect(leave()).toBe(false)
+  })
+
+  it('읽기 요청은 이탈을 막지 않는다', async () => {
+    let finish!: (res: Response) => void
+    fetchMock.mockReturnValue(new Promise<Response>((ok) => { finish = ok }))
+
+    const pending = apiFetch('/api/v1/admin/reports')
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+    expect(leave()).toBe(false)
+    finish(new Response('{}', { status: 200 }))
+    await pending
+  })
+})

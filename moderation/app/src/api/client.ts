@@ -56,19 +56,44 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
+/**
+ * 도는 쓰기 요청 수(HP-456).
+ *
+ * <p>운영 콘솔 도구 전환(콘솔 홈·시딩 도구)은 앱 밖이라 페이지를 통째로 옮긴다. 쓰기가 도는 중에 떠나면
+ * 요청이 끊겨 조치가 서버에 닿았는지 모르게 된다. 전역 writing 잠금을 쓰지 않는 화면(사용자 상세의 정지
+ * 해제, 운영 협업 저장 등)도 있어, 쓰기 요청 자체가 이탈을 붙잡는다 — 브라우저가 떠나기 전에 묻는다.
+ * 새로고침·탭 닫기에도 같이 걸린다.
+ */
+let pendingWrites = 0
+
+function holdUnload(event: BeforeUnloadEvent): void {
+  event.preventDefault()
+  event.returnValue = '' // 옛 브라우저는 이 값이 있어야 묻는다
+}
+
+function beginWrite(): void {
+  if (pendingWrites++ === 0) window.addEventListener('beforeunload', holdUnload)
+}
+
+function endWrite(): void {
+  if (--pendingWrites === 0) window.removeEventListener('beforeunload', holdUnload)
+}
+
 export async function apiFetch<T>(
   path: string, init?: RequestInit, writeSummary?: ProductionWriteSummary,
 ): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase()
+  const isWrite = method !== 'GET' && method !== 'HEAD'
   // 사람이 확인 내용을 읽고 PROD를 입력하는 시간은 네트워크 15초 상한에 포함하지 않는다.
   // 상한은 확인이 끝나 실제 토큰 갱신·요청이 시작되는 순간부터 잰다.
-  if (env.environment === 'PROD' && method !== 'GET' && method !== 'HEAD') {
+  if (env.environment === 'PROD' && isWrite) {
     if (!writeSummary) {
       throw new Error('PROD 쓰기 요청 설명이 없어 전송을 차단했습니다')
     }
     await confirmProductionWrite(writeSummary)
   }
 
+  if (isWrite) beginWrite()
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -124,6 +149,7 @@ export async function apiFetch<T>(
     // 끝난 요청의 타이머를 남기면 나중에 깨어나 <b>다음</b> 일과 무관하게 abort를 때린다.
     clearTimeout(timer)
     init?.signal?.removeEventListener('abort', relayAbort)
+    if (isWrite) endWrite()
   }
 }
 

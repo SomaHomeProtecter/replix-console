@@ -24,7 +24,16 @@ describe('운영 콘솔 도구 전환(HP-456)', () => {
     expect(tools.querySelector('[aria-current="page"]')).toHaveTextContent('조치 콘솔')
   })
 
-  it('Esc로 닫고 여는 버튼으로 초점을 돌려준다', async () => {
+  // 시딩 도구는 console.replix.tv에서 늘 운영 서버에 붙는다 — 조치 콘솔이 DEV여도 그렇다(코드 리뷰 지적).
+  it('시딩 도구가 늘 운영 서버에 붙는다는 것을 목록에서 밝힌다', async () => {
+    const user = userEvent.setup()
+    render(<ConsoleSwitcher disabled={false} />)
+    await user.click(screen.getByRole('button', { name: /조치 콘솔/ }))
+    expect(screen.getByRole('navigation', { name: '운영 콘솔 도구' }))
+        .toHaveTextContent('시딩 도구는 늘 운영 서버에 붙습니다')
+  })
+
+  it('목록 안에서 Esc를 누르면 닫고 여는 버튼으로 초점을 돌려준다', async () => {
     const user = userEvent.setup()
     render(<ConsoleSwitcher disabled={false} />)
     const toggle = screen.getByRole('button', { name: /조치 콘솔/ })
@@ -37,14 +46,18 @@ describe('운영 콘솔 도구 전환(HP-456)', () => {
     expect(toggle).toHaveFocus()
   })
 
-  it('바깥을 누르면 닫는다', async () => {
+  // 목록이 열린 채 남으면 다른 곳의 Esc(검색창 지우기·대화상자 닫기)까지 가로채 초점을 빼앗았다(코드 리뷰 지적).
+  it('초점이 목록 밖으로 나가면 닫고, 밖에서 누른 Esc는 가로채지 않는다', async () => {
     const user = userEvent.setup()
-    render(<div><ConsoleSwitcher disabled={false} /><p>본문</p></div>)
+    render(<div><ConsoleSwitcher disabled={false} /><input aria-label="사용자 검색" /></div>)
+    const toggle = screen.getByRole('button', { name: /조치 콘솔/ })
 
-    await user.click(screen.getByRole('button', { name: /조치 콘솔/ }))
-    await user.click(screen.getByText('본문'))
+    await user.click(toggle)
+    await user.click(screen.getByLabelText('사용자 검색'))
 
     expect(screen.queryByRole('navigation', { name: '운영 콘솔 도구' })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.getByLabelText('사용자 검색')).toHaveFocus()
   })
 
   // 조치 처리 중 이탈 차단(HP-300)은 종전 브랜드 링크가 지던 책임이라 이 자리가 그대로 잇는다.

@@ -154,6 +154,9 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     expect(screen.getByRole('button', { name: '검색' })).toBeDisabled()
 
     await user.click(topbarLinks[0])
+    // 브랜드는 라우터 밖 페이지 이동이 됐다(HP-456) — 앱 안 이동의 잠금(preventWhileWriting)은 탭으로
+    // 따로 확인한다. 이 클릭이 없으면 그 잠금을 빼도 이 테스트가 초록으로 남는다(코드 리뷰 지적).
+    await user.click(topbarLinks[1])
     await user.click(logout)
     expect(auth.logout).not.toHaveBeenCalled()
     expect(screen.getByRole('region', { name: '정지 현황판' })).toBeInTheDocument()
