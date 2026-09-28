@@ -1,0 +1,1160 @@
+/* ── Replix 조치 콘솔 — 시각 정본 = 2026-08-04 검토 아티팩트 v7 §4 (콘솔 목업, 라이트 고정)
+   토큰·hex는 시안에서 그대로 옮겼다. 빨강(--red)은 파괴적 조치(정지) 전용. */
+:root {
+  --ground: #f7f8fa;
+  --panel: #ffffff;
+  --panel-2: #fbfcfd;
+  --ink: #212b35;
+  --body: #303b46;
+  --muted: #8a95a1;
+  --muted-2: #6a7683;
+  --label: #4a5865;
+  --line: #e2e7ec;
+  --line-2: #eef1f4;
+  --line-strong: #cfd7de;
+  --frame: #d9dee4;
+  --top: #1f2732;
+  --top-ink: #e8edf2;
+  --top-muted: #aeb9c5;
+  --top-chip: #3a4656;
+  --top-chip-ink: #cdd6e0;
+  --top-on: #303b49;
+  --logo-red: #f0424d;
+  --blue: #2f6da8;
+  --blue-soft: #f2f6fb;
+  --red: #b03030;              /* 정지 전용 */
+  --red-soft: #fdecec;
+  --red-border: #f2c9c9;
+  --green: #2e7d4f;
+  --green-soft: #e6f4ec;
+  --amber: #d9a441;
+  --amber-ink: #97650c;
+  --amber-soft: #fff3df;
+  --amber-bg: #fffaf0;
+  --warn-bg: #fff8ea;
+  --purple: #5b4bc4;
+  --purple-soft: #eae9fb;
+  --radius: 7px;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--body);
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard Variable", Pretendard,
+    "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+button { font: inherit; }
+
+/* ── 앱 셸 · 톱바 (시안 cm-top) ── */
+.app { display: flex; flex-direction: column; height: 100%; }
+.topbar {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--top); color: var(--top-ink);
+  padding: 9px 14px; flex: none; font-size: 13px;
+}
+.brand { color: inherit; text-decoration: none; font-weight: 800; white-space: nowrap; }
+.brand .rx { color: var(--logo-red); }
+
+/* 운영 콘솔 도구 전환(HP-456) — 종전 브랜드 자리. 다른 도구로는 페이지를 옮긴다.
+   목록은 사용자 검색 결과와 같은 겹(z-index 20)·같은 패널 모양을 쓴다. */
+.console-switcher { position: relative; display: flex; align-items: center; gap: 6px; flex: none; }
+.console-switcher-sep { color: #5e6b7a; }
+.console-switcher-toggle {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 6px;
+  padding: 3px 8px; background: var(--top-on); color: #fff; font-weight: 800; white-space: nowrap; cursor: pointer;
+}
+.console-switcher-toggle:hover:not(:disabled), .console-switcher-toggle[aria-expanded="true"] { background: var(--top-chip); }
+.console-switcher-toggle:disabled { opacity: .45; cursor: not-allowed; }
+.console-switcher-toggle:focus-visible { outline: 2px solid #8db5dc; outline-offset: 2px; }
+.console-switcher-toggle .caret {
+  width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+}
+.console-switcher-menu {
+  position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; width: min(300px, 90vw); padding: 4px;
+  border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--body);
+  box-shadow: 0 12px 28px rgba(10, 18, 26, .22);
+}
+.console-switcher-menu ul { list-style: none; margin: 0; padding: 0; }
+.console-switcher-menu a, .console-switcher-menu .current {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; padding: 7px 9px;
+  border-radius: 6px; color: inherit; text-decoration: none;
+}
+.console-switcher-menu a:hover { background: var(--blue-soft); }
+.console-switcher-menu a:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.console-switcher-menu .current { background: var(--blue-soft); box-shadow: inset 3px 0 0 var(--blue); }
+.console-switcher-menu b { color: var(--ink); font-size: 12.5px; font-weight: 800; }
+.console-switcher-menu small { grid-column: 1; color: var(--muted-2); font-size: 11.5px; }
+.console-switcher-menu em {
+  grid-row: 1 / span 2; grid-column: 2; align-self: center;
+  font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+.console-switcher-menu p {
+  margin: 4px 0 0; padding: 7px 9px 3px; border-top: 1px solid var(--line-2);
+  color: var(--muted-2); font-size: 11.5px;
+}
+.env-selector {
+  position: relative; display: inline-flex; align-items: center; border-radius: 4px;
+  background: var(--top-chip); color: var(--top-chip-ink);
+}
+.env-selector select {
+  appearance: none; border: 0; outline: 0; border-radius: inherit; cursor: pointer;
+  padding: 2px 20px 2px 7px; color: inherit; background: transparent;
+  font: inherit; font-size: 11px; font-weight: 800;
+}
+.env-selector::after {
+  content: ""; pointer-events: none; position: absolute; right: 7px;
+  border-left: 3px solid transparent; border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+}
+.env-selector:focus-within { outline: 2px solid #8db5dc; outline-offset: 2px; }
+.env-selector.env-prod { background: #73561d; color: #ffe2a4; }
+.env-selector:has(select:disabled) { opacity: .45; cursor: not-allowed; }
+.env-selector select:disabled { cursor: not-allowed; }
+.prod-environment-banner {
+  flex: none; padding: 5px 14px; border-bottom: 1px solid #e7c783;
+  background: var(--amber-bg); color: var(--amber-ink); text-align: center;
+  font-size: 12px; font-weight: 800; letter-spacing: .01em;
+}
+.prod-confirm-backdrop { z-index: 30; }
+.prod-confirm-dialog { border-top: 4px solid var(--amber); }
+.prod-change-summary { margin: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.prod-change-summary div { display: grid; grid-template-columns: 64px 1fr; }
+.prod-change-summary div + div { border-top: 1px solid var(--line-2); }
+.prod-change-summary dt, .prod-change-summary dd { margin: 0; padding: 7px 9px; font-size: 12px; }
+.prod-change-summary dt { background: var(--panel-2); color: var(--muted-2); font-weight: 800; }
+.prod-change-summary dd { color: var(--body); overflow-wrap: anywhere; }
+.prod-change-summary dd strong { color: var(--amber-ink); }
+.prod-confirm-input { color: var(--body); font-size: 12px; }
+.prod-confirm-input input {
+  width: 100%; margin-top: 4px; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 8px 11px; color: var(--ink); background: var(--panel); font: var(--mono);
+}
+.prod-confirm-input input:focus { outline: 2px solid var(--amber); outline-offset: 1px; }
+.btn-prod-confirm { background: var(--amber-ink); border-color: var(--amber-ink); color: #fff; }
+.topnav { display: flex; gap: 3px; margin-left: 3px; white-space: nowrap; }
+/* 탭은 화면이 둘 이상이 되면서 <b>링크</b>가 됐다(HP-300) — 종전엔 글자였다.
+   켜짐 표시는 클래스가 아니라 aria-current로 건다: 스크린리더가 읽는 그 표시와 눈에 보이는
+   표시가 <b>같은 근거</b>를 쓰게 해, 한쪽만 켜지는 일이 생기지 않는다. */
+.topnav a {
+  padding: 4px 8px; border-radius: 6px; color: var(--top-muted);
+  text-decoration: none; font-weight: 700;
+}
+.topnav a:hover { color: var(--top-ink); }
+.topnav a[aria-current="page"] { background: var(--top-on); color: #fff; }
+/* 쓰기 중 잠긴 링크(HP-300) — 버튼의 :disabled와 같은 결로 보인다. 링크는 disabled 속성이
+   없어 aria-disabled로 막는데, 그것만으로는 <b>모습이 그대로다</b> — 평소와 똑같이 생긴 것을
+   눌렀는데 아무 일도 안 일어나면 막힌 게 아니라 고장 난 것으로 읽힌다. */
+.topnav a[aria-disabled="true"], .brand[aria-disabled="true"] {
+  opacity: 0.45; cursor: not-allowed;
+}
+.topbar-right { display: flex; align-items: center; gap: 8px; color: var(--top-muted); font-size: 12px; min-width: 0; }
+.topbar-right .operator { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 줄바꿈 금지(HP-456) — 도구 전환 메뉴가 종전 브랜드보다 넓어 1240px 안팎에서 "로그/아웃"으로 꺾였다.
+   자리가 모자라면 옆 계정 이름(.operator)이 말줄임으로 줄어든다. */
+.btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; white-space: nowrap; }
+.btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
+.content { flex: 1; min-height: 0; padding: 18px; display: flex; flex-direction: column; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* 상세 진입용 사용자 검색(HP-301) — 결과 패널은 톱바 아래로만 펼치고 빈 검색 목록은 없다. */
+.user-search { position: relative; margin-left: auto; width: clamp(180px, 21vw, 280px); }
+.user-search-form {
+  display: flex; align-items: stretch; width: 100%; border: 1px solid #465363;
+  border-radius: 6px; overflow: hidden; background: #2a3441;
+}
+.user-search-form:focus-within { border-color: #8db5dc; box-shadow: 0 0 0 1px #8db5dc; }
+.user-search-form input {
+  flex: 1; min-width: 0; border: 0; outline: 0; padding: 6px 9px;
+  color: var(--top-ink); background: transparent; font: inherit;
+}
+.user-search-form input::placeholder { color: #909dac; }
+.user-search-form input:disabled { opacity: .45; cursor: not-allowed; }
+.user-search-form button {
+  border: 0; border-left: 1px solid #465363; padding: 0 10px; cursor: pointer;
+  background: #354252; color: var(--top-ink); font-weight: 750; font-size: 12px;
+}
+.user-search-form button:disabled { opacity: .4; cursor: not-allowed; }
+.user-search-results {
+  position: absolute; z-index: 20; top: calc(100% + 7px); right: 0; width: min(380px, 90vw);
+  overflow: hidden; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--panel); color: var(--body); box-shadow: 0 12px 28px rgba(10, 18, 26, .22);
+}
+.user-search-results ul { list-style: none; margin: 0; padding: 4px; }
+.user-search-results li + li { border-top: 1px solid var(--line-2); }
+.user-search-results a {
+  display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 5px;
+  color: inherit; text-decoration: none;
+}
+.user-search-results a:hover { background: var(--blue-soft); }
+.user-search-results a[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.user-search-results .ua {
+  width: 30px; height: 30px; flex: none; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: #e9b06c; color: #fff; font-size: 11px; font-weight: 800;
+}
+.user-search-identity { min-width: 0; display: flex; flex-direction: column; }
+.user-search-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.user-search-identity span { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.user-search-status { margin-left: auto; color: var(--green); font-weight: 750; font-size: 11px; }
+.user-search-status.suspended { color: var(--red); }
+.user-search-status.withdrawn { color: var(--muted); }
+.user-search-note { padding: 12px; color: var(--muted-2); }
+.user-search-note.error { color: var(--red); }
+
+/* ── 버튼 공통 ── */
+.btn {
+  border: 1px solid transparent; border-radius: var(--radius);
+  padding: 8px 14px; cursor: pointer; font-weight: 750; font-size: 12.5px;
+  background: var(--panel); color: var(--label); border-color: var(--line-strong);
+}
+.btn:hover { filter: brightness(0.97); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:focus-visible, .btn-logout:focus-visible, .chip-f:focus-visible, a:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: 2px;
+}
+.btn-blind { background: var(--ink); color: #fff; border-color: var(--ink); }         /* 가림 — 기본(잉크) */
+.btn-susp { background: var(--red-soft); color: var(--red); border-color: var(--red-border); }
+.btn-danger-solid { background: var(--red); color: #fff; border-color: var(--red); }   /* 정지 확정 전용 */
+.btn-room-end {
+  background: var(--warn-bg); color: var(--amber-ink); border-color: var(--amber-soft);
+}
+.btn-room-end-solid {
+  background: var(--amber-ink); color: #fff; border-color: var(--amber-ink);
+}
+.btn-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--blue); text-decoration: none; font-weight: 600; font-size: 12px;
+}
+.btn-link:hover { text-decoration: underline; }
+.btn-link[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; text-decoration: none; }
+.btn-link[aria-disabled="true"]:hover { text-decoration: none; }
+
+/* ── 신고 큐 레이아웃 — 전폭 테이블 + 상세 모달(2026-08-05 E2E 피드백) ── */
+.queue-layout {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  background: var(--panel); border: 1px solid var(--frame); border-radius: 10px;
+  overflow: hidden; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.12);
+}
+.queue-error { margin: 10px 16px 0; }
+
+/* 상세 모달 — 바깥 클릭·Esc·✕ = 목록 복귀. 정지 다이얼로그(.dialog-backdrop)가 이 위에 겹친다. */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(31, 39, 50, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 9; padding: 20px;
+}
+.modal-card {
+  position: relative; background: var(--panel); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(20, 30, 40, 0.25);
+  width: min(480px, 100%); max-height: 86vh; overflow: auto;
+}
+.modal-close {
+  position: absolute; top: 8px; right: 10px; z-index: 1;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 14px; padding: 4px 6px; border-radius: 6px;
+}
+.modal-close:hover:not(:disabled) { color: var(--ink); background: var(--line-2); }
+/* 조치를 처리하는 동안은 닫을 수 없다(HP-298) — 눌리지 않는데 눌릴 것처럼 보이면 고장으로 읽힌다.
+   hover 반응까지 함께 꺼야 "누를 수 있다"는 신호가 남지 않는다. */
+.modal-close:disabled { opacity: .35; cursor: progress; }
+
+/* 진행 중 목록 — 잠긴 동안 흐리게 두어 지금 손댈 수 없다는 것이 한눈에 보인다 */
+.author-msgs[aria-busy='true'] .msg-picks { opacity: .55; }
+/* [선택 N건 가림] 옆의 [취소] — 도는 동안만 나타난다(HP-298) */
+.msg-picks-acts { display: flex; align-items: center; gap: 10px; }
+
+/* 필터 툴바 (cm-toolbar — pill 칩) */
+.filter-bar {
+  display: flex; align-items: center; gap: 8px; padding: 12px 18px;
+  border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap;
+}
+.filter-gap { width: 10px; }
+.chip-f {
+  font-size: 12px; font-weight: 700; border: 1px solid var(--line-strong);
+  border-radius: 999px; padding: 3px 12px; color: var(--label);
+  background: var(--panel); cursor: pointer;
+}
+.chip-f[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.filter-note { margin-left: auto; font-size: 12px; color: var(--muted-2); }
+.timeline-signals { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; padding: 10px 0; }
+
+/* 테이블 (cm-tr) */
+.report-table-wrap { overflow: auto; flex: 1; }
+table.report-table { width: 100%; border-collapse: collapse; }
+.report-table th {
+  text-align: left; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase;
+  padding: 10px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+  background: var(--panel-2);
+}
+.report-table td { padding: 10px 16px; border-bottom: 1px solid var(--line-2); vertical-align: middle; font-size: 12.5px; }
+.report-table tbody tr { cursor: pointer; }
+.report-table tbody tr:hover { background: var(--blue-soft); }
+.report-table tbody tr[aria-current="true"] { background: var(--blue-soft); box-shadow: inset 3px 0 0 var(--blue); }
+.report-table tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* 발췌는 잘리되 묶음 칩은 잘리지 않는다(HP-296) — 종전엔 td 자체에 ellipsis가 걸려 있어
+   칸 안에 무엇을 더하든 말줄임에 함께 먹혔다. 자르는 책임을 본문 span으로 내린다. */
+.report-table .excerpt { max-width: 420px; color: var(--body); }
+.excerpt-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.excerpt-row .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.excerpt-row .cnt { flex: none; }
+
+/* ── 계측 표식(대기 시간·묶음 수)은 <b>외곽선·중립</b>으로 그린다 ────────────────────────
+   원칙(2026-08-11 재설계): 한 행 안에서 <b>분류는 채움, 계측은 외곽선/중립</b>이다.
+   사유 pill(욕설=빨강·스포일러=호박·도배=보라·기타=회색)이 이미 '채워진 색'이라는 어휘를
+   독점하고 있는데, 계측 표식이 같은 어휘를 빌려 쓰면서 hex까지 겹쳐 있었다 —
+   .agebadge.warm = .p-spoiler, .cnt = .p-spam, .agebadge.fresh = .p-other 로 <b>세 쌍이
+   바이트 단위로 같은 색</b>이었다. 그 결과 같은 행에서 같은 모양·같은 색이 어떤 자리에선
+   '스포일러 신고'를, 다른 자리에선 '하루 지남'을 뜻해 색이 뜻을 잃었다.
+   형태로 갈라 두면 색이 겹쳐도 역할이 섞이지 않는다. */
+
+/* 같은 메시지에 몰린 신고 수 — 도배 판별의 첫 단서라 발췌 옆에 붙인다.
+   수량은 분류가 아니므로 사유 색을 빌리지 않는다(중립 외곽선). */
+.cnt {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: transparent; color: var(--muted-2); border: 1px solid var(--line-strong);
+}
+
+/* 대기 시간 뱃지(HP-296) — 24시간 넘김 = warm, 48시간 넘김 = hot.
+   ⚠️ hot에 빨강(--red)을 쓰지 않는다: 콘솔에서 빨강은 파괴적 조치(정지) 전용이고
+   (HP-223 확정 제약), 오래 기다린 신고는 급할 뿐 파괴적이지 않다.
+   단계는 <b>형태</b>로 올린다 — 없음(fresh) → 외곽선(warm) → 솔리드(hot). 솔리드는 어떤
+   사유 pill도 쓰지 않는 형태라, 가장 급한 것만 행에서 유일하게 튄다. */
+.agebadge {
+  margin-left: 6px; font-family: var(--mono); font-size: 10px; font-weight: 700;
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: transparent; border: 1px solid transparent;
+}
+/* 하루 안쪽은 급하지 않다 — 테두리도 주지 않아 훑는 눈에 걸리지 않게 한다. */
+.agebadge.fresh { color: var(--muted); }
+.agebadge.warm { color: var(--amber-ink); border-color: var(--amber); }
+.agebadge.hot { background: var(--amber-ink); border-color: var(--amber-ink); color: #fff; }
+/* 작성자·신고자 칸(HP-268) — 이름은 줄바꿈 없이, 신고자는 한 톤 낮춰 본문 경쟁을 피한다. */
+.report-table .party { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-table .party.reporter { color: var(--muted); }
+.report-table .time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); width: 60px; }
+.source-mark {
+  display: inline-block; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--muted); font-size: 10.5px; font-weight: 750; white-space: nowrap;
+}
+.source-mark.group { border-color: var(--amber); color: var(--amber-ink); background: var(--amber-soft); }
+.load-more { align-self: center; margin: 10px; }
+
+/* 사유 pill (cm-pill — 사유별 색) */
+.pill { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
+.p-abuse { background: var(--red-soft); color: var(--red); }
+.p-spoiler { background: var(--amber-soft); color: var(--amber-ink); }
+.p-spam { background: var(--purple-soft); color: var(--purple); }
+.p-other { background: #e9eef2; color: #5b6875; }
+
+/* 상태 텍스트 (cm-st) */
+.st { font-size: 11px; font-weight: 800; white-space: nowrap; }
+.st-open { color: var(--red); }
+.st-done { color: var(--green); }
+.st-rej { color: var(--muted); }
+
+/* 사용자 상태 칩 (cm-status) */
+.ustatus { font-size: 11px; font-weight: 800; border-radius: 4px; padding: 2px 8px; background: var(--green-soft); color: var(--green); white-space: nowrap; }
+.ustatus.susp { background: var(--red-soft); color: var(--red); }
+.ustatus.gone { background: #e9eef2; color: var(--muted); }
+
+/* ── 상세 패널(모달 내용부 — 시안 cm-side 구성) ── */
+.detail-panel { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.side-h { margin: 0; font-size: 11px; letter-spacing: 0.07em; color: var(--muted); text-transform: uppercase; font-weight: 800; }
+.snapshot {
+  margin: 0; border-left: 3px solid var(--amber); background: var(--amber-bg);
+  border-radius: 0 6px 6px 0; padding: 8px 11px; font-size: 12.5px; color: #3a3225;
+  white-space: pre-wrap; word-break: break-word;
+}
+.meta-line { font-size: 11.5px; color: var(--muted); }
+/* 조치 로그 대상 칸의 신고 발췌 — 이름 옆에 붙어 "어느 신고인지"를 말한다(HP-299). */
+.action-table .target-excerpt {
+  margin-left: 6px;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+.target-card {
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px;
+  font-size: 12px; display: flex; align-items: center; gap: 8px;
+}
+.target-card .ua {
+  width: 24px; height: 24px; border-radius: 50%; background: #e9b06c; color: #fff;
+  font-weight: 800; font-size: 11px; display: flex; align-items: center; justify-content: center; flex: none;
+}
+/* 프로필 사진 아바타(HP-268) — 글자 아바타와 같은 원형 자리를 차지하고 잘라 채운다. */
+.ua.img { object-fit: cover; }
+.target-card .un { font-weight: 700; color: var(--ink); }
+/* 신고자 카드 — 작성자와 같은 틀이되 한 톤 낮춰 "대상"과 혼동되지 않게 한다. */
+.reporter-card { margin-top: 6px; }
+.reporter-card .un { font-weight: 600; color: var(--muted); }
+.reporter-card .ua { background: #b8b2a6; }
+.target-card .role { margin-left: auto; font-size: 11px; color: var(--muted-2); }
+.target-card .ul { margin-left: auto; font-size: 11.5px; }
+.acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acts .btn { padding: 8px 0; text-align: center; }
+.acts .span2 { grid-column: span 2; }
+.note-in { width: 100%; }
+.note-in textarea {
+  width: 100%; border: 1px dashed var(--line-strong); border-radius: var(--radius);
+  padding: 7px 10px; font: inherit; font-size: 12px; color: var(--body);
+  background: var(--panel); resize: vertical;
+}
+.note-in textarea::placeholder { color: var(--muted); }
+.hist { border-top: 1px solid var(--line-2); padding-top: 10px; font-size: 11.5px; color: var(--muted-2); }
+.hist b { color: var(--ink); }
+.error-box { background: var(--red-soft); color: var(--red); border-radius: 6px; padding: 8px 11px; font-size: 12px; }
+/* 조치 결과 문구(HP-298 일부 실패·취소). <b>오류가 아니라 주의</b>다 — 빨강은 이 콘솔에서
+   파괴적 조치(정지) 전용이고(HP-223 확정 제약), 일부 실패는 "다시 손봐야 할 일"이지 고장이
+   아니다. 오류와 같은 외피를 입히면 운영자가 둘을 구분하지 못한다. */
+.notice-box {
+  background: var(--warn-bg); color: var(--amber-ink);
+  border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 8px 11px; font-size: 12px;
+}
+.hint { color: var(--muted); font-size: 12px; }
+
+/* ── 정지 다이얼로그 (cm-dlg) ── */
+.dialog-backdrop {
+  position: fixed; inset: 0; background: rgba(31, 39, 50, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 10;
+}
+.dialog {
+  position: relative; /* ✕(.modal-close) 절대 배치 기준 */
+  background: var(--panel); border-radius: 10px; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.25);
+  width: min(400px, calc(100vw - 40px)); padding: 18px; display: flex; flex-direction: column; gap: 10px;
+}
+.dialog h2 { margin: 0; font-size: 14px; color: var(--ink); font-weight: 800; }
+.dialog .sub { font-size: 12px; color: var(--muted); margin: 0; }
+.durs { display: flex; gap: 6px; flex-wrap: wrap; }
+.durs label {
+  font-size: 12px; font-weight: 700; border: 1px solid var(--line-strong);
+  border-radius: 999px; padding: 4px 12px; color: var(--label); cursor: pointer;
+}
+.durs label:has(input:checked) { background: var(--red); border-color: var(--red); color: #fff; }
+.durs input { position: absolute; opacity: 0; pointer-events: none; }
+.dialog .req label { font-size: 12px; color: var(--body); display: block; }
+.dialog .req .must { color: var(--red); font-weight: 800; }
+.dialog textarea {
+  width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 8px 11px; font: inherit; font-size: 12px; color: var(--body); resize: vertical; margin-top: 4px;
+}
+.warnline {
+  display: flex; gap: 7px; font-size: 11.5px; color: var(--amber-ink);
+  background: var(--warn-bg); border-radius: 6px; padding: 7px 10px;
+}
+.dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dialog-actions .btn { text-align: center; }
+.room-end-copy {
+  background: var(--warn-bg); border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 9px 11px; color: var(--amber-ink); font-size: 12px; line-height: 1.45;
+}
+
+/* HP-303 경고는 파괴적 제재가 아니므로 빨강을 쓰지 않는다. 기존 판단 재료의 호박색 토큰을
+   재사용하되, 버튼 대비를 위해 글자는 짙은 잉크로 둔다. */
+.btn-warn {
+  background: var(--warn-bg); border-color: var(--amber-soft); color: var(--amber-ink);
+  font-weight: 750;
+}
+.btn-warn:hover:not(:disabled) { background: var(--amber-soft); color: var(--ink); }
+.warning-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.warning-presets label {
+  font-size: 12px; font-weight: 700; border: 1px solid var(--line-strong);
+  border-radius: 999px; padding: 4px 12px; color: var(--label); cursor: pointer;
+}
+.warning-presets label:has(input:checked) {
+  background: var(--warn-bg); border-color: var(--amber-soft); color: var(--amber-ink);
+}
+.warning-presets input { position: absolute; opacity: 0; pointer-events: none; }
+.warning-copy {
+  background: var(--warn-bg); border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 9px 11px; color: var(--amber-ink); font-size: 12px; line-height: 1.45;
+}
+.warning-copy p { margin: 4px 0 0; }
+.warning-review dt, .warning-review dd { color: var(--amber-ink); }
+
+/* ── 사용자 상세 (cm2) ── */
+.user-detail {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  background: var(--panel); border: 1px solid var(--frame); border-radius: 10px;
+  overflow: auto; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.12);
+}
+.back-row { padding: 10px 18px 0; }
+.user-header { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.user-header .ua {
+  width: 38px; height: 38px; border-radius: 50%; background: #e9b06c; color: #fff;
+  font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none;
+}
+.user-header h1 { margin: 0; font-size: 16px; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.user-header .uid { font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-weight: 400; }
+/* 보낸 신고 집계(HP-270) — uid 줄 아래 보조 정보. 숫자가 나란히 읽히도록 tabular-nums.
+   색을 따로 주지 않는다: 이건 경고가 아니라 판단 재료이고, 색으로 미리 판정하면
+   "인상에 기대지 말라"는 이 지표의 목적과 어긋난다. */
+.user-header .sent-trust {
+  margin-top: 2px; font-size: 11.5px; color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+.user-header .top-act { margin-left: auto; display: flex; gap: 8px; }
+/* 기본 정보 가로 스트립(HP-268) — 좌측 240px 칸에선 이메일이 두 줄로 접혔고, 칸을 넓히면
+   조치 이력이 좁아져 돌려막기가 됐다. 한 줄로 펴서 탭이 전체 폭을 쓰게 한다. */
+.info-strip {
+  display: flex; flex-wrap: wrap; gap: 6px 22px;
+  margin: 0 16px 2px; padding: 10px 12px;
+  background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--radius);
+  font-size: 12px;
+}
+.info-strip > div { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.info-strip dt { color: var(--muted); white-space: nowrap; }
+.info-strip dd { margin: 0; color: var(--body); font-weight: 600; }
+
+.user-columns { flex: 1; min-height: 0; }
+.history-tabs { padding: 12px 16px; min-width: 0; }
+.tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.tab-bar button {
+  border: none; background: none; padding: 6px 12px; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab-bar button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.evrow {
+  display: grid; grid-template-columns: 96px 84px 1fr; gap: 10px; font-size: 12px;
+  padding: 7px 4px; border-bottom: 1px solid var(--line-2); align-items: baseline;
+}
+.evrow .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.evrow .who2 { color: var(--muted-2); }
+/* 조치 이력 5열 — 시각 | 조치 | 대상 | 사유 | 처리자 (HP-268: 머리글과 내용을 맞춘다).
+   표는 화면을 꽉 채우되 처리자 칸도 여유 지분(0.8fr)을 갖는다. 고정폭/auto로 두면 남는 공간을
+   앞의 fr 칸들이 전부 먹어 처리자만 오른쪽 끝에 홀로 박힌다 — 지분이 있으면 칸의 왼쪽 모서리가
+   당겨져 이름이 사유 옆에 붙어 읽힌다(2026-08-05 김지호 확인). */
+.evrow.act { grid-template-columns: 92px 120px minmax(170px, 2.2fr) minmax(110px, 1.2fr) minmax(72px, 0.8fr); }
+.evrow.act .tgt { min-width: 0; overflow-wrap: anywhere; }
+.evrow.act .actor { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.evrow.act .alabel { font-weight: 700; color: var(--body); white-space: nowrap; }
+.evrow.act .actor { color: var(--ink); font-weight: 700; white-space: nowrap; }
+.evrow.head2 { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
+.empty-hint { color: var(--muted); padding: 20px 0; text-align: center; }
+
+/* 조치 이력 필터 토글 줄(HP-268) — 컨트롤 한 줄 + 그 아래 설명 한 줄.
+   설명을 라벨 옆에 나란히 두면 같은 줄에 굵기·색만 다른 글이 붙어 어색하게 읽힌다
+   (2026-08-05 김지호 피드백) — 아래로 내리고 라벨 글자와 왼쪽을 맞춘다. */
+.eff-row {
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+}
+.eff-main { align-items: center; display: flex; gap: 10px; }
+.eff-row label { align-items: center; cursor: pointer; display: flex; gap: 6px; white-space: nowrap; }
+.eff-hint {
+  color: var(--muted-2);
+  font-size: 12px;
+  margin: 0;
+  padding-left: 22px; /* 체크박스 + gap 만큼 들여써 라벨 글자와 왼쪽을 맞춘다 */
+}
+/* 숨긴 건수는 설명보다 강하게 — 목록이 줄어든 이유를 눈이 먼저 잡아야 한다. */
+.eff-row .hidden-count { color: var(--amber); margin-left: auto; white-space: nowrap; }
+
+.boot-error { padding: 40px; color: var(--red); }
+.page-status { color: var(--muted); padding: 24px 0; text-align: center; }
+
+/* ── 기능 제어(HP-340) — 기존 전폭 표·pill·중앙 dialog 문법을 그대로 확장한다. ── */
+.feature-control {
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
+  background: var(--panel); border: 1px solid var(--frame); border-radius: 10px;
+  overflow: hidden; box-shadow: 0 10px 30px rgba(20, 30, 40, .12);
+}
+.feature-control > .board-head { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.feature-control .board-head > div p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.feature-table th, .feature-table td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); text-align: left; vertical-align: middle; }
+.feature-table th { color: var(--muted-2); background: var(--panel-2); font-size: 11px; letter-spacing: .03em; }
+.feature-table th:nth-child(1) { width: 32%; }
+.feature-table th:nth-child(2) { width: 90px; }
+.feature-table th:nth-child(3) { width: 76px; }
+.feature-table th:nth-child(4) { width: 150px; }
+.feature-table th:nth-child(5) { width: 210px; }
+.feature-table th:nth-child(6) { width: 78px; }
+.feature-name { display: flex; flex-direction: column; min-width: 0; }
+.feature-name strong { color: var(--ink); font-size: 13px; }
+.feature-name code { margin-top: 1px; color: var(--blue); font: 10.5px var(--mono); }
+.feature-name span, .feature-runtime span, .feature-meta { display: block; color: var(--muted); font-size: 11px; }
+.feature-state { display: inline-block; min-width: 62px; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 8px; text-align: center; font-size: 11px; font-weight: 800; }
+.feature-state.on { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
+.feature-state.off { color: var(--amber-ink); background: var(--amber-bg); border-color: var(--amber-soft); }
+.feature-state.pending { color: var(--blue); background: var(--blue-soft); border-color: #cadbec; }
+.feature-state.partial { color: var(--purple); background: var(--purple-soft); border-color: #d1cef1; }
+.feature-state.disconnected { color: var(--muted); background: var(--line-2); }
+.feature-table .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.feature-runtime strong { color: var(--body); font-size: 11.5px; }
+.feature-dialog { width: min(520px, calc(100vw - 40px)); }
+.feature-toggle { display: flex; gap: 6px; }
+.feature-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.feature-form-grid .span2 { grid-column: span 2; }
+.feature-form-grid label > span { display: block; margin-bottom: 3px; color: var(--muted-2); font-size: 11.5px; font-weight: 700; }
+.feature-form-grid label > span b { color: var(--amber-ink); }
+.feature-form-grid input, .feature-form-grid textarea {
+  width: 100%; margin: 0; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 7px 9px; color: var(--body); background: var(--panel); font: inherit; font-size: 12px;
+}
+.feature-form-grid textarea { resize: vertical; }
+
+/* HP-343 변경 세트 — 기능 목록과 같은 패널·표·chip 문법 안에서 승인 흐름만 한 단계 깊게 보인다. */
+.control-tabs { display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.control-tabs a { padding: 9px 12px 8px; color: var(--muted-2); font-size: 12px; font-weight: 750; text-decoration: none; border-bottom: 2px solid transparent; }
+.control-tabs a.active { color: var(--ink); border-bottom-color: var(--ink); }
+.change-set-page > .board-head .filter-note { margin-left: auto; }
+.change-workspace { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(410px, .9fr); min-height: 0; flex: 1; }
+.change-list { min-height: 0; overflow: auto; border-right: 1px solid var(--line); }
+.change-list table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.change-list th, .change-list td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); text-align: left; font-size: 12px; }
+.change-list th { position: sticky; top: 0; z-index: 1; background: var(--panel-2); color: var(--muted-2); font-size: 11px; }
+.change-list th:first-child { width: 42%; }
+.change-list th:nth-child(2) { width: 110px; }
+.change-list th:nth-child(3) { width: 100px; }
+.change-list th:nth-child(4) { width: 112px; }
+.change-list tbody tr { cursor: pointer; }
+.change-list tbody tr:hover, .change-list tbody tr.selected { background: var(--blue-soft); }
+.change-list td:first-child strong, .change-list td:first-child span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.change-list td:first-child span { margin-top: 2px; color: var(--muted); font-size: 10.5px; }
+.feature-state.status-review_requested, .feature-state.status-approved, .feature-state.status-scheduled { color: var(--blue); background: var(--blue-soft); border-color: #cadbec; }
+.feature-state.status-succeeded, .feature-state.status-rolled_back { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
+.feature-state.status-partially_failed, .feature-state.status-failed, .feature-state.status-rejected { color: var(--amber-ink); background: var(--amber-bg); border-color: var(--amber-soft); }
+.feature-state.status-cancelled { color: var(--muted); background: var(--line-2); }
+.change-detail { min-width: 0; overflow: auto; padding: 16px; background: var(--panel); }
+.change-detail-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.change-detail-head h2 { margin: 7px 0 0; color: var(--ink); font-size: 16px; }
+.change-detail-head p { margin: 3px 0 0; color: var(--muted); font: 11px var(--mono); }
+.change-detail h3 { margin: 17px 0 7px; color: var(--ink); font-size: 12px; }
+.change-summary { display: grid; grid-template-columns: 1fr 1fr; margin: 13px 0 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.change-summary div { min-width: 0; padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
+.change-summary div:nth-child(odd) { border-right: 1px solid var(--line-2); }
+.change-summary dt { color: var(--muted); font-size: 10.5px; font-weight: 750; }
+.change-summary dd { margin: 2px 0 0; color: var(--body); font-size: 11.5px; overflow-wrap: anywhere; }
+.guard-findings { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+.guard-findings > div { border: 1px solid var(--amber-soft); border-left: 3px solid var(--amber); border-radius: var(--radius); padding: 7px 9px; background: var(--amber-bg); }
+.guard-findings > .guard-blocking { border-color: #e4b7b7; border-left-color: var(--red); background: var(--red-soft); }
+.guard-findings strong { color: var(--amber-ink); font-size: 10.5px; }
+.guard-findings .guard-blocking strong { color: var(--red); }
+.guard-findings p { margin: 2px 0 0; color: var(--body); font-size: 11px; }
+.guard-findings code { display: block; margin-top: 2px; color: var(--blue); font: 9.5px var(--mono); }
+.change-diffs { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.change-diff { display: grid; grid-template-columns: minmax(120px, 1fr) 74px 16px 84px auto; gap: 6px; align-items: center; padding: 7px 9px; font-size: 11px; }
+.change-diff + .change-diff { border-top: 1px solid var(--line-2); }
+.change-diff code { overflow: hidden; text-overflow: ellipsis; color: var(--blue); font: 10.5px var(--mono); }
+.change-diff span { color: var(--muted); }
+.change-diff b { color: var(--muted); }
+.change-diff strong { color: var(--ink); }
+.change-diff small { color: var(--green); }
+.dry-run-box, .change-actions { margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.dry-run-box { display: flex; align-items: end; gap: 7px; flex-wrap: wrap; }
+.dry-run-box label, .change-actions label { flex: 1; min-width: 180px; }
+.dry-run-box label span, .change-actions label > span { display: block; margin-bottom: 3px; color: var(--muted-2); font-size: 11px; font-weight: 750; }
+.dry-run-box input, .change-actions input, .change-actions textarea, .change-target input { width: 100%; border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 8px; background: var(--panel); color: var(--body); font: inherit; font-size: 11.5px; }
+.dry-results { display: flex; flex-direction: column; width: 100%; padding-top: 6px; border-top: 1px solid var(--line); color: var(--body); font: 10.5px var(--mono); }
+.change-actions .dialog-actions { margin-top: 8px; }
+.schedule-row { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
+.schedule-row input { width: auto; flex: 1; }
+.change-events { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.change-events li { display: grid; grid-template-columns: 112px 132px 1fr; gap: 7px; padding: 7px 0; border-bottom: 1px solid var(--line-2); font-size: 10.5px; }
+.change-events span { color: var(--muted); font-family: var(--mono); }
+.change-events strong { color: var(--ink); }
+.change-events p { margin: 0; color: var(--body); }
+.change-empty { display: flex; align-items: center; justify-content: center; padding: 30px; color: var(--muted); text-align: center; }
+.change-set-create { width: min(760px, calc(100vw - 40px)); max-height: min(820px, calc(100vh - 40px)); overflow: auto; }
+.change-picks { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.change-pick { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.change-pick.selected { border-color: var(--line-strong); background: var(--panel); }
+.change-pick-main { display: flex; align-items: center; gap: 9px; padding: 8px 10px; cursor: pointer; }
+.change-pick-main > span { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.change-pick-main strong { color: var(--ink); font-size: 12px; }
+.change-pick-main code { color: var(--blue); font: 10px var(--mono); }
+.change-pick-main small { color: var(--muted); font-size: 10.5px; }
+.change-target { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding: 8px 10px; border-top: 1px solid var(--line-2); }
+.change-target .preset-label { margin-left: 5px; color: var(--muted); font-size: 10.5px; }
+.change-target input { width: 170px; margin-left: auto; }
+.feature-form-grid .auto-rollback-policy { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.feature-form-grid .auto-rollback-policy > span { display: flex; align-items: center; gap: 7px; margin: 0; flex: 1; color: var(--body); }
+.feature-form-grid .auto-rollback-policy input { width: auto; padding: 0; }
+.feature-form-grid .auto-rollback-policy select { border: 1px solid var(--line-strong); border-radius: 6px; padding: 5px 7px; background: var(--panel); color: var(--body); font: inherit; font-size: 11.5px; }
+
+/* HP-343 장애 대응 프리셋 — 기능 목록의 정보 밀도와 변경 세트의 안전 문법을 재사용한다. */
+.preset-page > .board-head .filter-note { margin-left: auto; }
+.preset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; padding: 16px 18px; overflow: auto; }
+.preset-card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 13px; background: var(--panel); }
+.preset-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.preset-card-head small { color: var(--amber-ink); font-size: 10.5px; font-weight: 750; }
+.preset-card h2 { margin: 10px 0 3px; color: var(--ink); font-size: 14px; }
+.preset-card > p { min-height: 32px; margin: 0 0 10px; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.preset-targets, .preset-preview { display: flex; flex-direction: column; margin-bottom: 12px; border: 1px solid var(--line-2); border-radius: var(--radius); overflow: hidden; }
+.preset-targets > div, .preset-preview > div { display: flex; align-items: center; gap: 9px; padding: 7px 8px; background: var(--panel-2); }
+.preset-targets > div + div, .preset-preview > div + div { border-top: 1px solid var(--line-2); }
+.preset-targets span, .preset-preview span { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.preset-targets strong, .preset-preview strong { color: var(--body); font-size: 11.5px; }
+.preset-targets code, .preset-preview code { overflow: hidden; text-overflow: ellipsis; color: var(--blue); font: 9.5px var(--mono); }
+.preset-targets b { color: var(--ink); font-size: 10.5px; white-space: nowrap; }
+.preset-card > .btn { margin-top: auto; text-align: center; }
+.preset-created { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid #b9ddc8; background: var(--green-soft); color: var(--body); font-size: 11.5px; }
+.preset-created span { flex: 1; }
+.preset-created strong { display: block; color: var(--green); }
+.preset-dialog { width: min(620px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; }
+.preset-dialog .preset-preview { margin: 10px 0; }
+.preset-preview .feature-state { min-width: 88px; }
+
+/* HP-343 사용자 공지 — 공개 배너와 운영 정보의 경계를 화면에서도 분리한다. */
+.notice-page > .board-head .filter-note { margin-left: auto; }
+.notice-dialog { width: min(680px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; }
+.feature-form-grid select { width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 7px 9px; background: var(--panel); color: var(--body); font: inherit; font-size: 12px; }
+.notice-preview { display: grid; grid-template-columns: auto minmax(120px, max-content) 1fr; align-items: center; gap: 9px; margin: 12px 0; border: 1px solid #cadbec; border-left: 4px solid var(--blue); border-radius: var(--radius); padding: 9px 11px; background: var(--blue-soft); }
+.notice-preview > span { border-radius: 999px; padding: 2px 7px; background: var(--panel); color: var(--blue); font-size: 10px; font-weight: 800; }
+.notice-preview > strong { color: var(--ink); font-size: 12px; }
+.notice-preview > p { margin: 0; color: var(--body); font-size: 11.5px; }
+.notice-preview.notice-maintenance { border-color: var(--amber-soft); border-left-color: var(--amber); background: var(--amber-bg); }
+.notice-preview.notice-maintenance > span { color: var(--amber-ink); }
+.notice-preview.notice-incident { border-color: #e4b7b7; border-left-color: var(--red); background: var(--red-soft); }
+.notice-preview.notice-incident > span { color: var(--red); }
+/* 전문 보기 링크(HP-425) — 3열 그리드에 끼지 않게 한 줄을 통째로 쓴다. 색은 유형별 배경 위에서 모두 읽히도록 본문색 + 밑줄. */
+.notice-preview > .notice-link { grid-column: 1 / -1; color: var(--ink); font-size: 11px; font-weight: 700; text-decoration: underline; }
+.notice-detail .notice-preview { margin-top: 13px; }
+.internal-note { margin-top: 12px; border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 9px 10px; background: var(--panel-2); }
+.internal-note strong { color: var(--amber-ink); font-size: 10.5px; }
+.internal-note p { margin: 4px 0 0; color: var(--body); font-size: 11.5px; white-space: pre-wrap; }
+.notice-schedule { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 8px; }
+.notice-schedule label { min-width: 0; }
+.feature-state.status-published { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
+
+/* HP-343 runtime drift 해소 — 기능 목록 표 안에서 판정과 안전 조치를 바로 비교한다. */
+.drift-page > .board-head .filter-note { margin-left: auto; }
+.drift-table { flex: 1; min-height: 0; overflow: auto; }
+.drift-table .feature-table th:nth-child(1) { width: 25%; }
+.drift-table .feature-table th:nth-child(2) { width: 100px; }
+.drift-table .feature-table th:nth-child(3) { width: 110px; }
+.drift-table .feature-table th:nth-child(4) { width: 145px; }
+.drift-table .feature-table th:nth-child(5) { width: 130px; }
+.drift-table .feature-table th:nth-child(6) { width: auto; }
+.feature-state.drift-healthy { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
+.feature-state.drift-propagating { color: var(--blue); background: var(--blue-soft); border-color: #cadbec; }
+.feature-state.drift-drift, .feature-state.drift-stale { color: var(--red); background: var(--red-soft); border-color: #e4b7b7; }
+.feature-state.drift-no_signal { color: var(--muted); background: var(--line-2); }
+.drift-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.drift-actions > span { color: var(--muted-2); font-size: 10.5px; }
+.drift-actions .btn { margin-left: auto; white-space: nowrap; }
+.drift-dialog { width: min(600px, calc(100vw - 40px)); }
+.drift-reapply-target { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 10px; background: var(--panel-2); }
+.drift-reapply-target strong { color: var(--ink); font-size: 12px; }
+.drift-reapply-target code { color: var(--blue); font: 10px var(--mono); }
+.drift-reapply-target span { grid-column: 1 / -1; color: var(--muted); font: 10px var(--mono); }
+
+/* HP-343 인시던트 타임라인 — 기존 감사 이력의 밀도를 유지하며 서로 다른 소스를 한 축에 묶는다. */
+.incident-page > .board-head .filter-note { margin-left: auto; }
+.incident-search { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.incident-search label { color: var(--muted-2); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.incident-search input { width: min(360px, 50vw); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 7px 9px; background: var(--panel); color: var(--body); font: 12px var(--mono); }
+.incident-page > .error-box { margin: 12px 18px 0; }
+.incident-guide { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 5px; min-height: 240px; color: var(--muted); text-align: center; }
+.incident-guide strong { color: var(--ink); font-size: 13px; }
+.incident-guide span { font-size: 11.5px; }
+.incident-result { min-height: 0; overflow: auto; padding: 14px 18px 24px; }
+.incident-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 16px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.incident-summary div { min-width: 0; padding: 8px 10px; border-right: 1px solid var(--line-2); background: var(--panel-2); }
+.incident-summary div:last-child { border-right: 0; }
+.incident-summary dt { color: var(--muted); font-size: 10px; font-weight: 800; }
+.incident-summary dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--body); font-size: 11.5px; }
+.incident-summary .feature-state { min-width: 0; padding-block: 1px; }
+.incident-timeline { list-style: none; margin: 0; padding: 0; }
+.incident-timeline li { position: relative; display: grid; grid-template-columns: 112px 18px minmax(0, 1fr); gap: 8px; }
+.incident-timeline li:not(:last-child)::after { content: ''; position: absolute; left: 128px; top: 19px; bottom: -1px; width: 1px; background: var(--line-strong); }
+.incident-timeline time { padding-top: 8px; color: var(--muted); font: 10px var(--mono); text-align: right; }
+.incident-dot { z-index: 1; width: 9px; height: 9px; margin: 10px auto 0; border: 2px solid var(--panel); border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.incident-dot.source-notice { background: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.incident-timeline article { min-width: 0; margin-bottom: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 10px; background: var(--panel); }
+.incident-timeline article header { display: flex; align-items: center; gap: 7px; }
+.incident-timeline article header > strong { color: var(--ink); font: 10.5px var(--mono); }
+.incident-timeline article header > .feature-state { min-width: 0; margin-left: auto; padding-block: 1px; color: var(--muted-2); background: var(--panel-2); }
+.incident-source { border-radius: 4px; padding: 2px 6px; color: var(--blue); background: var(--blue-soft); font-size: 10px; font-weight: 800; }
+.incident-source.source-notice { color: var(--amber-ink); background: var(--amber-bg); }
+.incident-timeline h2 { margin: 7px 0 2px; color: var(--ink); font-size: 12px; }
+.incident-timeline p { margin: 0; color: var(--body); font-size: 11px; line-height: 1.45; white-space: pre-wrap; }
+.incident-links { display: flex; align-items: center; gap: 5px 10px; flex-wrap: wrap; margin-top: 7px; color: var(--muted); font-size: 10px; }
+.incident-links a { color: var(--blue); font-weight: 700; text-decoration: none; }
+.incident-links a:hover { text-decoration: underline; }
+.incident-revisions { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; border-top: 1px solid var(--line-2); padding-top: 6px; }
+.incident-revisions code { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; color: var(--blue); font: 9.5px var(--mono); }
+.incident-revisions code b { color: var(--green); white-space: nowrap; }
+
+.incident-primary-banner { display: flex; align-items: center; gap: 10px; padding: 7px 18px; border-bottom: 1px solid var(--amber-soft); background: var(--amber-bg); color: var(--body); font-size: 11.5px; }
+.incident-primary-banner strong { color: var(--amber-ink); }
+.incident-primary-banner span { flex: 1; }
+.incident-primary-banner b { border-radius: 999px; padding: 2px 7px; background: var(--panel); color: var(--muted-2); font-size: 10px; }
+.incident-primary-banner a { color: var(--blue); font-weight: 800; }
+.incident-primary-banner.severity-sev1, .incident-primary-banner.severity-sev2 { border-color: #e4b7b7; background: var(--red-soft); }
+.incident-primary-banner.severity-sev1 strong, .incident-primary-banner.severity-sev2 strong { color: var(--red); }
+.incident-mode-page > .board-head .filter-note { margin-left: auto; }
+.incident-dialog { width: min(650px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; }
+.incident-sev { display: inline-block; border-radius: 4px; padding: 2px 7px; color: var(--amber-ink); background: var(--amber-bg); font: 10.5px var(--mono); font-weight: 800; }
+.incident-sev.sev1, .incident-sev.sev2 { color: var(--red); background: var(--red-soft); }
+.incident-sev.sev4 { color: var(--muted-2); background: var(--line-2); }
+.incident-impact { margin-top: 12px; border-left: 3px solid var(--amber); padding: 8px 10px; background: var(--amber-bg); }
+.incident-impact strong { color: var(--amber-ink); font-size: 10.5px; }
+.incident-impact p { margin: 3px 0 0; color: var(--body); font-size: 11.5px; white-space: pre-wrap; }
+.incident-head-actions { display: flex; gap: 6px; }
+
+/* 톱바 Grafana 딥링크(HP-297) — 톱바의 보조 정보와 같은 톤으로 두어 상단이 시끄러워지지 않게 한다. */
+.grafana-link {
+  color: var(--top-muted); font-size: 12px; text-decoration: underline;
+  text-underline-offset: 2px; white-space: nowrap;
+}
+.grafana-link:hover { color: var(--top-ink); }
+.grafana-link:focus-visible { outline: 2px solid var(--top-chip-ink); outline-offset: 2px; border-radius: 3px; }
+
+/* 스포일러 점수 정정 줄(HP-294) — 판단 재료를 조치 그리드 바로 위에 둔다.
+   선택 칩은 --ink다: 빨강은 파괴적 조치(정지) 전용이고 점수 정정은 되돌릴 수 있다. */
+.score-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.score-now {
+  font-family: var(--mono); font-size: 15px; font-weight: 800; color: var(--ink);
+  min-width: 18px; text-align: center;
+}
+.score-arrow { color: var(--muted); font-size: 12px; }
+.score-picker { display: flex; gap: 3px; flex-wrap: wrap; }
+.score-chip {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  border: 1px solid var(--line-strong); border-radius: 5px;
+  padding: 2px 6px; color: var(--label); cursor: pointer; line-height: 1.4;
+}
+.score-chip:has(input:checked) { background: var(--ink); border-color: var(--ink); color: #fff; }
+.score-chip:has(input:disabled) { opacity: .45; cursor: default; }
+.score-chip:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 1px; }
+.score-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.btn-score { padding: 4px 10px; font-size: 11.5px; margin-left: auto; }
+
+/* 단축키 안내 줄(HP-295) — 기존 콘솔의 보조 패널 톤을 유지한다. */
+.kbar {
+  display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+  margin-top: 10px; padding: 8px 14px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius);
+  font-size: 11.5px; color: var(--muted-2);
+}
+.kbar kbd {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line-strong); border-bottom-width: 2px;
+  border-radius: 4px; padding: 1px 5px; margin-right: 4px;
+}
+
+/* 작성자 글 일괄 보기·가림(HP-298) — 상세 모달 안, 조치 그리드 위(판단 재료). */
+.author-msgs { margin-top: 4px; }
+.author-msgs .hint { font-weight: 400; }
+.msg-picks { list-style: none; margin: 0 0 8px; padding: 0; max-height: 168px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.msg-picks li + li { border-top: 1px solid var(--line-2); }
+.msg-picks label { display: flex; align-items: center; gap: 8px; padding: 5px 9px;
+  font-size: 12px; cursor: pointer; }
+.msg-picks li.blinded label { cursor: default; }
+/* 재생 시각 — 도배는 시간 순서로 읽어야 판단이 서므로 눈금처럼 고정폭으로 세운다 */
+.msg-picks .pt { flex: none; width: 46px; font-family: var(--mono); font-size: 10.5px;
+  color: var(--muted); font-variant-numeric: tabular-nums; }
+.msg-picks .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--body); }
+.msg-picks li.blinded .txt { color: var(--muted); text-decoration: line-through; }
+/* 표식은 계측이 아니라 상태라 사유 pill과 형태가 겹치지 않게 외곽선으로 둔다(HP-296 원칙) */
+.msg-picks .mark { flex: none; font-size: 10px; padding: 0 4px; border-radius: 4px;
+  border: 1px solid var(--line-strong); color: var(--muted-2); white-space: nowrap; }
+.msg-picks .mark.rep { border-color: var(--amber); color: var(--amber-ink); }
+
+/* ── 정지 현황판 (HP-300) — 지금 누가 정지 상태인가 ── */
+.susp-board { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.board-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.board-head h1 { margin: 0; font-size: 16px; color: var(--ink); }
+.susp-chips { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.board-head .refresh { margin-left: auto; padding: 5px 11px; }
+/* 칩은 세는 자리이지 누르는 자리가 아니다 — 필터 칩(.chip-f)과 형태를 다르게 둬(둥근 알약,
+   테두리 없는 채움) 눌러 보고 아무 일도 안 일어나는 오해를 만들지 않는다. */
+.susp-chip {
+  font-size: 12px; border-radius: 999px; padding: 4px 12px;
+  background: var(--panel); border: 1px solid var(--line-strong); color: var(--muted-2);
+}
+.susp-chip .n { font-weight: 800; font-variant-numeric: tabular-nums; }
+/* 진행 중·무기한은 실제로 걸려 있는 정지라 빨강(파괴적 조치 전용 색). 만료됨은 이미 풀린
+   상태의 잔재라 "손볼 일"인 amber로 둔다 — 고장이 아니므로 빨강을 쓰지 않는다. */
+.susp-chip.active, .susp-chip.indefinite {
+  background: var(--red-soft); border-color: var(--red-border); color: var(--red);
+}
+.susp-chip.indefinite { font-weight: 700; }
+.susp-chip.expired {
+  background: var(--amber-bg); border-color: var(--amber-soft); color: var(--amber-ink);
+}
+/* 칸 너비를 고정한다(table-layout: fixed) — 행에서 [정지 해제]가 [해제 확인][취소] 둘로 바뀌면
+   조치 칸이 넓어지고, 자동 레이아웃에서는 그때마다 <b>표 전체가 가로로 밀린다</b>. 확인을 열었을
+   뿐인데 옆 줄들이 움직이면 어느 줄을 누르려던 것인지 놓친다 — 오조작을 막으려고 넣은 확인 단계가
+   오히려 오조작을 부르는 꼴이다(2026-08-12 실브라우저 확인). */
+table.susp-table {
+  width: 100%; border-collapse: collapse; background: var(--panel); table-layout: fixed;
+}
+.susp-table th:nth-child(1), .susp-table td:nth-child(1) { width: 220px; }
+.susp-table th:nth-child(2), .susp-table td:nth-child(2) { width: 190px; }
+.susp-table th:nth-child(3), .susp-table td:nth-child(3) { width: 130px; }
+/* 확인 두 버튼이 들어가고도 남는 폭 — 여기가 좁으면 고정 레이아웃에서 버튼이 잘린다 */
+.susp-table th:nth-child(5), .susp-table td:nth-child(5) { width: 200px; }
+.susp-table th {
+  text-align: left; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--panel);
+}
+.susp-table td {
+  padding: 10px 16px; border-bottom: 1px solid var(--line-2);
+  vertical-align: middle; font-size: 12.5px;
+}
+.susp-table .party { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.susp-table .party a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.susp-table .party .ua {
+  width: 24px; height: 24px; border-radius: 50%; background: #e9b06c; color: #fff;
+  font-weight: 800; font-size: 11px;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.susp-table .time { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+.susp-table .why { color: var(--body); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.susp-table .act { white-space: nowrap; text-align: right; }
+.susp-table .act .btn { padding: 5px 11px; }
+.susp-table .act .btn + .btn { margin-left: 6px; }
+.sstate {
+  font-size: 11px; font-weight: 800; border-radius: 4px; padding: 2px 8px; white-space: nowrap;
+}
+.sstate.active, .sstate.indefinite { background: var(--red-soft); color: var(--red); }
+.sstate.expired { background: var(--amber-soft); color: var(--amber-ink); }
+
+/* ── 전역 조치 로그 (HP-299) ── */
+.action-log { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.action-log .board-head .filter-note { margin-left: auto; }
+.action-filters {
+  display: flex; align-items: end; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.action-filters label { display: flex; flex-direction: column; gap: 4px; }
+.action-filters label > span { color: var(--muted-2); font-size: 11px; font-weight: 750; }
+.action-filters select, .action-filters input {
+  height: 32px; min-width: 140px; border: 1px solid var(--line-strong); border-radius: 6px;
+  background: var(--panel); color: var(--body); padding: 4px 9px; font: inherit;
+}
+.action-filters select:focus-visible, .action-filters input:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: 1px;
+}
+/* 내용 길이와 무관하게 칸이 움직이지 않는다 — 현황판과 같은 고정 레이아웃 원칙. */
+table.action-table {
+  width: 100%; border-collapse: collapse; background: var(--panel); table-layout: fixed;
+}
+.action-table th:nth-child(1), .action-table td:nth-child(1) { width: 120px; }
+.action-table th:nth-child(2), .action-table td:nth-child(2) { width: 160px; }
+.action-table th:nth-child(3), .action-table td:nth-child(3) { width: 180px; }
+.action-table th:nth-child(4), .action-table td:nth-child(4) { width: 220px; }
+.action-table th {
+  text-align: left; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase; padding: 10px 16px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel-2);
+}
+.action-table td {
+  padding: 10px 16px; border-bottom: 1px solid var(--line-2);
+  vertical-align: middle; font-size: 12.5px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.action-table .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.action-table .admin { color: var(--label); font-weight: 650; }
+.action-table .action { color: var(--ink); font-weight: 700; }
+.action-table .why { color: var(--body); }
+
+/* ── 클린봇 오탐 검토 (HP-302) ──
+   아티팩트 F10의 밝은 검토 패널과 한 줄 판정 밀도를 유지한다. 빨강은 정지 전용이므로
+   오탐·혐오 표식은 호박/보라를 써 의미가 충돌하지 않게 한다. */
+.moderation-review { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.review-head { display: flex; align-items: end; gap: 16px; }
+.review-head h1 { margin: 0; font-size: 16px; color: var(--ink); }
+.review-head p { margin: 3px 0 0; color: var(--muted-2); font-size: 12px; }
+.review-head .refresh { margin-left: auto; padding: 5px 11px; }
+.review-panel {
+  min-height: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--frame);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.09);
+}
+.review-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel-2);
+}
+.review-counts { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.review-counts li {
+  border: 1px solid var(--line-strong); border-radius: 999px; overflow: hidden;
+  color: var(--muted-2); font-size: 12px; white-space: nowrap; background: var(--panel);
+}
+.review-counts li.pending { border-color: var(--ink); }
+.review-counts button {
+  appearance: none; border: 0; background: transparent; color: inherit; font: inherit;
+  padding: 4px 11px; cursor: pointer;
+}
+.review-counts button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.review-counts button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.review-counts b { font-variant-numeric: tabular-nums; }
+.review-stage-filters { display: flex; gap: 5px; padding-left: 6px; border-left: 1px solid var(--line); }
+.review-list { list-style: none; margin: 0; padding: 0; }
+.review-list li {
+  display: grid; grid-template-columns: 108px 126px minmax(220px, 1fr) 150px 122px;
+  gap: 12px; align-items: center; min-height: 50px; padding: 8px 16px;
+  border-bottom: 1px solid var(--line-2);
+}
+.review-list li:hover { background: var(--blue-soft); }
+.review-list time { color: var(--muted); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.review-stage {
+  display: inline-flex; align-items: center; gap: 5px; width: max-content;
+  border-radius: 4px; padding: 2px 7px; font-size: 11px; font-weight: 800;
+}
+.review-stage.profanity { background: var(--amber-soft); color: var(--amber-ink); }
+.review-stage.hate { background: var(--purple-soft); color: var(--purple); }
+.review-stage b { font-family: var(--mono); }
+.review-message { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-category { color: var(--muted-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.review-actions .btn { padding: 4px 11px; }
+.review-false { border-style: dashed; border-color: var(--amber); color: var(--amber-ink); }
+.review-true { background: var(--ink); border-color: var(--ink); color: #fff; }
+.review-outcome { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; }
+.review-outcome b { border-radius: 4px; padding: 2px 7px; font-size: 11px; }
+.review-outcome.false_positive b { background: var(--amber-soft); color: var(--amber-ink); }
+.review-outcome.true_positive b { background: var(--ink); color: #fff; }
+.review-outcome span { color: var(--muted-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.review-more { display: flex; justify-content: center; padding: 12px; border-top: 1px solid var(--line-2); }
+.review-load-error { display: flex; align-items: center; gap: 10px; }
+.review-load-error span { flex: 1; }
+.stale-box { border-color: var(--amber); background: var(--amber-soft); color: var(--amber-ink); }
+
+/* ── 사용자 피드백 (HP-426) ──
+   조치 콘솔이 아니라 읽는 화면이다 — 상태 뱃지·판정 색을 두지 않고, 빨강은 삭제 확인
+   버튼에만 쓴다(조치 콘솔 전역 규칙: 빨강 = 되돌릴 수 없는 행동). 필터·표 골격은 조치
+   로그(.action-filters)를 그대로 재사용해 두 화면의 조작감이 갈리지 않게 한다. */
+.feedback-page { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.feedback-page > .board-head .filter-note { margin-left: auto; }
+table.feedback-table {
+  width: 100%; border-collapse: collapse; background: var(--panel); table-layout: fixed;
+}
+.feedback-table th:nth-child(1), .feedback-table td:nth-child(1) { width: 112px; }
+.feedback-table th:nth-child(2), .feedback-table td:nth-child(2) { width: 72px; }
+.feedback-table th:nth-child(3), .feedback-table td:nth-child(3) { width: 72px; }
+.feedback-table th:nth-child(4), .feedback-table td:nth-child(4) { width: 132px; }
+.feedback-table th:nth-child(6), .feedback-table td:nth-child(6) { width: 150px; }
+.feedback-table th {
+  text-align: left; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase; padding: 10px 16px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel-2);
+}
+.feedback-table td {
+  padding: 10px 16px; border-bottom: 1px solid var(--line-2);
+  vertical-align: middle; font-size: 12.5px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.feedback-row { cursor: pointer; }
+.feedback-row:hover { background: var(--blue-soft); }
+.feedback-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.feedback-row.open { background: var(--panel-2); }
+.feedback-table .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.feedback-table .surface { color: var(--label); font-weight: 650; }
+.feedback-table .score { color: var(--amber-ink); font-weight: 700; }
+.feedback-table .category { color: var(--ink); font-weight: 700; }
+.feedback-table .excerpt { color: var(--body); }
+.feedback-table .who { color: var(--muted-2); }
+.feedback-detail-row > td { padding: 0; white-space: normal; background: var(--panel-2); }
+.feedback-detail {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px;
+  border-left: 3px solid var(--blue);
+}
+/* 사용자가 쓴 원문 그대로 — 줄바꿈을 보존하고 긴 단어는 칸 안에서 접는다. */
+.feedback-body {
+  margin: 0; color: var(--body); font-size: 12.5px; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word;
+}
+.feedback-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
+.feedback-meta > div { display: flex; align-items: baseline; gap: 6px; }
+.feedback-meta dt { color: var(--muted-2); font-size: 11px; font-weight: 750; }
+.feedback-meta dd {
+  margin: 0; color: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.feedback-actions { display: flex; align-items: center; gap: 10px; }
+.feedback-warn { color: var(--red); font-size: 11.5px; font-weight: 650; }
+
+@media (max-width: 1120px) {
+  .topbar-right .operator { display: none; }
+  .review-list li { grid-template-columns: 96px 116px minmax(180px, 1fr) 120px 118px; gap: 8px; }
+}
+
+@media (max-width: 900px) {
+  .topbar { gap: 6px; padding-inline: 10px; }
+  .topnav a { padding-inline: 6px; }
+  .user-search { width: 170px; }
+  .grafana-link { display: none; }
+  .review-list li { grid-template-columns: 90px 112px minmax(160px, 1fr) 118px; }
+  .review-category { display: none; }
+  .change-workspace { grid-template-columns: 1fr; overflow: auto; }
+  .change-list { min-height: 260px; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .change-detail { overflow: visible; }
+}
+
+/* 좁은 화면에서는 공통 톱바를 세 줄로 접는다. 탭과 기능 표는 각각 자기 영역에서만
+   가로 스크롤되어야 하며, 검색·로그아웃 때문에 문서 전체가 옆으로 밀리면 안 된다. */
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; }
+  .console-switcher { order: 1; }
+  .env-selector { order: 2; }
+  .topbar-right { order: 3; margin-left: auto; }
+  .topnav {
+    order: 4; width: 100%; max-width: 100%; min-width: 0; margin-left: 0;
+    overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin;
+  }
+  .user-search { order: 5; width: 100%; margin-left: 0; }
+  .user-search-results { left: 0; right: auto; width: 100%; }
+  .content { padding: 12px; }
+  .control-tabs { overflow-x: auto; padding-inline: 10px; }
+  .preset-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .preset-grid { grid-template-columns: 1fr; padding: 12px; }
+  .preset-created { align-items: stretch; flex-direction: column; }
+  .notice-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .notice-preview { grid-template-columns: auto 1fr; }
+  .notice-preview > p { grid-column: 1 / -1; }
+  .notice-schedule { grid-template-columns: 1fr; }
+  .drift-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .drift-table { overflow-x: auto; }
+  .drift-table .feature-table { min-width: 780px; }
+  .incident-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .incident-mode-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .incident-primary-banner { align-items: flex-start; flex-wrap: wrap; padding-inline: 12px; }
+  .incident-primary-banner span { order: 3; width: 100%; flex-basis: 100%; }
+  .incident-search { align-items: stretch; flex-direction: column; padding: 12px; }
+  .incident-search input { width: 100%; }
+  .incident-result { padding-inline: 12px; }
+  .incident-summary { grid-template-columns: 1fr 1fr; }
+  .incident-summary div:nth-child(2) { border-right: 0; }
+  .incident-summary div:nth-child(-n + 2) { border-bottom: 1px solid var(--line-2); }
+  .incident-timeline li { grid-template-columns: 14px minmax(0, 1fr); gap: 7px; }
+  .incident-timeline li:not(:last-child)::after { left: 6px; }
+  .incident-timeline time { grid-column: 2; grid-row: 1; padding: 0 0 3px; text-align: left; }
+  .incident-dot { grid-column: 1; grid-row: 1 / span 2; margin-top: 3px; }
+  .incident-timeline article { grid-column: 2; grid-row: 2; }
+  .change-set-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
+  .change-list { min-width: 0; }
+  .change-workspace { overflow: visible; }
+  .change-list th:first-child { width: 64%; }
+  .change-list th:nth-child(2) { width: 36%; }
+  .change-list th:nth-child(3), .change-list td:nth-child(3),
+  .change-list th:nth-child(4), .change-list td:nth-child(4) { display: none; }
+  .change-summary { grid-template-columns: 1fr; }
+  .change-summary div:nth-child(odd) { border-right: 0; }
+  .change-diff { grid-template-columns: minmax(100px, 1fr) 68px 12px 78px; }
+  .change-diff small { grid-column: 1 / -1; }
+}

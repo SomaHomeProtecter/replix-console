@@ -1,0 +1,685 @@
+/**
+ * BE 관리 API 계약(HP-226/227) — 원천은 Replix-be의 응답 DTO들:
+ * AdminReportPageResponse · ResolveReportResponse · SuspensionResponse · AdminUserDetailResponse.
+ * 여기 타입은 그 record들을 1:1로 옮긴 것이므로 BE가 바뀌면 여기도 함께 바꾼다.
+ */
+export type ReportReason = 'ABUSE' | 'SPOILER' | 'SPAM' | 'OTHER'
+export type ReportStatus = 'OPEN' | 'RESOLVED' | 'REJECTED'
+export type ReportSource = 'EPISODE' | 'GROUP_ROOM'
+export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'WITHDRAWN'
+export type SuspendDuration = 'H24' | 'H72' | 'D7' | 'PERMANENT'
+export type AdminActionType =
+  | 'BLIND' | 'UNBLIND' | 'SCORE_FIX' | 'SUSPEND' | 'UNSUSPEND' | 'WARN'
+  | 'RESOLVE_REPORT' | 'REOPEN_REPORT' | 'EXPORT_USER_TIMELINE'
+  | 'POLICY_CREATE' | 'POLICY_UPDATE' | 'POLICY_REVIEW_REQUEST' | 'POLICY_APPROVE'
+  | 'POLICY_ACTIVATE' | 'POLICY_RETIRE' | 'POLICY_SIMULATE'
+
+export type WarningReason = 'ABUSE' | 'SPOILER' | 'SPAM' | 'OTHER'
+
+export interface WarningResult {
+  warning: {
+    id: number
+    reason: WarningReason
+    reasonLabel: string
+    message: string
+    createdAt: string
+  }
+  totalWarnings: number
+  suspensionReviewRecommended: boolean
+}
+
+export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT' | 'POLICY'
+
+/** 처리(RESOLVED)에 동반된 조치. null = 단순 처리. */
+export type ResolutionAction = 'BLIND' | 'SUSPEND' | 'ROOM_CLOSE'
+
+export interface UserSummary {
+  id: number
+  displayName: string | null
+  status: UserStatus
+  /** 프로필 사진(HP-268) — 없으면 null이고 화면은 이름 첫 글자로 대체한다. */
+  profileImageUrl: string | null
+}
+
+export interface ReportItem {
+  id: number
+  createdAt: string
+  reason: ReportReason
+  detail: string | null
+  status: ReportStatus
+  resolvedAction: ResolutionAction | null
+  /** 채팅 출처. roomId 자체는 사적 방 열거를 막기 위해 관리 API가 내보내지 않는다. */
+  source: ReportSource
+  /** 신고가 가리킨 그룹방이 현재 Redis에 남아 있는지. roomId 자체는 노출하지 않는다. */
+  roomActive: boolean
+  episodeId: number
+  msgId: string
+  snapshotMessage: string
+  snapshotDisplayName: string
+  reporter: UserSummary | null
+  targetUser: UserSummary | null
+  handledBy: UserSummary | null
+  handledAt: string | null
+  resolutionNote: string | null
+  /** Redis 실황 — null이면 이미 사라진 메시지(TTL 등). */
+  currentStatus: string | null
+  spoilerScore: number | null
+  /** 같은 메시지 신고 <b>누계</b>(종결분 포함) — 상세의 중립적 사실. */
+  sameMessageReportCount: number
+  /** 그중 <b>지금 열려 있는</b> 수 — 큐의 우선순위 칩은 이것을 쓴다. */
+  openReportCount: number
+}
+
+export interface ReportPage {
+  items: ReportItem[]
+  nextCursor: string | null
+}
+
+export interface ResolveResult {
+  id: number
+  status: ReportStatus
+  resolvedAction: ResolutionAction | null
+  resolutionNote: string | null
+  handledBy: UserSummary | null
+  handledAt: string | null
+}
+
+export interface SuspensionResult {
+  userId: number
+  status: UserStatus
+  suspendedUntil: string | null
+  suspendReason: string | null
+}
+
+export interface UserProfile {
+  id: number
+  displayName: string | null
+  email: string | null
+  authProvider: string
+  status: UserStatus
+  suspendedUntil: string | null
+  suspendReason: string | null
+  createdAt: string
+  updatedAt: string
+  /** 프로필 사진(HP-268) — 없으면 null이고 화면은 이름 첫 글자로 대체한다. */
+  profileImageUrl: string | null
+}
+
+export interface ReceivedReport {
+  id: number
+  createdAt: string
+  reason: ReportReason
+  status: ReportStatus
+  snapshotMessage: string
+  reporterName: string | null
+}
+
+/**
+ * 신고 종결이 무엇으로 끝났는지(HP-268). `NONE` = 처리했지만 가림·정지는 하지 않음.
+ * 종결 외 조치는 종별이 곧 결과라 붙지 않는다.
+ */
+export type ResolveOutcome = 'BLIND' | 'SUSPEND' | 'ROOM_CLOSE' | 'NONE' | 'REJECTED'
+
+export interface AdminActionRow {
+  id: number
+  createdAt: string
+  action: AdminActionType
+  reason: string | null
+  adminName: string | null
+  /** 어떤 대상(신고 등)에 대한 조치인지 — 화면이 발췌·번호로 표기한다. */
+  targetType: AdminTargetType
+  targetId: string
+  /** REPORT 대상이면 그 신고의 스냅샷 발췌(≤30자), 그 외 null(대상 = 이 사용자 자신). */
+  targetSummary: string | null
+  /**
+   * 신고 종결의 결과(HP-268). 다른 조치는 null이고, 이 칸이 생기기 전에 쌓인 종결 기록도
+   * null이다 — 화면은 그때 결과를 지어내지 않고 "신고 종결"로만 표기한다.
+   */
+  outcome: ResolveOutcome | null
+}
+
+/** 전역 조치 로그 한 행(HP-299) — 사용자 상세 이력과 달리 처리자·대상 사용자를 모두 명시한다. */
+export interface AdminActionLogRow {
+  id: number
+  createdAt: string
+  action: AdminActionType
+  outcome: ResolveOutcome | null
+  reason: string | null
+  adminId: number
+  adminName: string | null
+  targetType: AdminTargetType
+  targetId: string
+  targetSummary: string | null
+  targetUserId: number | null
+  targetUserName: string | null
+}
+
+export interface AdminActor {
+  id: number
+  displayName: string | null
+}
+
+export interface AdminActionLogResponse {
+  items: AdminActionLogRow[]
+  nextCursor: string | null
+  /** 현재 페이지가 아니라 전체 조치 이력에서 distinct한 처리자 선택지. */
+  admins: AdminActor[]
+}
+
+/**
+ * 그 사용자가 <b>보낸</b> 신고의 집계(HP-270) — 받은 신고와 반대 축이다.
+ * 비율이 아니라 원수치가 내려온다: 분모를 무엇으로 잡느냐가 뜻을 뒤집기 때문이다.
+ */
+export interface ReportsSent {
+  /** 보낸 신고 전체 */
+  total: number
+  /** 그중 판정이 끝난 것(RESOLVED + REJECTED) — 기각률의 분모 */
+  judged: number
+  /** 그중 기각된 것 */
+  rejected: number
+}
+
+export interface UserDetail {
+  profile: UserProfile
+  reportsReceived: ReceivedReport[]
+  actions: AdminActionRow[]
+  /** 정지·해제만 담는 별도 축 — actions의 상한(50)과 경합하지 않는다(리뷰 m9). */
+  suspensions: AdminActionRow[]
+  /** 그 사용자가 <b>보낸</b> 신고 집계(HP-270) — reportsReceived와 반대 축이다. */
+  reportsSent: ReportsSent
+  /** 누적 3회는 자동 정지가 아니라 운영자의 정지 검토 신호다. */
+  warnings: { total: number; suspensionReviewRecommended: boolean }
+}
+
+export type OperationCaseView = 'ALL' | 'MINE' | 'UNASSIGNED' | 'OVERDUE'
+export type CaseNoteType = 'INTERNAL' | 'HANDOFF' | 'REVIEW_REQUEST'
+export interface OperatorRef { id: number; displayName: string | null }
+export interface OperationCaseRow {
+  reportId: number; createdAt: string; reason: ReportReason; messagePreview: string
+  targetUser: OperatorRef; assignee: OperatorRef | null; dueAt: string | null
+  reviewRequested: boolean; version: number; updatedAt: string | null
+  stale: boolean; overdue: boolean
+}
+export interface OperationWorkload { operator: OperatorRef; assigned: number; overdue: number }
+export interface OperationCasePage { items: OperationCaseRow[]; workloads: OperationWorkload[]; truncated: boolean }
+export interface OperationCaseNote { id: number; type: CaseNoteType; body: string; author: OperatorRef; createdAt: string }
+export interface OperationCaseEvent { id: number; type: string; detail: string; actor: OperatorRef; workspaceVersion: number; createdAt: string }
+export interface OperationCaseDetail { item: OperationCaseRow; notes: OperationCaseNote[]; events: OperationCaseEvent[] }
+
+export interface UserTimelineEvent {
+  id: string; occurredAt: string; type: string; summary: string; sourcePath: string; sensitiveMasked: boolean
+}
+export interface UserTimelineSignal {
+  code: string; label: string; numerator: number; denominator: number; interpretation: string
+}
+export interface UserTimeline {
+  userId: number; events: UserTimelineEvent[]; signals: UserTimelineSignal[]
+  automaticEnforcement: false; limitation: string
+}
+
+export type CleanbotPolicyStatus = 'DRAFT' | 'REVIEW_REQUESTED' | 'APPROVED' | 'ACTIVE' | 'RETIRED'
+export interface CleanbotPolicy {
+  id: number; name: string; status: CleanbotPolicyStatus; blockedTerms: string[]; allowedTerms: string[]
+  threshold: number; categoryMapping: Record<string, string>; basePolicyId: number | null
+  activatedChangeSetId: number | null; revision: number; createdBy: OperatorRef
+  reviewedBy: OperatorRef | null; approvedBy: OperatorRef | null; activatedBy: OperatorRef | null
+  createdAt: string; updatedAt: string; activatedAt: string | null
+}
+export interface CleanbotPolicyUpsert {
+  name: string; blockedTerms: string[]; allowedTerms: string[]; threshold: number
+  categoryMapping: Record<string, string>; basePolicyId: number | null
+}
+export interface CleanbotSimulationSample { sampleId: string; previouslyBlocked: boolean; candidateBlocked: boolean; outcome: string }
+export interface CleanbotSimulation {
+  id: number; policyId: number; sampleCount: number; newlyBlocked: number; newlyAllowed: number
+  unchanged: number; failures: number; sampleLimit: number; samples: CleanbotSimulationSample[]
+  limitation: string; createdAt: string
+}
+
+/** 한 회차에서 한 작성자가 남긴 글 한 줄(HP-298) — 운영자용이라 가려진 글도 원문이 온다. */
+export interface AuthorMessage {
+  msgId: string
+  message: string
+  playbackTime: number
+  /**
+   * Redis 실황 — visible / blocked_profanity / blocked_hate / blinded(ChatService).
+   * 이미 안 보이는 줄을 다시 고르지 않게 화면이 쓴다.
+   */
+  status: string
+}
+
+/** @property total 상한 적용 전 전체 수 — rows.length와 다르면 잘린 것이다(화면이 알려야 한다). */
+export interface AuthorMessages {
+  rows: AuthorMessage[]
+  total: number
+}
+
+/**
+ * 정지 현황판 한 행(HP-300). <b>갈래(진행 중·무기한·만료됨)는 서버가 정하지 않는다</b> —
+ * 만료 판정은 시각에 달려 있어, 서버와 화면이 각자 시계를 보면 같은 계정을 다르게 부른다.
+ * 원수치만 받고 갈래는 {@link suspensionState} 하나가 센다.
+ */
+export interface SuspendedUserRow {
+  userId: number
+  displayName: string | null
+  profileImageUrl: string | null
+  status: UserStatus
+  /** null = 무기한. 지난 시각이면 만료됨(자동 해제 대기) — 만료 배치가 없어 행만 남은 상태다. */
+  suspendedUntil: string | null
+  suspendReason: string | null
+}
+
+/** @property total 상한 적용 전 전체 수 — rows.length와 다르면 잘린 것이다(화면이 알려야 한다). */
+export interface SuspendedUsers {
+  rows: SuspendedUserRow[]
+  total: number
+}
+
+/** 사용자 상세 진입용 검색 결과(HP-301) — 이메일은 결과에 노출하지 않는다. */
+export interface UserSearchRow {
+  userId: number
+  displayName: string
+  profileImageUrl: string | null
+  status: UserStatus
+}
+
+export interface UserSearchResult {
+  rows: UserSearchRow[]
+}
+
+export type ModerationReviewStage = 'PROFANITY' | 'HATE'
+export type ModerationReviewDecision = 'FALSE_POSITIVE' | 'TRUE_POSITIVE'
+export type ModerationReviewView = 'PENDING' | ModerationReviewDecision
+
+export interface ModerationReviewRow {
+  sampleId: string
+  episodeId: number
+  msgId: string
+  userId: number | null
+  displayName: string | null
+  message: string
+  stage: ModerationReviewStage
+  category: string | null
+  /** 1차 규칙은 확률값이 없어 null, 2차 kor_unsmile만 실제 선택 category 점수. */
+  score: number | null
+  createdAt: string
+  decision: ModerationReviewDecision | null
+  reviewerId: number | null
+  reviewerName: string | null
+  decidedAt: string | null
+}
+
+export interface ModerationStageCounts {
+  falsePositive: number
+  truePositive: number
+}
+
+export interface ModerationReviewCounts {
+  profanity: ModerationStageCounts
+  hate: ModerationStageCounts
+  evictedPending: number
+}
+
+export interface ModerationReviewPage {
+  items: ModerationReviewRow[]
+  pendingTotal: number
+  /** 현재 view·stage 조건에 맞는 최근 상세 보존분 전체 건수. */
+  viewTotal: number
+  hasMore: boolean
+  counts: ModerationReviewCounts
+}
+
+export interface ModerationDecisionResult {
+  sampleId: string
+  decision: ModerationReviewDecision
+  counts: ModerationReviewCounts
+}
+
+export type FeatureRisk = 'MEDIUM' | 'HIGH'
+export type FeaturePolicyClass = 'AVAILABLE' | 'COMPLIANCE' | 'PRIVACY' | 'PLATFORM' | 'MODERATION'
+
+export interface FeatureFlagRow {
+  key: string
+  displayName: string
+  description: string
+  environment: 'LOCAL' | 'DEV' | 'PROD'
+  enabled: boolean
+  effectiveEnabled: boolean
+  rolloutPercentage: number
+  expiresAt: string | null
+  owner: string
+  risk: FeatureRisk
+  policyClass: FeaturePolicyClass
+  globalOnly: boolean
+  dependencies: string[]
+  conflicts: string[]
+  allowlistedUserIds: number[]
+  revision: number
+  connected: boolean
+  registryDigest: string
+  updatedAt: string
+  activeInstances: number
+  mismatchedInstances: number
+  converged: boolean
+  lastReportedAt: string | null
+}
+
+export interface FeatureFlagChange {
+  enabled: boolean
+  rolloutPercentage: number
+  expiresAt: string | null
+  owner: string
+  allowlistedUserIds: number[]
+  expectedRevision: number
+  reason: string
+}
+
+export type FeatureChangeSetStatus =
+  | 'DRAFT' | 'REVIEW_REQUESTED' | 'APPROVED' | 'REJECTED' | 'SCHEDULED' | 'RUNNING'
+  | 'SUCCEEDED' | 'PARTIALLY_FAILED' | 'FAILED' | 'ROLLED_BACK' | 'CANCELLED'
+
+export interface FeatureChangeSetItemInput {
+  flagKey: string
+  enabled: boolean
+  rolloutPercentage: number
+  expiresAt: string | null
+  owner: string
+  allowlistedUserIds: number[]
+  expectedRevision: number
+}
+
+export interface FeatureChangeSetItem extends Omit<FeatureChangeSetItemInput, 'enabled' | 'rolloutPercentage' | 'expiresAt' | 'owner' | 'allowlistedUserIds'> {
+  id: number
+  sequence: number
+  beforeState: string
+  targetEnabled: boolean
+  targetRolloutPercentage: number
+  targetExpiresAt: string | null
+  targetOwner: string
+  targetAllowlistedUserIds: number[]
+  appliedRevision: number | null
+  resultCode: string | null
+}
+
+export interface FeatureChangeSetEvent {
+  id: number
+  type: string
+  actorUserId: number
+  reason: string
+  payload: string
+  createdAt: string
+}
+
+export interface FeatureChangeSet {
+  id: number
+  environment: FeatureFlagRow['environment']
+  title: string
+  purpose: string
+  jiraReference: string | null
+  incidentReference: string | null
+  status: FeatureChangeSetStatus
+  risk: FeatureRisk
+  version: number
+  createdByUserId: number
+  approvedByUserId: number | null
+  scheduledByUserId: number | null
+  rollbackOfChangeSetId: number | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
+  approvalExpiresAt: string | null
+  requestedAt: string | null
+  approvedAt: string | null
+  scheduledAt: string | null
+  appliedAt: string | null
+  verificationDueAt: string | null
+  verificationCompletedAt: string | null
+  failureCode: string | null
+  createdAt: string
+  updatedAt: string
+  items: FeatureChangeSetItem[]
+  events: FeatureChangeSetEvent[]
+  findings: FeatureGuardFinding[]
+}
+
+export interface FeatureGuardFinding {
+  severity: 'WARNING' | 'BLOCKING'
+  code: string
+  message: string
+  flagKey: string | null
+}
+
+export type FeatureDriftStatus = 'HEALTHY' | 'PROPAGATING' | 'DRIFT' | 'STALE' | 'NO_SIGNAL'
+
+export interface FeatureDriftState {
+  flagKey: string
+  displayName: string
+  status: FeatureDriftStatus
+  desiredRevision: number
+  activeInstances: number
+  mismatchedInstances: number
+  lastReportedAt: string | null
+  observationChangeSetId: number | null
+  observationDueAt: string | null
+  recommendedActions: string[]
+}
+
+export interface FeatureDriftReapply {
+  reason: string
+  jiraReference: string | null
+  incidentReference: string | null
+  safetyExpiresAt: string | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
+}
+
+export interface IncidentRevisionReference {
+  flagKey: string
+  expectedRevision: number
+  appliedRevision: number | null
+}
+
+export interface IncidentTimelineEntry {
+  sourceType: 'CHANGE_SET' | 'NOTICE' | 'INCIDENT'
+  sourceId: number
+  sourceTitle: string
+  sourceStatus: string
+  eventType: string
+  reason: string
+  actorUserId: number
+  occurredAt: string
+  jiraReference: string | null
+  presetId: FeatureControlPreset['id'] | null
+  linkedChangeSetId: number | null
+  linkedResourceType: IncidentResourceType | null
+  linkedResourceId: string | null
+  revisions: IncidentRevisionReference[]
+}
+
+export interface IncidentTimeline {
+  incidentReference: string
+  environment: FeatureFlagRow['environment']
+  jiraReferences: string[]
+  sourceCount: number
+  entries: IncidentTimelineEntry[]
+}
+
+export type IncidentSeverity = 'SEV1' | 'SEV2' | 'SEV3' | 'SEV4'
+export type IncidentStatus = 'DECLARED' | 'INVESTIGATING' | 'MITIGATING' | 'MONITORING' | 'RESOLVED' | 'CANCELLED'
+
+export interface IncidentEvent {
+  id: number; type: string; actorUserId: number; summary: string
+  sourceType: string | null; sourceId: string | null; structuredPayload: string
+  requestId: string | null; occurredAt: string
+}
+
+export interface Incident {
+  id: number; environment: FeatureFlagRow['environment']; reference: string; title: string
+  severity: IncidentSeverity; status: IncidentStatus; primary: boolean; impactSummary: string
+  ownerUserId: number | null; nextUpdateAt: string | null; observationMetrics: string | null
+  successCriteria: string | null; monitoringEndsAt: string | null; recoveryRevisions: string | null
+  impactEndedAt: string | null; residualRisk: string | null; followUpJira: string | null
+  version: number; createdByUserId: number; createdAt: string; updatedAt: string; events: IncidentEvent[]
+}
+
+export interface IncidentDeclare {
+  reference: string; title: string; severity: IncidentSeverity; primary: boolean
+  impactSummary: string; reason: string; requestId: string
+}
+
+export interface IncidentUpdate {
+  expectedVersion: number; title: string; severity: IncidentSeverity; primary: boolean
+  impactSummary: string; ownerUserId: number | null; nextUpdateAt: string | null
+  reason: string; requestId: string
+}
+
+export interface IncidentTransition {
+  expectedVersion: number; targetStatus: IncidentStatus; ownerUserId: number | null
+  nextUpdateAt: string | null; observationMetrics: string | null; successCriteria: string | null
+  monitoringEndsAt: string | null; recoveryRevisions: string | null; impactEndedAt: string | null
+  residualRisk: string | null; followUpJira: string | null; reason: string; requestId: string
+}
+
+export type IncidentResourceType = 'CHANGE_SET' | 'NOTICE' | 'PRESET' | 'RUNBOOK' | 'DASHBOARD' | 'JIRA'
+
+export interface IncidentEventCreate {
+  expectedVersion: number; summary: string; sourceType: IncidentResourceType | null
+  sourceId: string | null; structuredPayload: string; requestId: string
+}
+
+export interface FeatureChangeSetCreate {
+  title: string
+  purpose: string
+  jiraReference: string | null
+  incidentReference: string | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
+  items: FeatureChangeSetItemInput[]
+}
+
+export interface FeatureDryRunRow {
+  userId: number
+  flagKey: string
+  currentEnabled: boolean
+  proposedEnabled: boolean
+}
+
+export interface FeatureControlPresetTarget {
+  flagKey: string
+  displayName: string
+  enabled: boolean
+  rolloutPercentage: number
+}
+
+export interface FeatureControlPreset {
+  id: 'NORMAL_OPERATION' | 'READ_ONLY' | 'CHAT_BLOCK' | 'REPORT_LIMIT' | 'STAGE2_BYPASS'
+    | 'PUBLIC_CONTENT_STOP' | 'PRIVACY_TRANSMISSION_STOP' | 'VIDEO_OVERLAY_MINIMIZE'
+    | 'DISNEY_PLUS_ISOLATION'
+  displayName: string
+  description: string
+  risk: FeatureRisk
+  requiresExpiry: boolean
+  targets: FeatureControlPresetTarget[]
+}
+
+export interface FeatureControlPresetApply {
+  reason: string
+  expiresAt: string | null
+  jiraReference: string | null
+  incidentReference: string | null
+  autoRollbackEnabled: boolean
+  verificationWindowSeconds: number
+}
+
+export type ServiceNoticeKind = 'NOTICE' | 'MAINTENANCE' | 'INCIDENT'
+export type ServiceNoticeStatus = 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'ENDED' | 'CANCELLED'
+
+export interface ServiceNoticeEvent {
+  id: number
+  type: string
+  actorUserId: number
+  reason: string
+  payload: string
+  createdAt: string
+}
+
+export interface ServiceNotice {
+  id: number
+  environment: FeatureFlagRow['environment']
+  kind: ServiceNoticeKind
+  title: string
+  publicMessage: string
+  internalNote: string
+  status: ServiceNoticeStatus
+  linkedChangeSetId: number | null
+  presetId: FeatureControlPreset['id'] | null
+  jiraReference: string | null
+  incidentReference: string | null
+  /** 공지 전문 링크(HP-425) — 없으면 null. https:// 로 시작하는 500자 이하만 서버가 받는다. */
+  linkUrl: string | null
+  version: number
+  createdByUserId: number
+  publishedByUserId: number | null
+  endedByUserId: number | null
+  startsAt: string | null
+  endsAt: string | null
+  publishedAt: string | null
+  endedAt: string | null
+  createdAt: string
+  updatedAt: string
+  events: ServiceNoticeEvent[]
+}
+
+export interface ServiceNoticeCreate {
+  kind: ServiceNoticeKind
+  title: string
+  publicMessage: string
+  internalNote: string
+  linkedChangeSetId: number | null
+  presetId: FeatureControlPreset['id'] | null
+  jiraReference: string | null
+  incidentReference: string | null
+  /** 빈 문자열은 서버가 400으로 거절한다 — 입력이 비었으면 반드시 null로 보낸다. */
+  linkUrl: string | null
+}
+/**
+ * 사용자 피드백(HP-426) — 원천은 Replix-be의 `AdminFeedbackPageResponse`.
+ * 확장·웹이 보내는 공개 계약(`POST /api/v1/feedback`)과 값 집합이 같다.
+ */
+export type FeedbackSurface = 'EXT' | 'WEB'
+export type FeedbackCategory = 'ANNOY' | 'BUG' | 'IDEA' | 'PRAISE'
+/** 어디서 열려 제출됐는지 — 자동 프롬프트(PROMPT)인지 사용자가 직접 연 것(MANUAL)인지. */
+export type FeedbackTrigger = 'PROMPT' | 'MANUAL'
+
+export interface FeedbackItem {
+  id: number
+  surface: FeedbackSurface
+  /** 별점 1~5. 본문만 적고 보낼 수 있어 null이 정상이다. */
+  score: number | null
+  category: FeedbackCategory | null
+  body: string | null
+  appVersion: string | null
+  platform: string | null
+  /** 서버 발급 식별자만 싣는다 — 작품명·재생 시각은 계약상 오지 않는다(준수 §7). */
+  contentId: number | null
+  episodeId: number | null
+  trigger: FeedbackTrigger
+  createdAt: string
+  /** 비로그인 제출·탈퇴 detach면 null. 없음이 오류가 아니다. */
+  user: UserSummary | null
+}
+
+export interface FeedbackPage {
+  items: FeedbackItem[]
+  nextCursor: string | null
+}
+
+/** 빈 문자열 = 그 축은 전체(BE의 "미지정 = 전체"와 맞춤). */
+export interface FeedbackFilters {
+  surface: FeedbackSurface | ''
+  category: FeedbackCategory | ''
+  score: number | ''
+}
+
+import type { EnvironmentMetadata } from '../environment'
+
+export type { EnvironmentMetadata }
