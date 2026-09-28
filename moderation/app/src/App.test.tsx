@@ -135,7 +135,8 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     await user.click(screen.getByRole('button', { name: '해제 확인' }))
 
     const topbarLinks = [
-      screen.getByRole('link', { name: /Re\s*plix Admin/ }),
+      // 종전 "Replix Admin" 브랜드 자리는 운영 콘솔 도구 전환이 이었다(HP-456) — 같은 잠금을 진다.
+      screen.getByRole('link', { name: /^Re\s*plix$/ }),
       screen.getByRole('link', { name: '신고 큐' }),
       screen.getByRole('link', { name: '정지 현황' }),
       screen.getByRole('link', { name: '조치 로그' }),
@@ -147,6 +148,8 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     })
     const logout = screen.getByRole('button', { name: '로그아웃' })
     expect(logout).toBeDisabled()
+    const toolToggle = screen.getByRole('button', { name: /조치 콘솔/ })
+    expect(toolToggle).toBeDisabled()
     expect(screen.getByRole('searchbox', { name: '사용자 검색' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '검색' })).toBeDisabled()
 
@@ -159,6 +162,7 @@ describe('톱바 탭 — 화면 사이를 오간다', () => {
     await waitFor(() => {
       for (const link of topbarLinks) expect(link).not.toHaveAttribute('aria-disabled')
       expect(logout).toBeEnabled()
+      expect(toolToggle).toBeEnabled()
       expect(screen.getByRole('searchbox', { name: '사용자 검색' })).toBeEnabled()
     })
   })

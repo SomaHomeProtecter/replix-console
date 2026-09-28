@@ -1,11 +1,12 @@
 import type { MouseEvent } from 'react'
-import { Link, NavLink, Route, Routes } from 'react-router'
+import { NavLink, Route, Routes } from 'react-router'
 import { logout, roleLabel, switchEnvironment, userName } from './auth'
 import { env } from './env'
 import { CONSOLE_ENVIRONMENTS } from './environment'
 import ActionLogPage from './pages/ActionLogPage'
 import ModerationReviewPage from './pages/ModerationReviewPage'
 import UserSearch from './components/UserSearch'
+import ConsoleSwitcher from './components/ConsoleSwitcher'
 import ReportQueuePage from './pages/ReportQueuePage'
 import SuspensionBoardPage from './pages/SuspensionBoardPage'
 import UserDetailPage from './pages/UserDetailPage'
@@ -41,11 +42,7 @@ function AppContent() {
   return (
     <div className="app">
       <header className="topbar">
-        <Link
-            to="/" className="brand" aria-disabled={writing || undefined}
-            title={writingTitle} onClick={preventWhileWriting}>
-          <span className="rx">Re</span>plix Admin
-        </Link>
+        <ConsoleSwitcher disabled={writing} disabledTitle={writingTitle} />
         <label className={`env-selector env-${env.environment.toLowerCase()}`}>
           <span className="sr-only">연결 환경</span>
           <select

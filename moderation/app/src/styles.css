@@ -60,6 +60,45 @@ button { font: inherit; }
 }
 .brand { color: inherit; text-decoration: none; font-weight: 800; white-space: nowrap; }
 .brand .rx { color: var(--logo-red); }
+
+/* 운영 콘솔 도구 전환(HP-456) — 종전 브랜드 자리. 다른 도구로는 페이지를 옮긴다.
+   목록은 사용자 검색 결과와 같은 겹(z-index 20)·같은 패널 모양을 쓴다. */
+.console-switcher { position: relative; display: flex; align-items: center; gap: 6px; flex: none; }
+.console-switcher-sep { color: #5e6b7a; }
+.console-switcher-toggle {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 6px;
+  padding: 3px 8px; background: var(--top-on); color: #fff; font-weight: 800; white-space: nowrap; cursor: pointer;
+}
+.console-switcher-toggle:hover:not(:disabled), .console-switcher-toggle[aria-expanded="true"] { background: var(--top-chip); }
+.console-switcher-toggle:disabled { opacity: .45; cursor: not-allowed; }
+.console-switcher-toggle:focus-visible { outline: 2px solid #8db5dc; outline-offset: 2px; }
+.console-switcher-toggle .caret {
+  width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+}
+.console-switcher-menu {
+  position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; width: min(300px, 90vw); padding: 4px;
+  border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--body);
+  box-shadow: 0 12px 28px rgba(10, 18, 26, .22);
+}
+.console-switcher-menu ul { list-style: none; margin: 0; padding: 0; }
+.console-switcher-menu a, .console-switcher-menu .current {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; padding: 7px 9px;
+  border-radius: 6px; color: inherit; text-decoration: none;
+}
+.console-switcher-menu a:hover { background: var(--blue-soft); }
+.console-switcher-menu a:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.console-switcher-menu .current { background: var(--blue-soft); box-shadow: inset 3px 0 0 var(--blue); }
+.console-switcher-menu b { color: var(--ink); font-size: 12.5px; font-weight: 800; }
+.console-switcher-menu small { grid-column: 1; color: var(--muted-2); font-size: 11.5px; }
+.console-switcher-menu em {
+  grid-row: 1 / span 2; grid-column: 2; align-self: center;
+  font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+.console-switcher-menu p {
+  margin: 4px 0 0; padding: 7px 9px 3px; border-top: 1px solid var(--line-2);
+  color: var(--muted-2); font-size: 11.5px;
+}
 .env-selector {
   position: relative; display: inline-flex; align-items: center; border-radius: 4px;
   background: var(--top-chip); color: var(--top-chip-ink);
@@ -1069,7 +1108,7 @@ table.feedback-table {
    가로 스크롤되어야 하며, 검색·로그아웃 때문에 문서 전체가 옆으로 밀리면 안 된다. */
 @media (max-width: 640px) {
   .topbar { flex-wrap: wrap; }
-  .brand { order: 1; }
+  .console-switcher { order: 1; }
   .env-selector { order: 2; }
   .topbar-right { order: 3; margin-left: auto; }
   .topnav {
