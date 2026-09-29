@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import type { FeedbackItem, FeedbackTrigger, UninstallReason } from '../api/types'
 import { makeFeedbackItem } from '../test/fixtures'
 import FeedbackPage from './FeedbackPage'
 
@@ -162,5 +163,95 @@ describe('피드백 탭(HP-426) — 목록·필터·상세·삭제', () => {
     renderPage()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('관리자 권한이 없습니다')
+  })
+})
+
+describe('삭제 설문(HP-458) — 사유·후속 선택·설치 후 경과일', () => {
+  /**
+   * 확장을 지운 뒤 replix.tv 삭제 페이지가 보낸 행. 별점·카테고리·본문 없이 사유만 올 수 있고,
+   * 서버는 배열을 설문 순서(enum 선언 순)로 정렬해 준다.
+   */
+  function uninstallItem(overrides: Partial<FeedbackItem> = {}): FeedbackItem {
+    return makeFeedbackItem({
+      surface: 'WEB', trigger: 'UNINSTALL', score: null, category: null, body: null,
+      appVersion: '0.12.0', platform: null, contentId: null, episodeId: null, user: null,
+      reasons: ['BLOCKS_SCREEN', 'NO_MY_OTT'], coveredBy: ['CHAT_PANEL', 'DANMAKU'],
+      wantedServices: ['TVING'], installDays: 3,
+      ...overrides,
+    })
+  }
+
+  it('⑥ 목록에서 카테고리 자리에 "삭제 설문", 본문 자리에 고른 사유가 보인다', async () => {
+    listFeedback.mockImplementation(async () => ({ items: [uninstallItem()], nextCursor: null }))
+    renderPage()
+
+    const row = (await waitFor(() => rows()))[0]
+    // 별점·카테고리·본문이 모두 "—"로 늘어서면 왜 지웠는지 목록에서 읽을 수 없다.
+    expect(within(row).getByText('삭제 설문')).toBeInTheDocument()
+    expect(within(row).getByText('화면을 가려요 · 쓰는 OTT가 없어요')).toBeInTheDocument()
+  })
+
+  it('⑥-2 남긴 말이 있으면 사유 뒤에 이어 보인다', async () => {
+    listFeedback.mockImplementation(async () => ({
+      items: [uninstallItem({
+        reasons: ['SLOW_OR_BUGGY'], coveredBy: [], wantedServices: [], body: '자꾸\n멈춰요',
+      })],
+      nextCursor: null,
+    }))
+    renderPage()
+
+    const row = (await waitFor(() => rows()))[0]
+    expect(within(row).getByText('느리거나 오류가 나요 — 자꾸 멈춰요')).toBeInTheDocument()
+  })
+
+  it('⑦ 펼치면 사유마다 후속 선택이, 메타에 설치 후 경과일과 경로가 드러난다', async () => {
+    listFeedback.mockImplementation(async () => ({ items: [uninstallItem()], nextCursor: null }))
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click((await waitFor(() => rows()))[0])
+
+    const list = screen.getByRole('list', { name: '삭제 사유' })
+    expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      '화면을 가려요 — 가린 것: 채팅창, 탄막',
+      '쓰는 OTT가 없어요 — 원하는 서비스: 티빙',
+    ])
+    expect(screen.getByText('3일')).toBeInTheDocument()
+    expect(screen.getByText('삭제 설문', { selector: 'dd' })).toBeInTheDocument()
+  })
+
+  it('⑦-2 일반 피드백 상세에는 삭제 사유·설치 후 칸을 두지 않는다', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click((await waitFor(() => rows()))[0])
+
+    expect(screen.getByText('프롬프트')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: '삭제 사유' })).not.toBeInTheDocument()
+    expect(screen.queryByText('설치 후')).not.toBeInTheDocument()
+  })
+
+  /**
+   * 관리 API는 값을 더하는 쪽으로 바뀌고 콘솔은 서버보다 늦게 나갈 수 있다. 서버가 먼저 늘린 사유·경로가
+   * 빈칸으로 그려지면 운영자는 그런 값이 있는 줄도 모른다 — UNINSTALL이 처음 왔을 때 경로 칸이 그랬다.
+   */
+  it('⑧ 콘솔이 아직 모르는 코드는 비우지 않고 코드 그대로 보인다', async () => {
+    listFeedback.mockImplementation(async () => ({
+      items: [
+        uninstallItem({
+          reasons: ['NEW_REASON' as UninstallReason], coveredBy: [], wantedServices: [],
+        }),
+        makeFeedbackItem({ id: 13, body: '새 경로 피드백', trigger: 'NEW_TRIGGER' as FeedbackTrigger }),
+      ],
+      nextCursor: null,
+    }))
+    const user = userEvent.setup()
+    renderPage()
+
+    const [uninstallRow, newTriggerRow] = await waitFor(() => rows())
+    expect(within(uninstallRow).getByText('NEW_REASON')).toBeInTheDocument()
+
+    await user.click(newTriggerRow)
+    expect(screen.getByText('NEW_TRIGGER', { selector: 'dd' })).toBeInTheDocument()
   })
 })

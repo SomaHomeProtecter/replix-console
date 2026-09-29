@@ -1080,6 +1080,12 @@ table.feedback-table {
   margin: 0; color: var(--body); font-size: 12.5px; line-height: 1.55;
   white-space: pre-wrap; word-break: break-word;
 }
+/* 삭제 설문(HP-458)의 사유와 후속 답 — 대개 본문 없이 이것만 오므로 본문보다 먼저 목록으로 세운다. */
+.feedback-reasons { display: flex; flex-direction: column; gap: 4px; }
+.feedback-reasons-title { color: var(--muted-2); font-size: 11px; font-weight: 750; }
+.feedback-reasons ul {
+  margin: 0; padding-left: 18px; color: var(--ink); font-size: 12.5px; line-height: 1.55;
+}
 .feedback-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
 .feedback-meta > div { display: flex; align-items: baseline; gap: 6px; }
 .feedback-meta dt { color: var(--muted-2); font-size: 11px; font-weight: 750; }

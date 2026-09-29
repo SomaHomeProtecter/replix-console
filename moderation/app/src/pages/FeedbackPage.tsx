@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteFeedback, listFeedback } from '../api/admin'
 import type {
-  FeedbackCategory, FeedbackFilters, FeedbackItem, FeedbackSurface, FeedbackTrigger,
+  CoveredElement, FeedbackCategory, FeedbackFilters, FeedbackItem, FeedbackSurface,
+  FeedbackTrigger, UninstallReason, WantedService,
 } from '../api/types'
 import { formatKstShort } from '../format'
 
@@ -10,7 +11,29 @@ const SURFACE_LABELS: Record<FeedbackSurface, string> = { EXT: '확장', WEB: '�
 const CATEGORY_LABELS: Record<FeedbackCategory, string> = {
   ANNOY: '불편해요', BUG: '버그예요', IDEA: '이런 게 있으면', PRAISE: '잘 쓰고 있어요',
 }
-const TRIGGER_LABELS: Record<FeedbackTrigger, string> = { PROMPT: '프롬프트', MANUAL: '직접' }
+const TRIGGER_LABELS: Record<FeedbackTrigger, string> = {
+  PROMPT: '프롬프트', MANUAL: '직접', UNINSTALL: '삭제 설문',
+}
+/** 삭제 설문(HP-458)의 선택지 — 서버 enum과 1:1이고 문구는 BE enum 주석과 같다. */
+const REASON_LABELS: Record<UninstallReason, string> = {
+  FEW_CHATS: '볼 만한 채팅이 적어요',
+  BLOCKS_SCREEN: '화면을 가려요',
+  SLOW_OR_BUGGY: '느리거나 오류가 나요',
+  SPOILER_WORRY: '스포일러가 걱정돼요',
+  BAD_VIBE: '채팅 분위기가 별로예요',
+  HARD_TO_USE: '쓰는 법이 어려워요',
+  NO_MY_OTT: '쓰는 OTT가 없어요',
+  PRIVACY_WORRY: '개인정보가 걱정돼요',
+  JUST_TRYING: '잠깐 써 봤어요',
+}
+const COVERED_LABELS: Record<CoveredElement, string> = {
+  CHAT_PANEL: '채팅창', DANMAKU: '탄막', FULLSCREEN_CHAT: '전체화면 채팅 상자',
+  REACTION: '반응 이모지', HEATMAP: '재생바 봉우리',
+}
+const SERVICE_LABELS: Record<WantedService, string> = {
+  TVING: '티빙', WAVVE: '웨이브', COUPANG_PLAY: '쿠팡플레이', WATCHA: '왓챠', YOUTUBE: '유튜브',
+  OTHER: '그 밖에',
+}
 
 const SCORES = [1, 2, 3, 4, 5]
 
@@ -30,11 +53,49 @@ const EMPTY_FILTERS: FeedbackFilters = { surface: '', category: '', score: '' }
 
 const NONE = '—'
 
-/** 줄바꿈이 든 본문도 한 줄 칸에서 읽히게 접어 발췌한다. 전문은 상세가 원문 그대로 보여 준다. */
-function previewOf(body: string | null): string {
-  const text = (body ?? '').replace(/\s+/g, ' ').trim()
+/**
+ * 코드를 사람이 읽는 말로 바꾼다. 콘솔이 모르는 코드는 <b>코드 그대로</b> 보인다 — 관리 API는 값을 더하는
+ * 쪽으로 바뀌고 콘솔은 서버보다 늦게 나갈 수 있는데, 빈칸으로 그리면 운영자는 그런 값이 있는 줄도 모른다.
+ */
+function labelOf<K extends string>(labels: Record<K, string>, code: K): string {
+  return labels[code] ?? code
+}
+
+/**
+ * 목록 한 줄 발췌 — 줄바꿈이 든 글도 한 줄 칸에서 읽히게 접는다. 전문은 상세가 원문 그대로 보여 준다.
+ *
+ * <p>삭제 설문(HP-458)은 <b>고른 사유가 먼저</b>다. 별점·카테고리·본문 없이 사유만 오는 게 보통이라, 본문만
+ * 발췌하면 "—"만 남아 왜 지웠는지 목록에서 읽을 수 없다. 남긴 말이 있으면 사유 뒤에 잇는다.
+ */
+function previewOf(item: FeedbackItem): string {
+  const reasons = (item.reasons ?? []).map((reason) => labelOf(REASON_LABELS, reason)).join(' · ')
+  const body = (item.body ?? '').replace(/\s+/g, ' ').trim()
+  const text = [reasons, body].filter((part) => part !== '').join(' — ')
   if (text === '') return NONE
   return text.length > PREVIEW_LENGTH ? `${text.slice(0, PREVIEW_LENGTH)}…` : text
+}
+
+/**
+ * 카테고리 칸. 삭제 설문은 카테고리를 고르지 않으므로 그 자리에 "삭제 설문"이라고 적어, 일반 의견 사이에서
+ * 한눈에 갈라 보이게 한다.
+ */
+function categoryOf(item: FeedbackItem): string {
+  if (item.category !== null) return labelOf(CATEGORY_LABELS, item.category)
+  return item.trigger === 'UNINSTALL' ? TRIGGER_LABELS.UNINSTALL : NONE
+}
+
+/** 상세의 사유 한 줄. 후속 선택이 달린 사유(화면을 가려요·쓰는 OTT가 없어요)는 그 답을 뒤에 붙인다. */
+function reasonLine(item: FeedbackItem, reason: UninstallReason): string {
+  const label = labelOf(REASON_LABELS, reason)
+  if (reason === 'BLOCKS_SCREEN' && item.coveredBy?.length) {
+    const covered = item.coveredBy.map((code) => labelOf(COVERED_LABELS, code)).join(', ')
+    return `${label} — 가린 것: ${covered}`
+  }
+  if (reason === 'NO_MY_OTT' && item.wantedServices?.length) {
+    const services = item.wantedServices.map((code) => labelOf(SERVICE_LABELS, code)).join(', ')
+    return `${label} — 원하는 서비스: ${services}`
+  }
+  return label
 }
 
 /**
@@ -216,12 +277,10 @@ export default function FeedbackPage() {
                     <td className="time" title={item.createdAt}>
                       {formatKstShort(item.createdAt)}
                     </td>
-                    <td className="surface">{SURFACE_LABELS[item.surface]}</td>
+                    <td className="surface">{labelOf(SURFACE_LABELS, item.surface)}</td>
                     <td className="score">{item.score === null ? NONE : `★${item.score}`}</td>
-                    <td className="category">
-                      {item.category === null ? NONE : CATEGORY_LABELS[item.category]}
-                    </td>
-                    <td className="excerpt">{previewOf(item.body)}</td>
+                    <td className="category">{categoryOf(item)}</td>
+                    <td className="excerpt">{previewOf(item)}</td>
                     {/* 탈퇴·비로그인 제출은 user가 없다 — 빈 칸 대신 그 사실을 적는다. */}
                     <td className="who">{item.user?.displayName ?? '익명'}</td>
                   </tr>,
@@ -229,6 +288,20 @@ export default function FeedbackPage() {
                     <tr key={`${item.id}-detail`} className="feedback-detail-row">
                       <td colSpan={6}>
                         <div className="feedback-detail">
+                          {item.reasons?.length ? (
+                            <div className="feedback-reasons">
+                              <span
+                                  id={`feedback-reasons-${item.id}`}
+                                  className="feedback-reasons-title">
+                                삭제 사유
+                              </span>
+                              <ul aria-labelledby={`feedback-reasons-${item.id}`}>
+                                {item.reasons.map((reason) => (
+                                  <li key={reason}>{reasonLine(item, reason)}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                           {/* 본문은 사용자가 쓴 글이다 — React가 문자열로 넣어 HTML로 해석되지
                               않는다. dangerouslySetInnerHTML을 쓰면 그 보장이 깨진다. */}
                           <p className="feedback-body">{item.body ?? NONE}</p>
@@ -237,7 +310,13 @@ export default function FeedbackPage() {
                             <div><dt>플랫폼</dt><dd>{item.platform ?? NONE}</dd></div>
                             <div><dt>작품</dt><dd>{item.contentId ?? NONE}</dd></div>
                             <div><dt>회차</dt><dd>{item.episodeId ?? NONE}</dd></div>
-                            <div><dt>경로</dt><dd>{TRIGGER_LABELS[item.trigger]}</dd></div>
+                            <div><dt>경로</dt><dd>{labelOf(TRIGGER_LABELS, item.trigger)}</dd></div>
+                            {item.trigger === 'UNINSTALL' && (
+                              <div>
+                                <dt>설치 후</dt>
+                                <dd>{item.installDays == null ? NONE : `${item.installDays}일`}</dd>
+                              </div>
+                            )}
                           </dl>
                           <div className="feedback-actions">
                             {/* 같은 버튼을 두 번 누르게 해 확인을 받는다(window.confirm 금지) —
