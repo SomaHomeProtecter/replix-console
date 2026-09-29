@@ -56,9 +56,12 @@ const NONE = '—'
 /**
  * 코드를 사람이 읽는 말로 바꾼다. 콘솔이 모르는 코드는 <b>코드 그대로</b> 보인다 — 관리 API는 값을 더하는
  * 쪽으로 바뀌고 콘솔은 서버보다 늦게 나갈 수 있는데, 빈칸으로 그리면 운영자는 그런 값이 있는 줄도 모른다.
+ *
+ * <p>표에 <b>직접</b> 적힌 코드만 라벨로 읽는다. 라벨 표는 평범한 객체라 `constructor`·`__proto__` 같은 이름은
+ * 상속된 함수·객체를 돌려주고, 그것을 그리려던 React가 던지면 에러 경계가 없는 콘솔은 화면 전체를 잃는다.
  */
 function labelOf<K extends string>(labels: Record<K, string>, code: K): string {
-  return labels[code] ?? code
+  return Object.prototype.hasOwnProperty.call(labels, code) ? labels[code] : code
 }
 
 /**
@@ -113,7 +116,11 @@ export default function FeedbackPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   /** 삭제 확인을 받고 있는 행. null = 아무 행도 확인 중이 아님. */
   const [confirmingId, setConfirmingId] = useState<number | null>(null)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  /**
+   * 삭제 요청이 나가 있는 행들. 한 칸(id 하나)으로 두면 먼저 끝난 삭제가 다른 행의 "삭제 중"까지 지워, 아직
+   * 지우는 중인 행의 버튼이 다시 켜진다 — 같은 행에 DELETE가 두 번 나가 이미 성공한 삭제가 404로 보인다.
+   */
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<number>>(() => new Set())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadSeq = useRef(0)
@@ -179,7 +186,7 @@ export default function FeedbackPage() {
 
   const removeRow = async (id: number) => {
     cancelConfirm()
-    setDeletingId(id)
+    setDeletingIds((current) => new Set(current).add(id))
     setError(null)
     try {
       await deleteFeedback(id)
@@ -190,7 +197,12 @@ export default function FeedbackPage() {
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
     } finally {
-      setDeletingId(null)
+      // 자기 행만 내린다 — 다른 행의 삭제는 아직 진행 중일 수 있다.
+      setDeletingIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
     }
   }
 
@@ -324,7 +336,7 @@ export default function FeedbackPage() {
                             <button
                                 type="button"
                                 className={`btn${confirming ? ' btn-danger-solid' : ''}`}
-                                disabled={deletingId === item.id}
+                                disabled={deletingIds.has(item.id)}
                                 onClick={(event) => {
                                   event.stopPropagation() // 행 토글로 번지면 상세가 닫힌다
                                   if (confirming) void removeRow(item.id)
