@@ -647,8 +647,19 @@ export interface ServiceNoticeCreate {
  */
 export type FeedbackSurface = 'EXT' | 'WEB'
 export type FeedbackCategory = 'ANNOY' | 'BUG' | 'IDEA' | 'PRAISE'
-/** 어디서 열려 제출됐는지 — 자동 프롬프트(PROMPT)인지 사용자가 직접 연 것(MANUAL)인지. */
-export type FeedbackTrigger = 'PROMPT' | 'MANUAL'
+/**
+ * 어디서 열려 제출됐는지 — 자동 프롬프트(PROMPT)인지 사용자가 직접 연 것(MANUAL)인지, 또는 확장을 지운 뒤
+ * replix.tv 삭제 페이지가 보낸 삭제 설문(UNINSTALL, HP-458)인지.
+ */
+export type FeedbackTrigger = 'PROMPT' | 'MANUAL' | 'UNINSTALL'
+/** 삭제 사유(HP-458, 복수 선택). 서버가 설문 순서(enum 선언 순)로 정렬하고 중복을 없애 준다. */
+export type UninstallReason =
+  | 'FEW_CHATS' | 'BLOCKS_SCREEN' | 'SLOW_OR_BUGGY' | 'SPOILER_WORRY' | 'BAD_VIBE'
+  | 'HARD_TO_USE' | 'NO_MY_OTT' | 'PRIVACY_WORRY' | 'JUST_TRYING'
+/** "화면을 가려요"(BLOCKS_SCREEN)의 후속 선택 — 무엇이 가렸는지. */
+export type CoveredElement = 'CHAT_PANEL' | 'DANMAKU' | 'FULLSCREEN_CHAT' | 'REACTION' | 'HEATMAP'
+/** "쓰는 OTT가 없어요"(NO_MY_OTT)의 후속 선택 — 원하는 서비스. */
+export type WantedService = 'TVING' | 'WAVVE' | 'COUPANG_PLAY' | 'WATCHA' | 'YOUTUBE' | 'OTHER'
 
 export interface FeedbackItem {
   id: number
@@ -666,6 +677,16 @@ export interface FeedbackItem {
   createdAt: string
   /** 비로그인 제출·탈퇴 detach면 null. 없음이 오류가 아니다. */
   user: UserSummary | null
+  /**
+   * 삭제 설문 칸(HP-458). 일반 피드백은 빈 목록이다. <b>선택 필드인 이유</b>: 콘솔은 한 화면에서 PROD·DEV를
+   * 오가는데, 이 칸을 싣는 BE(Replix-be PR #303)가 아직 나가지 않은 환경은 칸 자체를 보내지 않는다 — 없으면
+   * 빈 목록으로 읽는다.
+   */
+  reasons?: UninstallReason[]
+  coveredBy?: CoveredElement[]
+  wantedServices?: WantedService[]
+  /** 설치 후 경과일(개인을 식별하지 않는 값). 삭제 설문에서만 오고, 없으면 null이다. */
+  installDays?: number | null
 }
 
 export interface FeedbackPage {
