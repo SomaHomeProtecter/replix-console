@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
 import { canRead, canWrite, login, logout, useAuth } from './auth'
 import { ENV, OTHER, WORKSPACE } from './env'
-import { callOther, type ExternalItem, type ExternalResult, type PlanItem } from './api'
+import { callOther, type EngagementSummary, type ExternalItem, type ExternalResult, type PlanItem } from './api'
 import { secondaryToken, secondarySignedIn, secondaryLogout } from './secondaryAuth'
 
 /* 시딩 도구 화면(HP-435/436) — 2026-09-26 전면 재설계.
@@ -748,6 +748,13 @@ function parseSceneTable(text: string, airDate: string, airStartAt: string): New
   return out
 }
 
+/** 채팅과 함께 넣은 참여 신호 요약. 채팅만 넣고 반응·감상 시간이 없는 옛 계획은 비어 있다. */
+function engagementLine(e: EngagementSummary | null | undefined) {
+  if (!e || (e.emojis === 0 && e.watchSeconds === 0)) return null
+  const h = Math.floor(e.watchSeconds / 3600), m = Math.round((e.watchSeconds % 3600) / 60)
+  return <p className="text-xs text-muted mt-1">채팅과 함께 넣은 것 — 장면 반응 {e.emojis.toLocaleString()}개 · 누적 감상 시간 {h > 0 ? `${h}시간 ` : ''}{m}분. 지울 때 함께 빠집니다.</p>
+}
+
 /* ─── 3단계: AI 계획과 4단계: 주입 ───────────────────────────────────── */
 function PlanStep({ episode, plans, injections, writable, reload, onError }: { episode: Episode; plans: Plan[]; injections: Injection[]; writable: boolean; reload: () => void; onError: (m: string) => void }) {
   const [planId, setPlanId] = useState<number | null>(null)
@@ -785,6 +792,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
      보낸다(500건씩). 결과를 정본 서버에 행별로 기록해 표에 "개발 넣음"이 보이게 한다. */
   const extOf = (it: PlanItem): Record<string, { id: number; batchKey: string }> => { try { return it.external ? JSON.parse(it.external) : {} } catch { return {} } }
   const [extProgress, setExtProgress] = useState<string | null>(null)
+  const [otherEngagement, setOtherEngagement] = useState<EngagementSummary | null>(null)
   const injectOther = async () => {
     if (!view) return
     if (!view.platformEpisodeId || !view.platformCode) { onError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
@@ -805,7 +813,15 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
         for (const x of r.results) { if (x.injectionId) results.push({ itemId: Number(x.ref), remoteInjectionId: x.injectionId }); else if (x.error) errors.push(x.error) }
         setView(await api.recordExternal(view.plan.id, OTHER.env, batchKey, results))
       }
+      // 채팅이 다 들어간 뒤 한 번 — 묶음 전체를 보고 장면 반응·감상 시간을 만든다(HP-436, 2026-10-02 결정).
+      let eng: EngagementSummary | null = null
+      if (results.length) {
+        setExtProgress(`${OTHER.label} 서버에 반응·감상 시간 넣는 중`)
+        try { eng = await callOther(OTHER.api, token, 'POST', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(batchKey)}/engagement`) as EngagementSummary }
+        catch (e) { errors.unshift(`반응·감상 시간 넣기 실패: ${errText(e)}`) }
+      }
       setExtProgress(null)
+      setOtherEngagement(eng)
       if (errors.length) onError(`${OTHER.label} 서버에 ${results.length}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`)
       reload()
     } catch (e) { setExtProgress(null); onError(errText(e)) } finally { setBusy(false) }
@@ -818,7 +834,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
     try {
       const token = await secondaryToken(OTHER)
       for (const b of batches) await callOther(OTHER.api, token, 'DELETE', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(b)}`)
-      setView(await api.clearExternal(view.plan.id, OTHER.env)); reload()
+      setView(await api.clearExternal(view.plan.id, OTHER.env)); setOtherEngagement(null); reload()
     } catch (e) { onError(errText(e)) } finally { setBusy(false) }
   }
 
@@ -929,13 +945,14 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
             <div className="grid grid-cols-2 gap-4">
               <div className={`rounded-lg border p-4 flex flex-col gap-2 ${WORKSPACE.env === 'prod' ? 'border-accent/40 bg-accentw' : 'border-line bg-soft/60'}`}>
                 <div className="font-semibold">{WORKSPACE.label} 서버 <span className="text-xs font-normal text-muted mono">{WORKSPACE.api}</span></div>
-                <p className="note">{WORKSPACE.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 서버가 뒤에서 처리하며 진행률이 여기와 확장의 시딩 도구에 표시됩니다.</p>
+                <p className="note">{WORKSPACE.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 서버가 뒤에서 처리하며 진행률이 여기와 확장의 시딩 도구에 표시됩니다. 채팅이 다 들어가면 그에 맞춰 장면 반응과 누적 감상 시간도 함께 넣습니다(카탈로그 순위에 반영).</p>
                 <div className="flex flex-wrap gap-2 mt-1">
                   <button className="btn-primary" disabled={busy || running || !episode.episodeId || stats.accepted - stats.done <= 0} onClick={execute}>
                     {running ? `넣는 중 ${(stats.done + stats.failed).toLocaleString()} / ${stats.accepted.toLocaleString()}` : `${WORKSPACE.label}에 ${(stats.accepted - stats.done).toLocaleString()}건 넣기`}
                   </button>
                   {stats.done > 0 && !running && <button className="btn-danger" disabled={busy} onClick={rollback}>{WORKSPACE.label}에 넣은 것 모두 지우기</button>}
                 </div>
+                {engagementLine(view.engagement)}
               </div>
               <div className={`rounded-lg border p-4 flex flex-col gap-2 ${OTHER.env === 'prod' ? 'border-accent/40 bg-accentw' : 'border-line bg-soft/60'}`}>
                 <div className="font-semibold">{OTHER.label} 서버 <span className="text-xs font-normal text-muted mono">{OTHER.api}</span>{secondarySignedIn(OTHER) && <button className="btn btn-sm ml-2" onClick={() => { secondaryLogout(OTHER); reload() }}>로그아웃</button>}</div>
@@ -946,6 +963,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
                   </button>
                   {stats.otherDone > 0 && <button className="btn-danger" disabled={busy} onClick={rollbackOther}>{OTHER.label}에 넣은 것 모두 지우기</button>}
                 </div>
+                {engagementLine(otherEngagement)}
               </div>
             </div>
           )}

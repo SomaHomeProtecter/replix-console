@@ -28,7 +28,9 @@ export type InjectionKind = 'VERBATIM' | 'LIGHT_EDIT' | 'VARIANT' | 'MANUAL'
 export type Plan = { id: number; seedEpisodeId: number; label: string | null; source: string | null; status: 'DRAFT' | 'RUNNING' | 'EXECUTED'; createdBy: string | null; createdAt: string; executedAt: string | null }
 export type PlanItem = { id: number; planId: number; seq: number; seedPostId: number | null; ghostKey: string | null; wallclockAt: string | null; playbackSec: number | null; message: string; kind: InjectionKind; spoiler: boolean; scene: string | null; reason: string | null; accepted: boolean; injectionId: number | null; error: string | null; external: string | null }
 export type PlanItemView = { item: PlanItem; previewSec: number | null; gap: boolean }
-export type PlanView = { plan: Plan; items: PlanItemView[]; anchorCount: number; platformCode: string | null; platformEpisodeId: string | null }
+/** 채팅과 함께 넣은 참여 신호(장면 반응 개수 · 누적 감상 시간 초, HP-436 2026-10-02). */
+export type EngagementSummary = { emojis: number; watchSeconds: number }
+export type PlanView = { plan: Plan; items: PlanItemView[]; anchorCount: number; platformCode: string | null; platformEpisodeId: string | null; engagement: EngagementSummary }
 export type ExternalItem = { ref: string; ghostKey: string | null; message: string; playbackSec: number; spoiler: boolean; kind: InjectionKind }
 export type ExternalResult = { ref: string; injectionId: number | null; error: string | null }
 export type NewPlanItem = { seedPostId?: number | null; ghostKey?: string | null; wallclockAt?: string | null; playbackSec?: number | null; message: string; kind?: InjectionKind; spoiler?: boolean; scene?: string | null; reason?: string | null }
