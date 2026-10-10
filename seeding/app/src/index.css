@@ -1,36 +1,45 @@
-@import "tailwindcss";
+/* 스캔 범위를 이 폴더로 못박는다 — 운영 콘솔 공용 틀(shell/app, HP-506)이 이 파일을 함께 빌드할 때 틀·조치 소스의
+   클래스 이름으로 유틸리티가 생기지 않게. 공용 틀은 이 CSS를 시딩 화면의 격리 영역(Shadow DOM) 안에만 넣는다. */
+@import "tailwindcss" source("./");
 
 /* 시딩 도구(HP-435/436) — 관리자용 작업 화면. 장식 없이 상태(대기·진행·완료·실패)를 색으로 읽게 하고,
    시각·수량은 tabular-nums 모노로 맞춘다. 2026-09-26 전면 재설계: 한 회차를 네 단계(수집 → 싱크와 장면 → AI 계획 → 주입)로
-   위에서 아래로 진행하며, 각 단계 카드는 "무엇을 하는 단계인지"와 "지금 상태"를 먼저 말한다. */
+   위에서 아래로 진행하며, 각 단계 카드는 "무엇을 하는 단계인지"와 "지금 상태"를 먼저 말한다.
+   2026-10-10 운영 콘솔 통합(HP-506): 색을 조치 콘솔의 시각 정본(moderation/app/src/styles.css :root)에 맞췄다.
+   운영(PROD) 표시는 호박색(prod-*)이고 빨강은 되돌리기 어려운 조치에만 쓴다(HP-456 D2, HP-223 확정 제약). */
 @theme {
-  --color-warm: #f7f7f8;
-  --color-soft: #eeeef1;
+  --color-warm: #f7f8fa;
+  --color-soft: #eef1f4;
   --color-raise: #ffffff;
-  --color-sink: #e6e6ea;
-  --color-ink: #121218;
-  --color-ink2: #3d3d48;
-  --color-muted: #666672;
-  --color-faint: #9a9aa6;
-  --color-line: rgba(18, 18, 24, 0.10);
-  --color-line2: rgba(18, 18, 24, 0.18);
-  --color-accent: #e50914;
+  --color-sink: #e2e7ec;
+  --color-ink: #212b35;
+  --color-ink2: #303b46;
+  --color-muted: #5d6975;
+  --color-faint: #8a95a1;
+  --color-line: #e2e7ec;
+  --color-line2: #cfd7de;
+  --color-accent: #f0424d;
   --color-accentd: #a3060f;
   --color-accentw: #fdf1f1;
-  --color-ok: #23704a;
-  --color-okw: #e3f3ea;
-  --color-warn: #8a5a08;
-  --color-warnw: #fff1d6;
-  --color-bad: #a82a2a;
-  --color-badw: #fce9e9;
-  --color-info: #2b66a3;
-  --color-infod: #224f80;
-  --color-infow: #eef4fb;
+  --color-prod: #73561d;
+  --color-prodink: #ffe2a4;
+  --color-prodw: #fffaf0;
+  --color-prodline: #ecd9ad;
+  --color-ok: #2e7d4f;
+  --color-okw: #e6f4ec;
+  --color-warn: #97650c;
+  --color-warnw: #fff3df;
+  --color-bad: #b03030;
+  --color-badw: #fdecec;
+  --color-info: #2f6da8;
+  --color-infod: #245a8c;
+  --color-infow: #f2f6fb;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, "Cascadia Mono", monospace;
 }
 
-html { background: var(--color-warm); color: var(--color-ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+/* :host — 공용 틀 안에서는 문서의 html이 아니라 격리 영역의 뿌리가 이 기본값을 받는다. */
+html, :host { background: var(--color-warm); color: var(--color-ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
 body { margin: 0; }
 button, input, select, textarea { font: inherit; }
 .mono { font-family: var(--font-mono); }

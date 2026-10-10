@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
 import { canRead, canWrite, login, logout, useAuth } from './auth'
-import { ENV, OTHER, WORKSPACE } from './env'
+import { ENV, OTHER, WORKSPACE, type Env } from './env'
+import { seedingHost, type ProductionWriteSummary } from './host'
 import { callOther, type EngagementSummary, type ExternalItem, type ExternalResult, type PlanItem } from './api'
 import { secondaryToken, secondarySignedIn, secondaryLogout } from './secondaryAuth'
 
@@ -58,6 +59,13 @@ function lastAirDate(weekday: number | null): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 function errText(e: unknown) { return e instanceof ApiError ? `${e.message}${e.code ? ` (${e.code})` : ''}` : e instanceof Error ? e.message : String(e) }
+/* 채팅을 넣고 지우는 일의 최종 확인. 공용 틀(HP-506) 안에서 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력
+   확인 창을 쓰고, 그 밖(개발 서버·단독 실행)은 브라우저 확인 창을 쓴다. */
+async function confirmWrite(env: Env, summary: ProductionWriteSummary, message: string): Promise<boolean> {
+  const host = seedingHost()
+  if (host && env === 'prod') return host.confirmProductionWrite(summary).then(() => true, () => false)
+  return confirm(message)
+}
 
 /* ─── 틀 ─────────────────────────────────────────────────────────── */
 export default function App() {
@@ -66,6 +74,17 @@ export default function App() {
   if (!user) return <Shell><Gate title="관리자 로그인이 필요합니다" body="이 도구는 운영 데이터를 다룹니다. 팀 Keycloak 계정으로 로그인하세요."><button className="btn-primary" onClick={login}>로그인</button></Gate></Shell>
   if (!canRead(user)) return <Shell user={user.name}><Gate title="이 계정에는 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(admin, moderation_operator, admin_console_viewer 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn" onClick={logout}>로그아웃</button></Gate></Shell>
   return <Shell user={user.name} nav><Main writable={canWrite(user)} /></Shell>
+}
+
+/* 운영 콘솔 공용 틀(shell/app, HP-506) 안에서 그리는 시딩 — 톱바와 탭 없이 화면만. 로그인은 틀이 콘솔을 열 때
+   마쳤으므로 여기서는 권한만 본다. 회차 작업과 AI 프롬프트는 틀의 왼쪽 메뉴가 고른다. */
+export function SeedingWorkspace({ view, workId, episodeId }: { view: 'work' | 'prompts'; workId?: number | null; episodeId?: number | null }) {
+  const { user } = useAuth()
+  if (!user) return null
+  if (!canRead(user)) return <Gate title="이 계정에는 시딩 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(admin, moderation_operator, admin_console_viewer 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn" onClick={logout}>다른 계정으로 로그인</button></Gate>
+  return view === 'work'
+    ? <Workspace writable={canWrite(user)} embedded initialWorkId={workId ?? null} initialEpisodeId={episodeId ?? null} />
+    : <PromptsView writable={canWrite(user)} />
 }
 
 /* 상단 이동: 회차 작업(기본) ↔ AI 프롬프트. 라우팅 없이 상태로 바꾼다. */
@@ -89,7 +108,7 @@ function Shell({ user, children }: { user?: string; nav?: boolean; children: Rea
       <header className="h-14 bg-ink text-white flex items-center gap-4 px-6">
         <span className="inline-block w-2.5 h-2.5 rounded-sm bg-accent" />
         <span className="font-bold tracking-wide text-[15px]">Replix 시딩 도구</span>
-        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold tracking-wider ${ENV === 'prod' ? 'bg-accent text-white' : 'bg-warn text-white'}`}>{ENV === 'prod' ? '운영 서버' : '개발 서버'}</span>
+        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold tracking-wider ${ENV === 'prod' ? 'bg-prod text-prodink' : 'bg-warn text-white'}`}>{ENV === 'prod' ? '운영 서버' : '개발 서버'}</span>
         <span className="text-white/55 text-xs">{ENV === 'prod' ? '여기서 넣은 채팅은 실제 사용자에게 보입니다.' : '개발 서버에만 반영됩니다. 실제 사용자에게는 보이지 않습니다.'}</span>
         <span className="flex-1" />
         {user && <><span className="text-sm text-white/80">{user}</span><button className="text-xs text-white/60 hover:text-white" onClick={logout}>로그아웃</button></>}
@@ -119,22 +138,23 @@ function Banner({ kind, children, onClose }: { kind: 'bad' | 'info'; children: R
 }
 
 /* ─── 작업 공간: 왼쪽 작품·회차, 오른쪽 단계 ───────────────────────── */
-function Workspace({ writable }: { writable: boolean }) {
+/* initialWorkId·initialEpisodeId: 공용 틀 홈의 '최근 회차'에서 고른 회차로 바로 연다(HP-506). 없거나 지워졌으면 첫 작품·첫 회차. */
+function Workspace({ writable, embedded = false, initialWorkId = null, initialEpisodeId = null }: { writable: boolean; embedded?: boolean; initialWorkId?: number | null; initialEpisodeId?: number | null }) {
   const [works, setWorks] = useState<Work[] | null>(null)
-  const [workId, setWorkId] = useState<number | null>(null)
+  const [workId, setWorkId] = useState<number | null>(initialWorkId)
   const [episodes, setEpisodes] = useState<Episode[]>([])
-  const [episodeId, setEpisodeId] = useState<number | null>(null)
+  const [episodeId, setEpisodeId] = useState<number | null>(initialEpisodeId)
   const [error, setError] = useState<string | null>(null)
   const work = useMemo(() => works?.find((w) => w.id === workId) ?? null, [works, workId])
   const episode = useMemo(() => episodes.find((e) => e.id === episodeId) ?? null, [episodes, episodeId])
 
-  const loadWorks = useCallback(() => api.works().then((ws) => { setWorks(ws); setWorkId((cur) => cur ?? ws[0]?.id ?? null) }).catch((e) => setError(errText(e))), [])
+  const loadWorks = useCallback(() => api.works().then((ws) => { setWorks(ws); setWorkId((cur) => (cur != null && ws.some((w) => w.id === cur)) ? cur : (ws[0]?.id ?? null)) }).catch((e) => setError(errText(e))), [])
   const loadEpisodes = useCallback((wid: number) => api.episodes(wid).then((es) => { setEpisodes(es); setEpisodeId((cur) => es.some((e) => e.id === cur) ? cur : (es[0]?.id ?? null)) }).catch((e) => setError(errText(e))), [])
   useEffect(() => { loadWorks() }, [loadWorks])
   useEffect(() => { if (workId != null) loadEpisodes(workId) }, [workId, loadEpisodes])
 
   return (
-    <div className="grid grid-cols-[300px_minmax(0,1fr)] min-h-[calc(100vh-56px)]">
+    <div className={`grid grid-cols-[300px_minmax(0,1fr)] ${embedded ? 'min-h-full' : 'min-h-[calc(100vh-56px)]'}`}>
       <aside className="border-r border-line bg-raise flex flex-col">
         <div className="px-5 pt-5 pb-3">
           <div className="text-[11px] font-semibold text-muted mb-2">작품</div>
@@ -260,7 +280,7 @@ function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode:
     catch (e) { onError(errText(e)) } finally { setBusy(false) }
   }
   const unlink = async () => {
-    if (!confirm('넷플릭스 회차와의 연결을 끊습니다. 확장 패널에서 다시 연결할 수 있습니다.')) return
+    if (!confirm('넷플릭스 회차와의 연결을 끊습니다. 익스텐션 패널에서 다시 연결할 수 있습니다.')) return
     try { await api.linkEpisode(episode.id, null); onChanged() } catch (e) { onError(errText(e)) }
   }
   return (
@@ -285,7 +305,7 @@ function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode:
               <span className="text-muted">넷플릭스 회차 연결</span>
               <span>{episode.episodeId
                 ? <span className="flex items-center gap-2"><span className="pill bg-okw text-ok">연결됨</span><span className="text-xs text-muted">회차 id {episode.episodeId}</span>{writable && <button className="btn btn-sm" onClick={unlink}>연결 끊기</button>}</span>
-                : <span className="text-muted">아직 연결되지 않았습니다. 넷플릭스에서 이 회차를 재생하고 확장의 시딩 도구에서 "이 회차에 연결"을 누르면 연결됩니다. 채팅은 연결된 뒤에만 넣을 수 있습니다.</span>}</span>
+                : <span className="text-muted">아직 연결되지 않았습니다. 넷플릭스에서 이 회차를 재생하고 익스텐션의 시딩 도구에서 "이 회차에 연결"을 누르면 연결됩니다. 채팅은 연결된 뒤에만 넣을 수 있습니다.</span>}</span>
             </div>
           </>
         ) : (
@@ -509,13 +529,13 @@ function SyncStep({ episode, anchors, notes, writable, reload, onError }: { epis
     <div className="card">
       <div className="card-head">
         <h2 className="font-bold flex items-center"><span className="step-no">2</span>시각 맞추기와 장면 메모</h2>
-        <p className="lead mt-2">수집한 글에는 방송 시각이 적혀 있고, 넷플릭스는 재생 시각으로 돕니다. 이 단계는 그 둘을 잇는 <b>기준점</b>과, 방송 1분마다 화면에서 무슨 일이 있었는지 적은 <b>장면 메모</b>를 다룹니다. 둘 다 확장의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 자막과 글을 읽어 자동으로 만들어집니다.</p>
+        <p className="lead mt-2">수집한 글에는 방송 시각이 적혀 있고, 넷플릭스는 재생 시각으로 돕니다. 이 단계는 그 둘을 잇는 <b>기준점</b>과, 방송 1분마다 화면에서 무슨 일이 있었는지 적은 <b>장면 메모</b>를 다룹니다. 둘 다 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 자막과 글을 읽어 자동으로 만들어집니다.</p>
       </div>
       <div className="card-body flex flex-col gap-8">
         <section className="flex flex-col gap-3">
           <div>
             <h3 className="font-semibold">기준점 {anchors.length}개</h3>
-            <p className="note mt-1">기준점 하나는 "재생 몇 초가 방송 몇 시 몇 분이었다"는 쌍입니다. 방송에는 광고가 있어서 한 쌍으로는 뒤로 갈수록 어긋나므로 광고 뒤마다 기준점을 둡니다. 채팅을 넣을 때 글의 방송 시각을 이 표로 재생 시각으로 바꿉니다. 재생하며 어긋남이 보이면 확장의 시딩 도구에서 초 단위로 다듬을 수 있습니다.</p>
+            <p className="note mt-1">기준점 하나는 "재생 몇 초가 방송 몇 시 몇 분이었다"는 쌍입니다. 방송에는 광고가 있어서 한 쌍으로는 뒤로 갈수록 어긋나므로 광고 뒤마다 기준점을 둡니다. 채팅을 넣을 때 글의 방송 시각을 이 표로 재생 시각으로 바꿉니다. 재생하며 어긋남이 보이면 익스텐션의 시딩 도구에서 초 단위로 다듬을 수 있습니다.</p>
           </div>
           {anchors.length === 0 ? <p className="text-sm text-muted">아직 기준점이 없습니다. 없으면 방영 시작 시각을 재생 0초로 보고 환산하는데, 광고가 있는 방송에서는 뒤로 갈수록 어긋납니다. AI 작업을 먼저 돌리세요.</p> : (
             <div className="overflow-auto rounded-lg border border-line max-h-80 max-w-3xl">
@@ -589,7 +609,7 @@ function SceneNotesBlock({ episode, notes, writable, reload, onError }: { episod
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="font-semibold">장면 메모 {notes.length > 0 && <span className="font-normal text-muted">{main.length}분 (방송 전 {pre.length}분, 종료 후 {post.length}분 별도)</span>}</h3>
-          <p className="note mt-1">AI가 자막과 글을 읽고 방송 1분마다 "이때 화면에서 무슨 일이 있었나"를 복원한 기록입니다. 세 곳에 쓰입니다. AI 채팅 계획을 만들 때 채팅을 고르고 다듬는 근거가 되고, 확장의 시딩 도구에서 재생 중인 분의 장면을 보여 주며, 방송 시작·광고·종료 시각을 알려 줍니다. 각 줄 앞의 점은 AI의 확신 정도입니다(초록 높음, 노랑 중간, 회색 낮음).</p>
+          <p className="note mt-1">AI가 자막과 글을 읽고 방송 1분마다 "이때 화면에서 무슨 일이 있었나"를 복원한 기록입니다. 세 곳에 쓰입니다. AI 채팅 계획을 만들 때 채팅을 고르고 다듬는 근거가 되고, 익스텐션의 시딩 도구에서 재생 중인 분의 장면을 보여 주며, 방송 시작·광고·종료 시각을 알려 줍니다. 각 줄 앞의 점은 AI의 확신 정도입니다(초록 높음, 노랑 중간, 회색 낮음).</p>
         </div>
         <div className="flex gap-1 shrink-0">
           {notes.length > 0 && <button className="btn" onClick={() => setOpen((v) => !v)}>{open ? '목록 접기' : '목록 보기'}</button>}
@@ -597,7 +617,7 @@ function SceneNotesBlock({ episode, notes, writable, reload, onError }: { episod
           {writable && notes.length > 0 && <button className="btn text-bad" disabled={busy} onClick={clearNotes}>모두 지우기</button>}
         </div>
       </div>
-      {notes.length === 0 && !paste && <p className="text-sm text-muted">아직 장면 메모가 없습니다. 확장 패널에서 "AI 채팅 작업 시작"을 누르면 만들어집니다.</p>}
+      {notes.length === 0 && !paste && <p className="text-sm text-muted">아직 장면 메모가 없습니다. 익스텐션 패널에서 "AI 채팅 작업 시작"을 누르면 만들어집니다.</p>}
       {groups.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm rounded-lg bg-soft/60 px-4 py-3">
           <span className="text-muted mr-1">방송 구조</span>
@@ -782,10 +802,14 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
   const execute = async () => {
     if (!view) return
     const n = view.items.filter((x) => x.item.accepted && !x.item.injectionId).length
-    if (!confirm(`수락한 ${n.toLocaleString()}건을 이 회차의 채팅으로 넣습니다. 넣은 뒤에는 "넣은 채팅 모두 지우기"나 확장의 시딩 도구에서 한 건씩 지울 수 있습니다.`)) return
+    if (!await confirmWrite(WORKSPACE.env, { target: `${WORKSPACE.label} 서버 · ${episode.label ?? episode.airDate} 채팅`, change: `계획 #${view.plan.id}의 수락 ${n.toLocaleString()}건을 채팅으로 넣기`, reason: '넣은 뒤에는 "넣은 것 모두 지우기"로 계획 단위로 되돌릴 수 있습니다' },
+      `수락한 ${n.toLocaleString()}건을 이 회차의 채팅으로 넣습니다. 넣은 뒤에는 "넣은 채팅 모두 지우기"나 익스텐션의 시딩 도구에서 한 건씩 지울 수 있습니다.`)) return
     setBusy(true); try { setView(await api.executePlan(view.plan.id)) } catch (e) { onError(errText(e)); setBusy(false) }
   }
-  const rollback = async () => { if (!view || !confirm('이 계획이 넣은 채팅을 모두 지우고 검수 대기 상태로 되돌립니다.')) return; setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+  const rollback = async () => {
+    if (!view || !await confirmWrite(WORKSPACE.env, { target: `${WORKSPACE.label} 서버 · ${episode.label ?? episode.airDate} 채팅`, change: `계획 #${view.plan.id}이 넣은 채팅 모두 지우기`, reason: '계획을 검수 대기 상태로 되돌립니다' },
+      '이 계획이 넣은 채팅을 모두 지우고 검수 대기 상태로 되돌립니다.')) return
+    setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
   const remove = async () => { if (!view || !confirm('이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return; setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
 
   /* 다른 환경에 넣기(HP-436): 수락했고 그 환경에 아직 안 넣은 행을, 정본 서버가 환산한 재생 초와 함께 그 서버의 외부 넣기 API 로
@@ -798,7 +822,8 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
     if (!view.platformEpisodeId || !view.platformCode) { onError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
     const rows = view.items.filter((x) => x.item.accepted && !x.item.error && !extOf(x.item)[OTHER.env] && x.previewSec != null)
     if (rows.length === 0) { onError(`${OTHER.label} 서버에 넣을 행이 없습니다.`); return }
-    if (!confirm(`수락한 ${rows.length.toLocaleString()}건을 ${OTHER.label} 서버(${OTHER.api})의 같은 회차 채팅에 넣습니다. ${OTHER.label} 서버에 그 회차가 없으면 실패합니다.`)) return
+    if (!await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${view.plan.id}의 수락 ${rows.length.toLocaleString()}건을 채팅으로 넣기`, reason: `${OTHER.label} 서버에 그 회차가 없으면 실패합니다` },
+      `수락한 ${rows.length.toLocaleString()}건을 ${OTHER.label} 서버(${OTHER.api})의 같은 회차 채팅에 넣습니다. ${OTHER.label} 서버에 그 회차가 없으면 실패합니다.`)) return
     setBusy(true)
     try {
       const token = await secondaryToken(OTHER)
@@ -829,7 +854,8 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
   const rollbackOther = async () => {
     if (!view) return
     const batches = Array.from(new Set(view.items.map((x) => extOf(x.item)[OTHER.env]?.batchKey).filter(Boolean))) as string[]
-    if (batches.length === 0 || !confirm(`${OTHER.label} 서버에 넣은 이 계획의 채팅을 모두 지웁니다.`)) return
+    if (batches.length === 0 || !await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${view.plan.id}이 넣은 채팅 모두 지우기`, reason: `${OTHER.label} 서버에 넣은 묶음만 지웁니다` },
+      `${OTHER.label} 서버에 넣은 이 계획의 채팅을 모두 지웁니다.`)) return
     setBusy(true)
     try {
       const token = await secondaryToken(OTHER)
@@ -849,7 +875,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
         <div className="card-head flex items-start justify-between gap-4">
           <div>
             <h2 className="font-bold flex items-center"><span className="step-no">3</span>AI 채팅 계획</h2>
-            <p className="lead mt-2">AI가 수집한 글 가운데 화면 반응이 아닌 글(광고 불평, 다른 기수 이야기, 비하와 욕설)을 빼고, 남은 글을 아래 네 종류로 정리한 목록입니다. 확장의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 만들어져 여기로 옵니다. 여기서는 훑어보며 뺄 행만 거부하면 됩니다. 표의 재생 시각은 지금 저장된 기준점으로 계산한 값이고, 실제로 넣을 때 다시 계산합니다.</p>
+            <p className="lead mt-2">AI가 수집한 글 가운데 화면 반응이 아닌 글(광고 불평, 다른 기수 이야기, 비하와 욕설)을 빼고, 남은 글을 아래 네 종류로 정리한 목록입니다. 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 만들어져 여기로 옵니다. 여기서는 훑어보며 뺄 행만 거부하면 됩니다. 표의 재생 시각은 지금 저장된 기준점으로 계산한 값이고, 실제로 넣을 때 다시 계산합니다.</p>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mt-3 text-xs max-w-3xl">
               {(Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => <div key={k} className="contents"><dt className="font-semibold text-ink2 whitespace-nowrap">{KIND_LABEL[k]}</dt><dd className="text-muted">{KIND_DESC[k]}</dd></div>)}
             </dl>
@@ -864,7 +890,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
               <div className="flex items-center gap-2 text-xs text-muted"><span>{parsed ? `인식된 행 ${parsed.items.length}개` : text.trim() ? 'JSON 형식이 아닙니다' : ''}</span><span className="flex-1" /><button className="btn-primary" disabled={busy || !parsed || parsed.items.length === 0} onClick={doUpload}>올리기</button></div>
             </div>
           )}
-          {plans.length === 0 && <p className="text-sm text-muted">아직 계획이 없습니다. 수집이 끝났다면 넷플릭스에서 이 회차를 재생하고 확장의 시딩 도구에서 "AI 채팅 작업 시작"을 누르세요. 한 시간쯤 뒤 계획이 여기에 나타납니다.</p>}
+          {plans.length === 0 && <p className="text-sm text-muted">아직 계획이 없습니다. 수집이 끝났다면 넷플릭스에서 이 회차를 재생하고 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르세요. 한 시간쯤 뒤 계획이 여기에 나타납니다.</p>}
           {plans.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {plans.map((p) => (
@@ -943,9 +969,9 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
           </div>
           {view && writable && stats && (
             <div className="grid grid-cols-2 gap-4">
-              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${WORKSPACE.env === 'prod' ? 'border-accent/40 bg-accentw' : 'border-line bg-soft/60'}`}>
+              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${WORKSPACE.env === 'prod' ? 'border-prodline bg-prodw' : 'border-line bg-soft/60'}`}>
                 <div className="font-semibold">{WORKSPACE.label} 서버 <span className="text-xs font-normal text-muted mono">{WORKSPACE.api}</span></div>
-                <p className="note">{WORKSPACE.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 서버가 뒤에서 처리하며 진행률이 여기와 확장의 시딩 도구에 표시됩니다. 채팅이 다 들어가면 그에 맞춰 장면 반응과 누적 감상 시간도 함께 넣습니다(카탈로그 순위에 반영).</p>
+                <p className="note">{WORKSPACE.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 서버가 뒤에서 처리하며 진행률이 여기와 익스텐션의 시딩 도구에 표시됩니다. 채팅이 다 들어가면 그에 맞춰 장면 반응과 누적 감상 시간도 함께 넣습니다(카탈로그 순위에 반영).</p>
                 <div className="flex flex-wrap gap-2 mt-1">
                   <button className="btn-primary" disabled={busy || running || !episode.episodeId || stats.accepted - stats.done <= 0} onClick={execute}>
                     {running ? `넣는 중 ${(stats.done + stats.failed).toLocaleString()} / ${stats.accepted.toLocaleString()}` : `${WORKSPACE.label}에 ${(stats.accepted - stats.done).toLocaleString()}건 넣기`}
@@ -954,7 +980,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
                 </div>
                 {engagementLine(view.engagement)}
               </div>
-              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${OTHER.env === 'prod' ? 'border-accent/40 bg-accentw' : 'border-line bg-soft/60'}`}>
+              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${OTHER.env === 'prod' ? 'border-prodline bg-prodw' : 'border-line bg-soft/60'}`}>
                 <div className="font-semibold">{OTHER.label} 서버 <span className="text-xs font-normal text-muted mono">{OTHER.api}</span>{secondarySignedIn(OTHER) && <button className="btn btn-sm ml-2" onClick={() => { secondaryLogout(OTHER); reload() }}>로그아웃</button>}</div>
                 <p className="note">{OTHER.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 이 콘솔이 환산한 재생 시각과 문장을 {OTHER.label} 서버로 보내 넣습니다. {OTHER.label} 서버에 이 회차가 있어야 합니다(그 환경에서 회차를 한 번 열면 생깁니다).</p>
                 <div className="flex flex-wrap gap-2 mt-1">

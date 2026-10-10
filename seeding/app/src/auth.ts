@@ -4,6 +4,7 @@
 import Keycloak from 'keycloak-js'
 import { useEffect, useState } from 'react'
 import { AUTH } from './env'
+import { seedingHost } from './host'
 
 const FLAG = 'replix_seeding_signed_in'
 
@@ -44,6 +45,7 @@ function hasFlag() { try { return localStorage.getItem(FLAG) === '1' } catch { r
 function setFlag(on: boolean) { try { on ? localStorage.setItem(FLAG, '1') : localStorage.removeItem(FLAG) } catch { /* 저장 불가 환경 */ } }
 
 export function initAuth(): Promise<void> {
+  if (seedingHost()) return Promise.resolve() // 공용 틀(HP-506)이 콘솔을 열 때 이미 로그인했다
   if (initPromise) return initPromise
   const k = instance()
   const returning = /[?&](code|error)=/.test(location.search)
@@ -66,6 +68,7 @@ export function initAuth(): Promise<void> {
    어댑터가 없어 "Cannot read properties of undefined (reading 'login')" 로 터진다(2026-09-20 실측) —
    initPromise 가 아니라 **init() 을 실제로 했는지**를 보고, 안 했으면 여기서 한다. */
 export function login() {
+  if (seedingHost()) return
   const k = instance()
   const go = () => k.login({ redirectUri: location.href })
   if (initialized && initPromise) { initPromise.then(go); return }
@@ -75,11 +78,15 @@ export function login() {
 }
 
 export function logout() {
+  const host = seedingHost()
+  if (host) { host.logout(); return }
   setFlag(false)
   kc?.logout({ redirectUri: location.href.split('?')[0] })
 }
 
 export async function accessToken(): Promise<string | null> {
+  const host = seedingHost()
+  if (host) return host.token()
   if (!kc?.authenticated) return null
   try { await kc.updateToken(30) } catch { return null }
   return kc.token ?? null
@@ -96,5 +103,7 @@ export function useAuth(): { ready: boolean; user: AuthUser | null } {
     initAuth()
     return () => { listeners.delete(l) }
   }, [])
+  const host = seedingHost()
+  if (host) return { ready: true, user: host.user }
   return { ready, user }
 }
