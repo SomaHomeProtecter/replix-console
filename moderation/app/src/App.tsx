@@ -128,25 +128,35 @@ function AppContent() {
       )}
       <IncidentPrimaryBanner />
       <main className="content">
-        <Routes>
-          <Route path="/" element={<ReportQueuePage />} />
-          <Route path="/suspensions" element={<SuspensionBoardPage />} />
-          <Route path="/actions" element={<ActionLogPage />} />
-          <Route path="/moderation-reviews" element={<ModerationReviewPage />} />
-          <Route path="/operation-cases" element={<OperationCasesPage />} />
-          <Route path="/moderation-policies" element={<CleanbotPolicyPage />} />
-          <Route path="/feedback" element={<FeedbackPage />} />
-          <Route path="/feature-control" element={<FeatureControlPage />} />
-          <Route path="/feature-control/change-sets" element={<FeatureChangeSetPage />} />
-          <Route path="/feature-control/presets" element={<FeatureControlPresetPage />} />
-          <Route path="/feature-control/notices" element={<ServiceNoticePage />} />
-          <Route path="/feature-control/drift" element={<FeatureDriftPage />} />
-          <Route path="/feature-control/incidents" element={<IncidentTimelinePage />} />
-          <Route path="/feature-control/incident-mode" element={<IncidentModePage />} />
-          <Route path="/users/:userId" element={<UserDetailPage />} />
-        </Routes>
+        <ModerationRoutes />
       </main>
     </div>
+  )
+}
+
+/**
+ * 조치 콘솔 화면 경로 묶음 — 톱바 없이 라우트만. 운영 콘솔 공용 틀(shell/app, HP-506)이 자기 톱바·메뉴 안에
+ * 이것을 그린다. 경로는 라우터 basename(/moderation/&lt;env&gt;) 기준이다.
+ */
+export function ModerationRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<ReportQueuePage />} />
+      <Route path="/suspensions" element={<SuspensionBoardPage />} />
+      <Route path="/actions" element={<ActionLogPage />} />
+      <Route path="/moderation-reviews" element={<ModerationReviewPage />} />
+      <Route path="/operation-cases" element={<OperationCasesPage />} />
+      <Route path="/moderation-policies" element={<CleanbotPolicyPage />} />
+      <Route path="/feedback" element={<FeedbackPage />} />
+      <Route path="/feature-control" element={<FeatureControlPage />} />
+      <Route path="/feature-control/change-sets" element={<FeatureChangeSetPage />} />
+      <Route path="/feature-control/presets" element={<FeatureControlPresetPage />} />
+      <Route path="/feature-control/notices" element={<ServiceNoticePage />} />
+      <Route path="/feature-control/drift" element={<FeatureDriftPage />} />
+      <Route path="/feature-control/incidents" element={<IncidentTimelinePage />} />
+      <Route path="/feature-control/incident-mode" element={<IncidentModePage />} />
+      <Route path="/users/:userId" element={<UserDetailPage />} />
+    </Routes>
   )
 }
 

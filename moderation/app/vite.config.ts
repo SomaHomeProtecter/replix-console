@@ -3,19 +3,19 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
-// console.replix.tv/moderation/ 아래에서 돈다(HP-456). 라우터 basename과 환경 전환 복귀 경로가
-// 이 값 하나를 따른다(import.meta.env.BASE_URL). 깊은 주소 복원은 docs/404.html + index.html.
+// console.replix.tv/moderation/ 아래에서 돈다(HP-456). 라우터 basename과 환경 전환 복귀 경로는
+// src/environment.ts의 MODERATION_BASE_PATH(같은 값)를 따른다 — 공용 틀(shell/app, HP-506)은 base '/'로
+// 빌드하므로 BASE_URL에 기대지 않는다. 이 값은 조치만 따로 띄우는 개발 서버의 기준 경로다.
 const BASE = '/moderation/'
 
 export default defineConfig(({ command }) => ({
   base: BASE,
-  // 시딩 도구(seeding/app)와 같은 방식 — 자기완결 HTML 한 장으로 빌드해 docs/moderation/index.html을
-  // 커밋한다. GitHub Pages는 빌드 단계가 없어 커밋한 산출물이 곧 배포물이다. 여러 파일로 나누면 Pages
-  // 캐시(max-age=600) 동안 옛 index.html이 이미 지워진 옛 청크를 불러 화면이 깨질 수 있다.
-  // ⚠️ 이 플러그인은 빌드 때 base를 './'로 바꾼다 — 그러면 BASE_URL이 './'가 되어 라우터와 환경 전환
-  // 복귀 경로가 깨진다. overrideConfig로 base를 되돌린다(2026-09-28 빌드 결과로 확인).
+  // 자기완결 HTML 한 장으로 빌드한다. ⚠️ 이 플러그인은 빌드 때 base를 './'로 바꾼다 — overrideConfig로
+  // base를 되돌린다(2026-09-28 빌드 결과로 확인).
   plugins: [react(), ...(command === 'build' ? [viteSingleFile({ overrideConfig: { base: BASE } })] : [])],
-  build: { outDir: '../../docs/moderation', emptyOutDir: true },
+  // 배포물은 운영 콘솔 공용 틀(shell/app, HP-506)이 이 소스를 함께 묶어 docs/에 쓴다. 이 빌드는 조치만 따로
+  // 확인하는 용도라 dist/에 쓴다 — 예전처럼 docs/moderation/에 쓰면 공용 틀 배포물을 옛 단독 화면으로 덮어쓴다.
+  build: { outDir: 'dist', emptyOutDir: true },
   // 공개 산출물은 커밋된 호스팅 프로필(hosted-env/.env.production)만 읽는다. 루트의 .env.local(개발 서버용)을
   // 빌드가 함께 읽으면 만든 사람의 PC 설정이 공개 번들에 섞이고, 누가 빌드하느냐에 따라 결과가 달라진다
   // (HP-456 코드 리뷰). 셸에서 export한 VITE_* 는 여전히 가장 앞선다 — 빌드 전에 비워 둘 것.

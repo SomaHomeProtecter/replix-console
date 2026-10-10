@@ -17,6 +17,14 @@ export const CONSOLE_ENVIRONMENTS = availableEnvironments(import.meta.env.DEV)
  */
 export const HOSTED_CONSOLE_HOSTNAME = 'console.replix.tv'
 
+/**
+ * 조치 콘솔이 도는 경로(HP-456). 환경 경로(/moderation/&lt;env&gt;/…)와 전환 복귀 경로가 이 값을 쓴다.
+ *
+ * <p>Vite base(import.meta.env.BASE_URL)에서 읽지 않는다 — 운영 콘솔 공용 틀(shell/app, HP-506)이 이 소스를
+ * base '/'로 함께 빌드하므로, 거기서는 BASE_URL이 '/'가 되어 환경 경로가 깨진다.
+ */
+export const MODERATION_BASE_PATH = '/moderation/'
+
 export interface ConsoleProfile {
   environment: ConsoleEnvironment
   apiBaseUrl: string
