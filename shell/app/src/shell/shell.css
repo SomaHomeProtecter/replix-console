@@ -1,0 +1,193 @@
+/* ── 운영 콘솔 공용 틀(HP-506) — 톱바·왼쪽 메뉴·본문 자리·홈 ──
+   색·글꼴 토큰은 조치 콘솔 styles.css의 :root(시각 정본 v7)를 그대로 쓴다. 그 파일은 콘솔 전체에 실린다.
+   이 파일의 클래스는 모두 cs- 로 시작해 조치 화면의 클래스와 겹치지 않는다. 시딩 화면은 격리 영역(Shadow DOM)
+   안에 따로 그려 이 파일과 조치 CSS가 닿지 않는다. 빨강은 쓰지 않는다 — 정지 같은 되돌리기 어려운 조치 전용이다. */
+
+.cs-app { display: flex; flex-direction: column; height: 100%; }
+
+/* ── 톱바 ── */
+.cs-top {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  min-height: 52px; padding: 8px 16px; background: var(--top); color: var(--top-ink); font-size: 13px;
+}
+.cs-brand {
+  display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; white-space: nowrap;
+  border-radius: 6px;
+}
+.cs-brand[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.cs-brand:focus-visible { outline: 2px solid #8db5dc; outline-offset: 3px; }
+.cs-wordmark { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.cs-wordmark .rx { color: var(--logo-red); }
+.cs-brand-sep { width: 1px; height: 16px; background: #465363; }
+.cs-brand-name { font-size: 13.5px; font-weight: 700; }
+.cs-top .env-selector select { padding-block: 4px; }
+.cs-account {
+  display: flex; align-items: center; gap: 10px; min-width: 0; margin-left: auto; color: var(--top-muted); font-size: 12px;
+}
+.cs-top .user-search + .cs-account { margin-left: 0; }
+.cs-operator { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 본문 자리: 왼쪽 메뉴 + 화면 ── */
+.cs-body { flex: 1; min-height: 0; display: flex; }
+.cs-nav {
+  flex: none; width: 232px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+  padding: 14px 10px 24px; background: var(--panel); border-right: 1px solid var(--line);
+}
+.cs-nav-home, .cs-nav-item, .cs-nav-external {
+  display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: 7px;
+  color: var(--label); font-weight: 650; text-decoration: none;
+}
+.cs-nav-home { min-height: 36px; font-weight: 700; }
+.cs-nav-item { padding-left: 46px; }
+.cs-nav-home:hover, .cs-nav-item:hover, .cs-nav-external:hover { background: #f2f4f7; color: var(--ink); }
+.cs-nav-home[aria-current="page"], .cs-nav-item[aria-current="page"] {
+  background: var(--blue-soft); color: var(--blue); font-weight: 800;
+}
+.cs-nav a:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.cs-nav a[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.cs-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-nav-rule { height: 1px; background: var(--line-2); margin: 10px 6px; }
+.cs-nav-caption { padding: 4px 10px 2px; font-size: 11px; font-weight: 800; color: var(--muted-2); }
+
+/* 서버가 바뀌는 메뉴 표시 — 누르면 그 서버로 새로 연다. PROD만 호박색(운영 표시), 나머지는 중립. */
+.cs-tag {
+  flex: none; padding: 1px 6px; border-radius: 4px; background: #e9eef2; color: var(--label);
+  font-family: var(--mono); font-size: 10px; font-weight: 800;
+}
+.cs-tag.is-prod { background: var(--amber-soft); color: var(--amber-ink); }
+
+.cs-group { display: flex; align-items: center; gap: 10px; padding: 6px 10px; }
+.cs-group-mark {
+  flex: none; width: 26px; height: 26px; border-radius: 7px; background: var(--line-2); color: var(--label);
+  display: flex; align-items: center; justify-content: center;
+}
+.cs-group-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+.cs-group-title { display: flex; align-items: center; gap: 6px; }
+.cs-group-title strong { font-size: 13.5px; font-weight: 800; color: var(--ink); }
+.cs-group-sub { font-size: 11.5px; color: var(--muted-2); }
+.cs-fixed {
+  display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border-radius: 4px;
+  background: var(--amber-soft); color: var(--amber-ink); font-size: 10.5px; font-weight: 800;
+}
+
+.cs-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+
+/* 시딩 화면의 격리 영역(Shadow DOM) 뿌리 — 본문 자리를 채우고, 더 길면 본문 자리가 스크롤한다. */
+.cs-seeding-host { flex: 1 1 0%; min-height: 0; display: block; }
+
+/* ── 홈 ── */
+.cs-page { padding: 26px 28px 40px; display: flex; flex-direction: column; gap: 20px; }
+.cs-page-head h1 { margin: 0; font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
+.cs-page-head p { margin: 6px 0 0; font-size: 13px; color: var(--muted-2); }
+.cs-ws-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 16px; align-items: start;
+}
+.cs-ws { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; }
+.cs-ws-head { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px 16px; border-bottom: 1px solid var(--line-2); }
+.cs-ws-mark {
+  flex: none; width: 36px; height: 36px; border-radius: 9px; background: var(--line-2); color: var(--label);
+  display: flex; align-items: center; justify-content: center;
+}
+.cs-ws-mark svg { width: 18px; height: 18px; }
+.cs-ws-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cs-ws-title > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cs-ws-title h2 { margin: 0; font-size: 16px; font-weight: 800; color: var(--ink); }
+.cs-ws-title p { margin: 0; font-size: 12.5px; color: var(--muted-2); line-height: 1.55; }
+.cs-open {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: 7px; background: var(--panel); color: var(--label);
+  font-size: 12.5px; font-weight: 750; text-decoration: none;
+}
+.cs-open:hover { background: var(--panel-2); color: var(--ink); }
+.cs-ws-caption { padding: 14px 20px 4px; font-size: 11.5px; font-weight: 800; color: var(--muted-2); }
+.cs-ws-rows { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 8px; }
+.cs-ws-rows > .error-box { margin: 4px 12px 8px; }
+.cs-ws-empty { padding: 12px; font-size: 12.5px; color: var(--muted-2); }
+.cs-ws-foot { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 20px 16px; border-top: 1px solid var(--line-2); }
+.cs-chip {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border: 1px solid var(--line);
+  border-radius: 999px; color: var(--label); font-size: 12px; font-weight: 700; text-decoration: none;
+}
+.cs-chip:hover { background: var(--line-2); color: var(--ink); }
+.cs-ws a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* 지금 볼 것(조치) */
+.cs-row { display: flex; align-items: center; gap: 16px; padding: 12px; border-radius: 9px; color: inherit; text-decoration: none; }
+.cs-row:hover { background: #f6f8fa; }
+.cs-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cs-row-label { font-size: 12px; font-weight: 700; color: var(--muted-2); }
+.cs-row-value { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.cs-row-value b { font-size: 20px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cs-row-value .agebadge { margin-left: 0; }
+.cs-row-quiet { font-size: 14px; font-weight: 700; color: var(--ink); }
+.cs-row-note { font-size: 12px; color: var(--muted-2); }
+.cs-row-go { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 750; color: var(--blue); }
+
+/* 최근 회차(시딩) — 네 단계 진행 */
+.cs-episode { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 9px; color: inherit; text-decoration: none; }
+.cs-episode:hover { background: #f6f8fa; }
+.cs-episode-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.cs-episode-name { display: flex; align-items: baseline; gap: 8px; }
+.cs-episode-name b { font-size: 14px; font-weight: 800; color: var(--ink); }
+.cs-episode-name span { font-size: 12px; color: var(--muted-2); }
+.cs-status { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #e9eef2; color: var(--label); }
+.cs-status.is-current { background: var(--blue-soft); color: var(--blue); }
+.cs-status.is-done { background: var(--green-soft); color: var(--green); }
+.cs-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.cs-step {
+  display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel-2);
+}
+.cs-step-no {
+  flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--line); color: var(--label);
+  display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800;
+}
+.cs-step-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.cs-step-text b { font-size: 11.5px; color: var(--ink); }
+.cs-step-text span { font-size: 11px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-step.is-done { background: var(--green-soft); border-color: #cfe8da; }
+.cs-step.is-done .cs-step-no { background: var(--green); color: #fff; }
+.cs-step.is-done .cs-step-text span { color: #2e6b48; }
+.cs-step.is-current { background: var(--blue-soft); border-color: #cfe0f1; }
+.cs-step.is-current .cs-step-no { background: var(--blue); color: #fff; }
+.cs-step.is-current .cs-step-text span { color: var(--blue); }
+
+/* ── 권한 없음 ── */
+.cs-denied { flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 72px 16px 48px; }
+.cs-denied-card {
+  width: 100%; max-width: 560px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(20, 30, 40, .08); padding: 28px; display: flex; flex-direction: column; gap: 18px;
+}
+.cs-denied-card h1 { margin: 0; font-size: 20px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
+.cs-denied-card p { margin: 0; font-size: 13.5px; color: var(--label); line-height: 1.65; }
+.cs-denied-account {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 14px; border-radius: 10px;
+  background: #f4f6f8; border: 1px solid var(--line);
+}
+.cs-denied-account span:first-child { font-size: 12px; font-weight: 800; color: var(--label); }
+.cs-denied-account b { font-size: 13.5px; color: var(--ink); }
+.cs-denied-account code { font-family: var(--mono); font-size: 11.5px; color: var(--muted-2); }
+.cs-roles { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.cs-roles table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cs-roles th { text-align: left; font-weight: 700; color: var(--body); padding: 10px 14px; background: var(--panel-2); width: 44%; }
+.cs-roles td { padding: 10px 14px; font-family: var(--mono); font-size: 11.5px; color: var(--label); }
+.cs-roles tr + tr > * { border-top: 1px solid var(--line-2); }
+.cs-denied-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cs-denied-actions .btn-primary-solid {
+  height: 40px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--blue); color: #fff;
+  font: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.cs-denied-actions .btn-primary-solid:hover { background: #245a8c; }
+.cs-denied-actions span { font-size: 12px; color: var(--muted-2); }
+
+/* 좁은 화면: 메뉴를 본문 위로 올리고 톱바를 접는다(조치 콘솔 styles.css의 640px 규칙과 순서를 맞춘다). */
+@media (max-width: 760px) {
+  .cs-body { flex-direction: column; }
+  .cs-nav { width: auto; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .cs-page { padding: 18px 16px 32px; }
+}
+@media (max-width: 640px) {
+  .cs-brand { order: 1; }
+  .cs-account { order: 3; margin-left: auto; }
+  .cs-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
