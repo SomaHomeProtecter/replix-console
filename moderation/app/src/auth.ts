@@ -1,7 +1,7 @@
 import Keycloak from 'keycloak-js'
 import { env } from './env'
 import type { ConsoleEnvironment } from './environment'
-import { environmentBasename, validateTokenClaims } from './environment'
+import { MODERATION_BASE_PATH, environmentBasename, validateTokenClaims } from './environment'
 
 /**
  * Keycloak 싱글턴(HP-227) — Authorization Code + PKCE(S256), 기존 replix-web client 재사용.
@@ -104,7 +104,7 @@ export function environmentSwitchUrl(
  */
 export function switchEnvironment(target: ConsoleEnvironment): void {
   if (target === env.environment) return
-  window.location.assign(environmentSwitchUrl(window.location.href, target, import.meta.env.BASE_URL))
+  window.location.assign(environmentSwitchUrl(window.location.href, target, MODERATION_BASE_PATH))
 }
 
 export function userName(): string {

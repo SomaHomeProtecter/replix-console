@@ -1,0 +1,187 @@
+import type { MouseEvent, ReactNode } from 'react'
+import { logout, roleLabel, switchEnvironment, userName } from '@moderation/auth'
+import { env } from '@moderation/env'
+import { CONSOLE_ENVIRONMENTS } from '@moderation/environment'
+import type { ConsoleEnvironment } from '@moderation/environment'
+import { handleLinkClick, isHostedConsole } from '../navigation'
+import { environmentForPath, moderationBasename, SEEDING_PATH } from '../sections'
+import type { Section } from '../sections'
+import { ExternalIcon, HomeIcon, LockIcon, ShieldIcon, SproutIcon } from './icons'
+
+/**
+ * 운영 콘솔 공용 틀(HP-506) — 톱바·왼쪽 메뉴·PROD 띠. 시안 = 아티팩트 FGyCFRqoVMB8YprhGyioMB.
+ *
+ * <p>종전에는 두 도구가 각자 톱바를 갖고 조치 톱바의 도구 전환 메뉴로 오갔다(HP-456). 이 틀이 그 자리를 대신한다:
+ * 한 톱바, 한 메뉴 안에서 시딩과 조치를 묶음으로 나눈다. 색은 조치 콘솔의 시각 정본(styles.css :root)을 따른다 —
+ * PROD는 호박색, 빨강은 정지 같은 되돌리기 어려운 조치에만 쓴다(HP-223 확정 제약, HP-456 D2).
+ *
+ * <p>조치가 쓰기 요청을 처리하는 동안(locked)에는 이동 수단을 모두 잠근다 — 페이지를 떠나면 조치 성패를 알릴 곳이
+ * 사라진다(HP-300). 종전 조치 톱바의 잠금과 같은 규칙을 틀 전체로 넓혔다.
+ */
+
+const MODERATION_ITEMS: readonly { label: string; sub: string }[] = [
+  { label: '신고 큐', sub: '/' },
+  { label: '정지 현황', sub: '/suspensions' },
+  { label: '조치 로그', sub: '/actions' },
+  { label: '오탐 검토', sub: '/moderation-reviews' },
+  { label: '운영 협업', sub: '/operation-cases' },
+  { label: '정책 실험', sub: '/moderation-policies' },
+  { label: '기능 제어', sub: '/feature-control' },
+  { label: '피드백', sub: '/feedback' },
+]
+
+type NavItem = { label: string; href: string; active: boolean; target: ConsoleEnvironment }
+
+function splitPath(path: string): { pathname: string; search: string } {
+  const at = path.indexOf('?')
+  return at < 0 ? { pathname: path, search: '' } : { pathname: path.slice(0, at), search: path.slice(at) }
+}
+
+/** 조치 메뉴 켜짐 판정 — 신고 큐('/')는 정확히 그 경로일 때만, 나머지는 하위 경로까지(기능 제어의 탭들). */
+function moderationActive(rest: string, sub: string): boolean {
+  if (sub === '/') return rest === '/'
+  return rest === sub || rest.startsWith(`${sub}/`)
+}
+
+export default function Shell({ section, path, locked = false, lockedTitle, search, banner, children }: {
+  section: Section
+  path: string
+  locked?: boolean
+  lockedTitle?: string
+  search: ReactNode
+  banner?: ReactNode
+  children: ReactNode
+}) {
+  const environment = env.environment
+  const hosted = isHostedConsole()
+  const { pathname, search: query } = splitPath(path)
+  const view = new URLSearchParams(query).get('view')
+  const basename = moderationBasename(environment)
+  const rest = section === 'moderation' ? (pathname.slice(basename.length) || '/') : ''
+  const targetOf = (href: string) => environmentForPath(splitPath(href).pathname, hosted, environment)
+
+  const home: NavItem = { label: '홈', href: '/', active: section === 'home', target: targetOf('/') }
+  const seeding: NavItem[] = [
+    { label: '회차 작업', href: SEEDING_PATH, active: section === 'seeding' && view !== 'prompts', target: targetOf(SEEDING_PATH) },
+    { label: 'AI 프롬프트', href: `${SEEDING_PATH}?view=prompts`, active: section === 'seeding' && view === 'prompts', target: targetOf(SEEDING_PATH) },
+  ]
+  const moderation: NavItem[] = MODERATION_ITEMS.map(({ label, sub }) => {
+    const href = sub === '/' ? `${basename}/` : `${basename}${sub}`
+    return { label, href, active: section === 'moderation' && moderationActive(rest, sub), target: environment }
+  })
+  // 홈·시딩은 PROD 전용이다(시딩 작업물 정본 = 운영). DEV로 조치를 시험하다 누르면 PROD로 새로 연다.
+  const seedingFixed = hosted && environment === 'PROD'
+
+  const follow = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (locked) { event.preventDefault(); return }
+    handleLinkClick(event, href)
+  }
+
+  const link = (item: NavItem, className: string, icon?: ReactNode) => (
+    <a
+        key={item.href} href={item.href} className={className}
+        aria-current={item.active ? 'page' : undefined}
+        aria-disabled={locked || undefined} title={locked ? lockedTitle : undefined}
+        onClick={(event) => follow(event, item.href)}>
+      {icon}
+      <span className="cs-nav-label">{item.label}</span>
+      {item.target !== environment && (
+        <span className={`cs-tag${item.target === 'PROD' ? ' is-prod' : ''}`} title={`${item.target} 서버로 새로 엽니다`}>
+          {item.target}
+        </span>
+      )}
+    </a>
+  )
+
+  const switchServer = (target: ConsoleEnvironment) => {
+    if (target === environment) return
+    // 조치는 지금 보던 화면의 환경 경로 규칙(HP-456)을 그대로 따른다. 홈·시딩에서 고르면 그 서버의 조치 첫 화면으로 간다 —
+    // DEV는 조치를 시험할 때만 쓰기 때문이다(HP-506).
+    if (section === 'moderation') switchEnvironment(target)
+    else window.location.assign(`${moderationBasename(target)}/`)
+  }
+
+  return (
+    <div className="cs-app">
+      <header className="cs-top">
+        <a
+            href="/" className="cs-brand" aria-disabled={locked || undefined}
+            title={locked ? lockedTitle : '운영 콘솔 홈'} onClick={(event) => follow(event, '/')}>
+          <span className="cs-wordmark"><span className="rx">Re</span>plix</span>
+          <span className="cs-brand-sep" aria-hidden="true" />
+          <span className="cs-brand-name">운영 콘솔</span>
+        </a>
+        <label className={`env-selector env-${environment.toLowerCase()}`}>
+          <span className="sr-only">연결 서버</span>
+          <select
+              aria-label="연결 서버" value={environment} disabled={locked}
+              title={lockedTitle ?? '서버를 바꾸면 그 서버로 다시 로그인합니다'}
+              onChange={(event) => switchServer(event.target.value as ConsoleEnvironment)}>
+            {CONSOLE_ENVIRONMENTS.map((candidate) => (
+              <option key={candidate} value={candidate}>{candidate}</option>
+            ))}
+          </select>
+        </label>
+        {search}
+        <div className="cs-account">
+          <span className="cs-operator">{userName()} ({roleLabel()})</span>
+          <button
+              type="button" className="btn-logout" disabled={locked} title={lockedTitle}
+              onClick={() => logout()}>
+            로그아웃
+          </button>
+        </div>
+      </header>
+      {environment === 'PROD' && (
+        <div className="prod-environment-banner" role="status">
+          PROD 운영 환경 · 실제 사용자 데이터에 즉시 반영됩니다
+        </div>
+      )}
+      <div className="cs-body">
+        <nav className="cs-nav" aria-label="콘솔 메뉴">
+          {link(home, 'cs-nav-home', <HomeIcon />)}
+          <div className="cs-nav-rule" aria-hidden="true" />
+
+          <div className="cs-group">
+            <span className="cs-group-mark" aria-hidden="true"><SproutIcon /></span>
+            <span className="cs-group-text">
+              <span className="cs-group-title">
+                <strong>시딩</strong>
+                {seedingFixed && <span className="cs-fixed"><LockIcon />PROD 고정</span>}
+              </span>
+              <span className="cs-group-sub">수집 · AI 채팅 계획 · 채팅 넣기</span>
+            </span>
+          </div>
+          {seeding.map((item) => link(item, 'cs-nav-item'))}
+
+          <div className="cs-nav-rule" aria-hidden="true" />
+
+          <div className="cs-group">
+            <span className="cs-group-mark" aria-hidden="true"><ShieldIcon /></span>
+            <span className="cs-group-text">
+              <span className="cs-group-title"><strong>조치</strong></span>
+              <span className="cs-group-sub">신고 · 정지 · 기능 제어</span>
+            </span>
+          </div>
+          {moderation.map((item) => link(item, 'cs-nav-item'))}
+
+          {/* 지표 화면은 콘솔에 만들지 않고 있는 곳으로 보낸다(HP-223 확정 제약 ③, HP-297). */}
+          {env.grafanaUrl && (
+            <>
+              <div className="cs-nav-rule" aria-hidden="true" />
+              <span className="cs-nav-caption">바깥 도구</span>
+              <a className="cs-nav-external" href={env.grafanaUrl} target="_blank" rel="noreferrer noopener">
+                <span className="cs-nav-label">Grafana · 모더레이션</span>
+                <ExternalIcon />
+              </a>
+            </>
+          )}
+        </nav>
+        <div className="cs-main">
+          {banner}
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}

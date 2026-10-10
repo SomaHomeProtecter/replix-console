@@ -1,4 +1,4 @@
-import { CONSOLE_ENVIRONMENTS, resolveEnvironment, restoreDeepLink } from './environment'
+import { CONSOLE_ENVIRONMENTS, MODERATION_BASE_PATH, resolveEnvironment, restoreDeepLink } from './environment'
 import type { ConsoleEnvironment, ConsoleProfile, EnvironmentRoute } from './environment'
 
 /** 콘솔 환경(개발 서버 .env.local · 호스팅 빌드 hosted-env/.env.production) — 고를 수 있는 환경의 누락 검증을 부트스트랩 시점에 끝낸다. */
@@ -55,6 +55,22 @@ export const env = {} as ConsoleProfile
 let route: EnvironmentRoute | null = null
 
 /**
+ * 고른 환경의 프로필을 {@link env}에 싣는다. 고를 수 있는 모든 환경의 값을 함께 검증한다 — 전환한 뒤에야
+ * 누락이 드러나지 않게. 호스팅 빌드는 LOCAL을 싣지 않으므로 그 값은 요구하지 않는다.
+ *
+ * <p>{@link initEnv}가 주소에서 환경을 정한 뒤 부른다. 운영 콘솔 공용 틀(shell/app, HP-506)은 조치 경로가
+ * 아닌 화면(홈·시딩)에서 연 경우 주소 대신 자기가 정한 환경으로 직접 부른다.
+ */
+export function loadProfile(environment: ConsoleEnvironment): ConsoleProfile {
+  const grafanaBaseUrl = optional('VITE_GRAFANA_URL')
+  const profiles = CONSOLE_ENVIRONMENTS.map((candidate) => profile(candidate, grafanaBaseUrl))
+  const selected = profiles.find((candidate) => candidate.environment === environment)
+  if (!selected) throw new Error(`지원하지 않는 콘솔 환경입니다: ${environment}`)
+  Object.assign(env, selected)
+  return env
+}
+
+/**
  * 주소를 정본으로 맞추고 연결 환경을 정한다 — 부팅 첫 단계에서 한 번(HP-456).
  *
  * <p>① 404.html이 ?p= 에 실어 보낸 깊은 주소를 되살리고 ② 환경 조각을 넣은 주소(/moderation/&lt;env&gt;/…)로
@@ -63,7 +79,7 @@ let route: EnvironmentRoute | null = null
  */
 export function initEnv(): EnvironmentRoute {
   if (route) return route
-  const basePath = import.meta.env.BASE_URL
+  const basePath = MODERATION_BASE_PATH
   const restored = restoreDeepLink(basePath, window.location.pathname, window.location.search)
   const resolved = resolveEnvironment({
     basePath,
@@ -73,11 +89,7 @@ export function initEnv(): EnvironmentRoute {
     fallback: required('VITE_DEFAULT_ENVIRONMENT'),
     available: CONSOLE_ENVIRONMENTS,
   })
-  // 고를 수 있는 모든 환경의 값을 부팅 때 검증한다 — 전환한 뒤에야 누락이 드러나지 않게.
-  // 호스팅 빌드는 LOCAL을 싣지 않으므로 그 값은 요구하지 않는다.
-  const grafanaBaseUrl = optional('VITE_GRAFANA_URL')
-  const profiles = CONSOLE_ENVIRONMENTS.map((environment) => profile(environment, grafanaBaseUrl))
-  Object.assign(env, profiles.find((candidate) => candidate.environment === resolved.environment))
+  loadProfile(resolved.environment)
 
   const canonical = `${resolved.pathname}${resolved.search}${window.location.hash}`
   if (canonical !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {

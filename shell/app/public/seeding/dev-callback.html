@@ -1,0 +1,8 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>로그인 완료</title></head>
+<body style="font-family:system-ui;padding:24px">로그인 처리 중입니다. 이 창은 곧 닫힙니다.
+<script>
+  // 두 번째 환경 로그인 팝업의 되돌아오는 자리(HP-436). code 를 연 창에 넘기고 닫는다.
+  var q = new URLSearchParams(location.search);
+  if (window.opener) window.opener.postMessage({ type: 'replix-secondary-code', code: q.get('code'), state: q.get('state'), error: q.get('error') }, location.origin);
+  setTimeout(function () { window.close(); }, 300);
+</script></body></html>
