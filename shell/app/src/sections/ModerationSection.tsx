@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, useLocation } from 'react-router'
-import { ModerationRoutes } from '@moderation/App'
+import { ModerationRoutes } from '@moderation/routes'
 import IncidentPrimaryBanner from '@moderation/components/IncidentPrimaryBanner'
 import UserSearch from '@moderation/components/UserSearch'
 import { env } from '@moderation/env'

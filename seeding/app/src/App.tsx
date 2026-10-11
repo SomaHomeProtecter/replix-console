@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
-import { canRead, canWrite, login, logout, useAuth } from './auth'
-import { ENV, OTHER, WORKSPACE, type Env } from './env'
+import { canRead, canWrite, currentUser, logout } from './auth'
+import { OTHER, WORKSPACE, type Env } from './env'
 import { seedingHost, type ProductionWriteSummary } from './host'
 import { callOther, type EngagementSummary, type ExternalItem, type ExternalResult, type PlanItem } from './api'
 import { secondaryToken, secondarySignedIn, secondaryLogout } from './secondaryAuth'
@@ -59,8 +59,8 @@ function lastAirDate(weekday: number | null): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 function errText(e: unknown) { return e instanceof ApiError ? `${e.message}${e.code ? ` (${e.code})` : ''}` : e instanceof Error ? e.message : String(e) }
-/* 채팅을 넣고 지우는 일의 최종 확인. 공용 틀(HP-506) 안에서 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력
-   확인 창을 쓰고, 그 밖(개발 서버·단독 실행)은 브라우저 확인 창을 쓴다. */
+/* 채팅을 넣고 지우는 일의 최종 확인. 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력 확인 창(공용 틀, HP-506)을
+   쓰고, 개발 서버는 브라우저 확인 창을 쓴다. */
 async function confirmWrite(env: Env, summary: ProductionWriteSummary, message: string): Promise<boolean> {
   const host = seedingHost()
   if (host && env === 'prod') return host.confirmProductionWrite(summary).then(() => true, () => false)
@@ -68,54 +68,15 @@ async function confirmWrite(env: Env, summary: ProductionWriteSummary, message: 
 }
 
 /* ─── 틀 ─────────────────────────────────────────────────────────── */
-export default function App() {
-  const { ready, user } = useAuth()
-  if (!ready) return <Shell><p className="text-muted p-6">로그인 상태를 확인하고 있습니다.</p></Shell>
-  if (!user) return <Shell><Gate title="관리자 로그인이 필요합니다" body="이 도구는 운영 데이터를 다룹니다. 팀 Keycloak 계정으로 로그인하세요."><button className="btn-primary" onClick={login}>로그인</button></Gate></Shell>
-  if (!canRead(user)) return <Shell user={user.name}><Gate title="이 계정에는 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(admin, moderation_operator, admin_console_viewer 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn" onClick={logout}>로그아웃</button></Gate></Shell>
-  return <Shell user={user.name} nav><Main writable={canWrite(user)} /></Shell>
-}
-
 /* 운영 콘솔 공용 틀(shell/app, HP-506) 안에서 그리는 시딩 — 톱바와 탭 없이 화면만. 로그인은 틀이 콘솔을 열 때
    마쳤으므로 여기서는 권한만 본다. 회차 작업과 AI 프롬프트는 틀의 왼쪽 메뉴가 고른다. */
 export function SeedingWorkspace({ view, workId, episodeId }: { view: 'work' | 'prompts'; workId?: number | null; episodeId?: number | null }) {
-  const { user } = useAuth()
+  const user = currentUser()
   if (!user) return null
   if (!canRead(user)) return <Gate title="이 계정에는 시딩 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(admin, moderation_operator, admin_console_viewer 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn" onClick={logout}>다른 계정으로 로그인</button></Gate>
   return view === 'work'
-    ? <Workspace writable={canWrite(user)} embedded initialWorkId={workId ?? null} initialEpisodeId={episodeId ?? null} />
+    ? <Workspace writable={canWrite(user)} initialWorkId={workId ?? null} initialEpisodeId={episodeId ?? null} />
     : <PromptsView writable={canWrite(user)} />
-}
-
-/* 상단 이동: 회차 작업(기본) ↔ AI 프롬프트. 라우팅 없이 상태로 바꾼다. */
-function Main({ writable }: { writable: boolean }) {
-  const [view, setView] = useState<'work' | 'prompts'>('work')
-  return (
-    <>
-      <nav className="h-11 border-b border-line bg-raise flex items-center gap-1 px-6">
-        {([['work', '회차 작업'], ['prompts', 'AI 프롬프트']] as const).map(([k, label]) => (
-          <button key={k} onClick={() => setView(k)} className={`h-11 px-3 text-sm border-b-2 ${view === k ? 'border-accent font-semibold' : 'border-transparent text-muted hover:text-ink'}`}>{label}</button>
-        ))}
-      </nav>
-      {view === 'work' ? <Workspace writable={writable} /> : <PromptsView writable={writable} />}
-    </>
-  )
-}
-
-function Shell({ user, children }: { user?: string; nav?: boolean; children: ReactNode }) {
-  return (
-    <div className="min-h-screen flex flex-col">
-      <header className="h-14 bg-ink text-white flex items-center gap-4 px-6">
-        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-accent" />
-        <span className="font-bold tracking-wide text-[15px]">Replix 시딩 도구</span>
-        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold tracking-wider ${ENV === 'prod' ? 'bg-prod text-prodink' : 'bg-warn text-white'}`}>{ENV === 'prod' ? '운영 서버' : '개발 서버'}</span>
-        <span className="text-white/55 text-xs">{ENV === 'prod' ? '여기서 넣은 채팅은 실제 사용자에게 보입니다.' : '개발 서버에만 반영됩니다. 실제 사용자에게는 보이지 않습니다.'}</span>
-        <span className="flex-1" />
-        {user && <><span className="text-sm text-white/80">{user}</span><button className="text-xs text-white/60 hover:text-white" onClick={logout}>로그아웃</button></>}
-      </header>
-      <main className="flex-1">{children}</main>
-    </div>
-  )
 }
 
 function Gate({ title, body, children }: { title: string; body: string; children: ReactNode }) {
@@ -139,7 +100,7 @@ function Banner({ kind, children, onClose }: { kind: 'bad' | 'info'; children: R
 
 /* ─── 작업 공간: 왼쪽 작품·회차, 오른쪽 단계 ───────────────────────── */
 /* initialWorkId·initialEpisodeId: 공용 틀 홈의 '최근 회차'에서 고른 회차로 바로 연다(HP-506). 없거나 지워졌으면 첫 작품·첫 회차. */
-function Workspace({ writable, embedded = false, initialWorkId = null, initialEpisodeId = null }: { writable: boolean; embedded?: boolean; initialWorkId?: number | null; initialEpisodeId?: number | null }) {
+function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: { writable: boolean; initialWorkId?: number | null; initialEpisodeId?: number | null }) {
   const [works, setWorks] = useState<Work[] | null>(null)
   const [workId, setWorkId] = useState<number | null>(initialWorkId)
   const [episodes, setEpisodes] = useState<Episode[]>([])
@@ -154,7 +115,7 @@ function Workspace({ writable, embedded = false, initialWorkId = null, initialEp
   useEffect(() => { if (workId != null) loadEpisodes(workId) }, [workId, loadEpisodes])
 
   return (
-    <div className={`grid grid-cols-[300px_minmax(0,1fr)] ${embedded ? 'min-h-full' : 'min-h-[calc(100vh-56px)]'}`}>
+    <div className="grid grid-cols-[300px_minmax(0,1fr)] min-h-full">
       <aside className="border-r border-line bg-raise flex flex-col">
         <div className="px-5 pt-5 pb-3">
           <div className="text-[11px] font-semibold text-muted mb-2">작품</div>

@@ -51,54 +51,7 @@ body {
 }
 button { font: inherit; }
 
-/* ── 앱 셸 · 톱바 (시안 cm-top) ── */
-.app { display: flex; flex-direction: column; height: 100%; }
-.topbar {
-  display: flex; align-items: center; gap: 9px;
-  background: var(--top); color: var(--top-ink);
-  padding: 9px 14px; flex: none; font-size: 13px;
-}
-.brand { color: inherit; text-decoration: none; font-weight: 800; white-space: nowrap; }
-.brand .rx { color: var(--logo-red); }
-
-/* 운영 콘솔 도구 전환(HP-456) — 종전 브랜드 자리. 다른 도구로는 페이지를 옮긴다.
-   목록은 사용자 검색 결과와 같은 겹(z-index 20)·같은 패널 모양을 쓴다. */
-.console-switcher { position: relative; display: flex; align-items: center; gap: 6px; flex: none; }
-.console-switcher-sep { color: #5e6b7a; }
-.console-switcher-toggle {
-  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 6px;
-  padding: 3px 8px; background: var(--top-on); color: #fff; font-weight: 800; white-space: nowrap; cursor: pointer;
-}
-.console-switcher-toggle:hover:not(:disabled), .console-switcher-toggle[aria-expanded="true"] { background: var(--top-chip); }
-.console-switcher-toggle:disabled { opacity: .45; cursor: not-allowed; }
-.console-switcher-toggle:focus-visible { outline: 2px solid #8db5dc; outline-offset: 2px; }
-.console-switcher-toggle .caret {
-  width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent;
-  border-top: 4px solid currentColor;
-}
-.console-switcher-menu {
-  position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; width: min(300px, 90vw); padding: 4px;
-  border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--body);
-  box-shadow: 0 12px 28px rgba(10, 18, 26, .22);
-}
-.console-switcher-menu ul { list-style: none; margin: 0; padding: 0; }
-.console-switcher-menu a, .console-switcher-menu .current {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; padding: 7px 9px;
-  border-radius: 6px; color: inherit; text-decoration: none;
-}
-.console-switcher-menu a:hover { background: var(--blue-soft); }
-.console-switcher-menu a:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-.console-switcher-menu .current { background: var(--blue-soft); box-shadow: inset 3px 0 0 var(--blue); }
-.console-switcher-menu b { color: var(--ink); font-size: 12.5px; font-weight: 800; }
-.console-switcher-menu small { grid-column: 1; color: var(--muted-2); font-size: 11.5px; }
-.console-switcher-menu em {
-  grid-row: 1 / span 2; grid-column: 2; align-self: center;
-  font-style: normal; font-family: var(--mono); font-size: 11px; color: var(--muted);
-}
-.console-switcher-menu p {
-  margin: 4px 0 0; padding: 7px 9px 3px; border-top: 1px solid var(--line-2);
-  color: var(--muted-2); font-size: 11.5px;
-}
+/* ── 톱바 부품 — 서버 칩·PROD 띠·로그아웃(공용 틀 shell/app이 쓴다) ── */
 .env-selector {
   position: relative; display: inline-flex; align-items: center; border-radius: 4px;
   background: var(--top-chip); color: var(--top-chip-ink);
@@ -138,26 +91,8 @@ button { font: inherit; }
 }
 .prod-confirm-input input:focus { outline: 2px solid var(--amber); outline-offset: 1px; }
 .btn-prod-confirm { background: var(--amber-ink); border-color: var(--amber-ink); color: #fff; }
-.topnav { display: flex; gap: 3px; margin-left: 3px; white-space: nowrap; }
-/* 탭은 화면이 둘 이상이 되면서 <b>링크</b>가 됐다(HP-300) — 종전엔 글자였다.
-   켜짐 표시는 클래스가 아니라 aria-current로 건다: 스크린리더가 읽는 그 표시와 눈에 보이는
-   표시가 <b>같은 근거</b>를 쓰게 해, 한쪽만 켜지는 일이 생기지 않는다. */
-.topnav a {
-  padding: 4px 8px; border-radius: 6px; color: var(--top-muted);
-  text-decoration: none; font-weight: 700;
-}
-.topnav a:hover { color: var(--top-ink); }
-.topnav a[aria-current="page"] { background: var(--top-on); color: #fff; }
-/* 쓰기 중 잠긴 링크(HP-300) — 버튼의 :disabled와 같은 결로 보인다. 링크는 disabled 속성이
-   없어 aria-disabled로 막는데, 그것만으로는 <b>모습이 그대로다</b> — 평소와 똑같이 생긴 것을
-   눌렀는데 아무 일도 안 일어나면 막힌 게 아니라 고장 난 것으로 읽힌다. */
-.topnav a[aria-disabled="true"], .brand[aria-disabled="true"] {
-  opacity: 0.45; cursor: not-allowed;
-}
-.topbar-right { display: flex; align-items: center; gap: 8px; color: var(--top-muted); font-size: 12px; min-width: 0; }
-.topbar-right .operator { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 줄바꿈 금지(HP-456) — 도구 전환 메뉴가 종전 브랜드보다 넓어 1240px 안팎에서 "로그/아웃"으로 꺾였다.
-   자리가 모자라면 옆 계정 이름(.operator)이 말줄임으로 줄어든다. */
+/* 줄바꿈 금지(HP-456) — 좁은 톱바에서 "로그/아웃"으로 꺾이지 않게 한다. 자리가 모자라면 옆 계정 이름이
+   말줄임으로 줄어든다(shell.css .cs-operator). */
 .btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; white-space: nowrap; }
 .btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
 .content { flex: 1; min-height: 0; padding: 18px; display: flex; flex-direction: column; }
@@ -819,13 +754,6 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .incident-impact p { margin: 3px 0 0; color: var(--body); font-size: 11.5px; white-space: pre-wrap; }
 .incident-head-actions { display: flex; gap: 6px; }
 
-/* 톱바 Grafana 딥링크(HP-297) — 톱바의 보조 정보와 같은 톤으로 두어 상단이 시끄러워지지 않게 한다. */
-.grafana-link {
-  color: var(--top-muted); font-size: 12px; text-decoration: underline;
-  text-underline-offset: 2px; white-space: nowrap;
-}
-.grafana-link:hover { color: var(--top-ink); }
-.grafana-link:focus-visible { outline: 2px solid var(--top-chip-ink); outline-offset: 2px; border-radius: 3px; }
 
 /* 스포일러 점수 정정 줄(HP-294) — 판단 재료를 조치 그리드 바로 위에 둔다.
    선택 칩은 --ink다: 빨강은 파괴적 조치(정지) 전용이고 점수 정정은 되돌릴 수 있다. */
@@ -1104,15 +1032,11 @@ table.feedback-table {
 .feedback-warn { color: var(--red); font-size: 11.5px; font-weight: 650; }
 
 @media (max-width: 1120px) {
-  .topbar-right .operator { display: none; }
   .review-list li { grid-template-columns: 96px 116px minmax(180px, 1fr) 120px 118px; gap: 8px; }
 }
 
 @media (max-width: 900px) {
-  .topbar { gap: 6px; padding-inline: 10px; }
-  .topnav a { padding-inline: 6px; }
   .user-search { width: 170px; }
-  .grafana-link { display: none; }
   .review-list li { grid-template-columns: 90px 112px minmax(160px, 1fr) 118px; }
   .review-category { display: none; }
   .change-workspace { grid-template-columns: 1fr; overflow: auto; }
@@ -1120,17 +1044,10 @@ table.feedback-table {
   .change-detail { overflow: visible; }
 }
 
-/* 좁은 화면에서는 공통 톱바를 세 줄로 접는다. 탭과 기능 표는 각각 자기 영역에서만
-   가로 스크롤되어야 하며, 검색·로그아웃 때문에 문서 전체가 옆으로 밀리면 안 된다. */
+/* 좁은 화면 — 사용자 검색이 한 줄을 차지하고, 탭과 기능 표는 각자 자기 영역에서만 가로 스크롤된다.
+   검색·로그아웃 때문에 문서 전체가 옆으로 밀리면 안 된다. */
 @media (max-width: 640px) {
-  .topbar { flex-wrap: wrap; }
-  .console-switcher { order: 1; }
   .env-selector { order: 2; }
-  .topbar-right { order: 3; margin-left: auto; }
-  .topnav {
-    order: 4; width: 100%; max-width: 100%; min-width: 0; margin-left: 0;
-    overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin;
-  }
   .user-search { order: 5; width: 100%; margin-left: 0; }
   .user-search-results { left: 0; right: auto; width: 100%; }
   .content { padding: 12px; }

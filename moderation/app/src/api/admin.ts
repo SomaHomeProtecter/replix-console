@@ -245,8 +245,6 @@ export function simulateCleanbotPolicy(id: number, sampleLimit = 100): Promise<C
     method: 'POST', body: JSON.stringify({ sampleLimit }),
   }, { target: `클린봇 정책 #${id}`, change: `과거 표본 ${sampleLimit}건 dry-run · 원본 무변경`, reason: '정책 비교 검증' })
 }
-export const listCleanbotSimulations = (id: number): Promise<CleanbotSimulation[]> =>
-  apiFetch(`/api/v1/admin/moderation-policies/${id}/simulations`)
 
 export interface ModerationReviewFilters {
   view: ModerationReviewView

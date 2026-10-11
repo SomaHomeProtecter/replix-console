@@ -4,11 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "keycloak-js": "^26.2.0",
@@ -26,7 +24,6 @@
     "jsdom": "^26.1.0",
     "typescript": "~5.8.3",
     "vite": "^7.1.0",
-    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^3.2.0"
   }
 }
