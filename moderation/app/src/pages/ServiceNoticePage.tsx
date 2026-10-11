@@ -9,7 +9,7 @@ import type {
 } from '../api/types'
 import { realmRoles } from '../auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { formatKstShort } from '../format'
+import { formatKstShort, kstInputToIso } from '../format'
 import { useWriting } from '../writing'
 
 const STATUS_LABEL: Record<ServiceNotice['status'], string> = {
@@ -37,10 +37,6 @@ function canOperate() {
   return roles.includes('admin') || roles.includes('feature_flag_operator')
 }
 
-function localInputToIso(value: string) {
-  return value ? new Date(value).toISOString() : null
-}
-
 function NoticePreview({ kind, title, message, linkUrl }: {
   kind: ServiceNoticeKind; title: string; message: string; linkUrl?: string | null
 }) {
@@ -63,7 +59,7 @@ function NoticeCreateDialog({ onClose, onCreated }: {
   const [changeSetId, setChangeSetId] = useState('')
   const [presetId, setPresetId] = useState<FeatureControlPreset['id'] | ''>('')
   const [linkUrl, setLinkUrl] = useState('')
-  const [jira, setJira] = useState('HP-343')
+  const [jira, setJira] = useState('')
   const [incident, setIncident] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -152,7 +148,7 @@ function NoticeDetail({ notice, onReload }: {
     finally { setBusy(false); setWriting(false) }
   }
   const schedule = () => action(() => scheduleServiceNotice(notice.id, notice.version,
-    localInputToIso(startsAt)!, localInputToIso(endsAt), reason))
+    kstInputToIso(startsAt)!, kstInputToIso(endsAt), reason))
 
   return <aside className="change-detail notice-detail" aria-label={`사용자 공지 #${notice.id} 상세`}>
     <div className="change-detail-head"><div>

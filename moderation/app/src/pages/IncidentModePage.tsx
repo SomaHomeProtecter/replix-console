@@ -5,7 +5,7 @@ import type { Incident, IncidentDeclare, IncidentResourceType, IncidentStatus, I
 import { realmRoles } from '../auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { env } from '../env'
-import { formatKstShort } from '../format'
+import { formatKstShort, kstInputToIso } from '../format'
 
 const STATUS: Record<IncidentStatus, string> = { DECLARED: '선언', INVESTIGATING: '조사', MITIGATING: '완화',
   MONITORING: '관찰', RESOLVED: '해결', CANCELLED: '취소' }
@@ -22,7 +22,6 @@ const active = (status: IncidentStatus) => !['RESOLVED', 'CANCELLED'].includes(s
 const writable = () => { const r = realmRoles(); return r.includes('admin') || (r.includes('feature_flag_operator')
   && (env.environment !== 'PROD' || r.includes('prod_change_approver'))) }
 const canNote = () => { const r = realmRoles(); return r.some((role) => ['admin','moderation_operator','feature_flag_operator','prod_change_approver'].includes(role)) }
-const iso = (value: string) => value ? new Date(value).toISOString() : null
 
 function DeclareDialog({ close, created }: { close: () => void; created: (row: Incident) => void }) {
   const [reference, setReference] = useState(''); const [title, setTitle] = useState('')
@@ -53,12 +52,12 @@ function TransitionDialog({ incident, close, done }: { incident: Incident; close
   const [owner, setOwner] = useState(incident.ownerUserId?.toString() ?? ''); const [next, setNext] = useState('')
   const [metrics, setMetrics] = useState(''); const [criteria, setCriteria] = useState(''); const [monitorEnd, setMonitorEnd] = useState('')
   const [revisions, setRevisions] = useState(''); const [impactEnd, setImpactEnd] = useState(''); const [risk, setRisk] = useState('')
-  const [jira, setJira] = useState('HP-343'); const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
+  const [jira, setJira] = useState(''); const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
   const submit = async () => { if (reason.trim().length < 10) { setError('전이 사유를 10자 이상 입력하세요'); return }
     const request: IncidentTransition = { expectedVersion: incident.version, targetStatus: target,
-      ownerUserId: owner ? Number(owner) : null, nextUpdateAt: iso(next), observationMetrics: metrics.trim() || null,
-      successCriteria: criteria.trim() || null, monitoringEndsAt: iso(monitorEnd), recoveryRevisions: revisions.trim() || null,
-      impactEndedAt: iso(impactEnd), residualRisk: risk.trim() || null, followUpJira: jira.trim() || null,
+      ownerUserId: owner ? Number(owner) : null, nextUpdateAt: kstInputToIso(next), observationMetrics: metrics.trim() || null,
+      successCriteria: criteria.trim() || null, monitoringEndsAt: kstInputToIso(monitorEnd), recoveryRevisions: revisions.trim() || null,
+      impactEndedAt: kstInputToIso(impactEnd), residualRisk: risk.trim() || null, followUpJira: jira.trim() || null,
       reason: reason.trim(), requestId: crypto.randomUUID() }
     try { done(await transitionIncident(incident.id, request)) }
     catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) } }
@@ -90,7 +89,7 @@ function EditDialog({ incident, close, done }: { incident: Incident; close: () =
   const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
   const submit = async () => { if (!title.trim() || impact.trim().length < 10 || reason.trim().length < 10) { setError('제목과 10자 이상의 영향·수정 사유를 입력하세요'); return }
     try { done(await updateIncident(incident.id, { expectedVersion: incident.version, title: title.trim(), severity, primary,
-      impactSummary: impact.trim(), ownerUserId: owner ? Number(owner) : null, nextUpdateAt: iso(next),
+      impactSummary: impact.trim(), ownerUserId: owner ? Number(owner) : null, nextUpdateAt: kstInputToIso(next),
       reason: reason.trim(), requestId: crypto.randomUUID() })) } catch (f) { setError(f instanceof Error ? f.message : String(f)) } }
   return <div className="dialog-backdrop"><div className="dialog incident-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-title">
     <button className="modal-close" aria-label="닫기" onClick={close}>✕</button><h2 id="edit-title">인시던트 정보 수정</h2>

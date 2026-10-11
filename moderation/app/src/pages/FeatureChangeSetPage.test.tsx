@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -104,6 +104,31 @@ describe('기능 변경 세트 화면(HP-343)', () => {
       title: '채팅 점진 적용', items: [expect.objectContaining({
         flagKey: flag.key, rolloutPercentage: 25, expectedRevision: 3,
       })],
+    })))
+  })
+
+  /**
+   * 만료 시각 칸이 UTC 문자열 앞 16자를 그대로 보여 9시간 이르게 보였고, 분만 고쳐 저장하면
+   * 9시간 이른 시각이 저장됐다(HP-516). 칸은 한국 시각이다.
+   */
+  it('만료 시각은 저장값과 같은 한국 시각으로 보이고, 분만 고치면 그만큼만 바뀐다(HP-516)', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.listFeatureFlags).mockResolvedValue([{ ...flag, expiresAt: '2026-10-12T01:00:00Z' }])
+    vi.mocked(admin.createFeatureChangeSet).mockResolvedValue(changeSet)
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: '새 변경 세트' }))
+    const dialog = screen.getByRole('dialog')
+    await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '채팅 만료 연장')
+    await user.type(within(dialog).getByRole('textbox', { name: /변경 목적/ }), '채팅 기능 만료 시각을 30분 늦춥니다')
+    await user.click(within(dialog).getByRole('checkbox', { name: /채팅 전송/ }))
+
+    const expiry = within(dialog).getByLabelText('채팅 전송 만료 시각')
+    expect(expiry).toHaveValue('2026-10-12T10:00') // 종전에는 01:00으로 보였다
+    fireEvent.change(expiry, { target: { value: '2026-10-12T10:30' } })
+    await user.click(within(dialog).getByRole('button', { name: '초안 생성 (1)' }))
+
+    await waitFor(() => expect(admin.createFeatureChangeSet).toHaveBeenCalledWith(expect.objectContaining({
+      items: [expect.objectContaining({ flagKey: flag.key, expiresAt: '2026-10-12T01:30:00.000Z' })],
     })))
   })
 

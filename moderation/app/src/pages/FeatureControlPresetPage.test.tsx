@@ -56,6 +56,8 @@ describe('장애 대응 프리셋 화면(HP-343)', () => {
     const dialog = screen.getByRole('dialog')
     await user.type(within(dialog).getByRole('textbox', { name: /적용 사유/ }),
       '채팅 장애 확산을 방지하는 프리셋입니다')
+    // Jira 칸은 빈 칸에서 시작한다(HP-520) — 넣은 값이 그대로 실리는지 본다
+    await user.type(within(dialog).getByRole('textbox', { name: 'Jira' }), 'HP-343')
     await user.click(within(dialog).getByRole('button', { name: '변경 세트 초안 생성' }))
 
     await waitFor(() => expect(admin.createPresetChangeSet).toHaveBeenCalledWith(preset,

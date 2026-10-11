@@ -62,6 +62,8 @@ describe('runtime drift 해소 화면(HP-343)', () => {
     await user.type(within(dialog).getByRole('textbox', { name: /복구 사유/ }),
       'runtime drift를 새 revision으로 복구합니다')
     await user.type(within(dialog).getByRole('textbox', { name: '인시던트' }), 'INC-DRIFT')
+    // Jira 칸은 빈 칸에서 시작한다(HP-520) — 넣은 값이 그대로 실리는지 본다
+    await user.type(within(dialog).getByRole('textbox', { name: 'Jira' }), 'HP-343')
     await user.click(within(dialog).getByRole('button', { name: '재적용 초안 생성' }))
 
     await waitFor(() => expect(admin.createDriftReapplyChangeSet).toHaveBeenCalledWith(drift,

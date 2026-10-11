@@ -80,6 +80,8 @@ describe('사용자 공지 화면(HP-343)', () => {
       '사용자에게 노출하지 않을 점검 운영 근거입니다')
     expect(within(dialog).getByLabelText('사용자 노출 미리보기'))
       .toHaveTextContent('일부 기능이 잠시 느릴 수 있습니다.')
+    // Jira 칸은 빈 칸에서 시작한다(HP-520) — 넣은 값이 그대로 실리는지 본다
+    await user.type(within(dialog).getByRole('textbox', { name: 'Jira' }), 'HP-343')
     await user.click(within(dialog).getByRole('button', { name: '공지 초안 생성' }))
 
     await waitFor(() => expect(admin.createServiceNotice).toHaveBeenCalledWith(expect.objectContaining({

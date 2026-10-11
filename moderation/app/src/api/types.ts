@@ -643,12 +643,12 @@ export interface ServiceNoticeCreate {
 }
 /**
  * 사용자 피드백(HP-426) — 원천은 Replix-be의 `AdminFeedbackPageResponse`.
- * 확장·웹이 보내는 공개 계약(`POST /api/v1/feedback`)과 값 집합이 같다.
+ * 익스텐션·웹이 보내는 공개 계약(`POST /api/v1/feedback`)과 값 집합이 같다.
  */
 export type FeedbackSurface = 'EXT' | 'WEB'
 export type FeedbackCategory = 'ANNOY' | 'BUG' | 'IDEA' | 'PRAISE'
 /**
- * 어디서 열려 제출됐는지 — 자동 프롬프트(PROMPT)인지 사용자가 직접 연 것(MANUAL)인지, 또는 확장을 지운 뒤
+ * 어디서 열려 제출됐는지 — 자동 프롬프트(PROMPT)인지 사용자가 직접 연 것(MANUAL)인지, 또는 익스텐션을 지운 뒤
  * replix.tv 삭제 페이지가 보낸 삭제 설문(UNINSTALL, HP-458)인지.
  */
 export type FeedbackTrigger = 'PROMPT' | 'MANUAL' | 'UNINSTALL'

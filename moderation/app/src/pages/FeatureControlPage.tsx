@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { changeFeatureFlag, listFeatureFlags } from '../api/admin'
 import type { FeatureFlagChange, FeatureFlagRow } from '../api/types'
 import { realmRoles } from '../auth'
-import { formatKstShort } from '../format'
+import { formatKstShort, isoToKstInput, kstInputToIso } from '../format'
 import { useWriting } from '../writing'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { useNavigate } from 'react-router'
@@ -31,13 +31,6 @@ function statusOf(row: FeatureFlagRow) {
   return { label: 'ON', className: 'on' }
 }
 
-function toLocalInput(value: string | null) {
-  if (!value) return ''
-  const date = new Date(value)
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
-}
-
 function ChangeDialog({ row, onClose, onChanged }: {
   row: FeatureFlagRow
   onClose: () => void
@@ -45,7 +38,7 @@ function ChangeDialog({ row, onClose, onChanged }: {
 }) {
   const [enabled, setEnabled] = useState(row.enabled)
   const [rollout, setRollout] = useState(row.globalOnly ? 100 : row.rolloutPercentage)
-  const [expiresAt, setExpiresAt] = useState(toLocalInput(row.expiresAt))
+  const [expiresAt, setExpiresAt] = useState(isoToKstInput(row.expiresAt))
   const [owner, setOwner] = useState(row.owner)
   const [allowlist, setAllowlist] = useState(row.globalOnly ? '' : row.allowlistedUserIds.join(', '))
   const [reason, setReason] = useState('')
@@ -78,7 +71,7 @@ function ChangeDialog({ row, onClose, onChanged }: {
     }
     const change: FeatureFlagChange = {
       enabled, rolloutPercentage: row.globalOnly ? 100 : rollout,
-      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      expiresAt: kstInputToIso(expiresAt),
       owner: owner.trim(), allowlistedUserIds: [...new Set(ids)],
       expectedRevision: row.revision, reason: reason.trim(),
     }

@@ -43,7 +43,7 @@ describe('피드백 탭(HP-426) — 목록·필터·상세·삭제', () => {
 
     expect(listFeedback).toHaveBeenCalledWith({ surface: '', category: '', score: '' }, null)
     const row = rows()[0]
-    expect(within(row).getByText('확장')).toBeInTheDocument()
+    expect(within(row).getByText('익스텐션')).toBeInTheDocument()
     expect(within(row).getByText('★4')).toBeInTheDocument()
     expect(within(row).getByText('이런 게 있으면')).toBeInTheDocument()
     expect(within(row).getByText('리플러')).toBeInTheDocument()
@@ -171,7 +171,7 @@ describe('피드백 탭(HP-426) — 목록·필터·상세·삭제', () => {
 
 describe('삭제 설문(HP-458) — 사유·후속 선택·설치 후 경과일', () => {
   /**
-   * 확장을 지운 뒤 replix.tv 삭제 페이지가 보낸 행. 별점·카테고리·본문 없이 사유만 올 수 있고,
+   * 익스텐션을 지운 뒤 replix.tv 삭제 페이지가 보낸 행. 별점·카테고리·본문 없이 사유만 올 수 있고,
    * 서버는 배열을 설문 순서(enum 선언 순)로 정렬해 준다.
    */
   function uninstallItem(overrides: Partial<FeedbackItem> = {}): FeedbackItem {
