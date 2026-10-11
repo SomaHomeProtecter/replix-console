@@ -1,7 +1,7 @@
 /* ── 운영 콘솔 공용 틀(HP-506) — 톱바·왼쪽 메뉴·본문 자리·홈 ──
    색·글꼴 토큰은 공용 기반 core/styles/core.css의 :root(시각 정본 v7)를 그대로 쓴다. 그 파일은 콘솔 전체에 실린다.
-   이 파일의 클래스는 모두 cs- 로 시작해 조치 화면의 클래스와 겹치지 않는다. 시딩 화면은 격리 영역(Shadow DOM)
-   안에 따로 그려 이 파일과 조치 CSS가 닿지 않는다. 빨강은 쓰지 않는다 — 정지 같은 되돌리기 어려운 조치 전용이다. */
+   이 파일의 클래스는 모두 cs- 로 시작해 조치 화면의 클래스와 겹치지 않는다. 시딩 화면의 클래스는 sd- 로 시작한다
+   (seeding/app/src/seeding.css, HP-525). 빨강은 쓰지 않는다 — 정지 같은 되돌리기 어려운 조치 전용이다. */
 
 .cs-app { display: flex; flex-direction: column; height: 100%; }
 
@@ -74,9 +74,6 @@
 }
 
 .cs-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
-
-/* 시딩 화면의 격리 영역(Shadow DOM) 뿌리 — 본문 자리를 채우고, 더 길면 본문 자리가 스크롤한다. */
-.cs-seeding-host { flex: 1 1 0%; min-height: 0; display: block; }
 
 /* ── 홈 ── */
 .cs-page { padding: 26px 28px 40px; display: flex; flex-direction: column; gap: 20px; }

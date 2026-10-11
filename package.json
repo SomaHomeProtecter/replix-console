@@ -11,12 +11,10 @@
     "typecheck": "tsc -p core && tsc -p shell/app && tsc -p moderation/app && tsc -p seeding/app"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.3",
     "keycloak-js": "^26.2.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "^8.3.0",
-    "tailwindcss": "^4.3.3"
+    "react-router": "^8.3.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

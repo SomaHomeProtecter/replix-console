@@ -19,7 +19,7 @@
 - 홈과 시딩은 **PROD 전용**이다(시딩 작업물 정본 = 운영). DEV는 조치를 개발 서버에서 시험할 때 쓰고, DEV에서 홈·시딩을 누르면 PROD로 새로 열린다. 시딩의 '개발에 넣기'는 지금처럼 4단계의 개발 로그인 창으로 넣는다.
 - 콘솔 역할(`admin`·`admin_console_viewer`·`moderation_operator`·`feature_flag_operator`·`prod_change_approver`)이 하나도 없는 계정은 권한 없음 화면과 '다른 계정으로 로그인'을 본다.
 - PROD 쓰기 최종 확인('PROD' 입력 창)은 콘솔 전체에 하나다 — 조치의 모든 PROD 쓰기와 시딩의 운영 넣기·지우기가 같은 창을 거친다.
-- 시딩 화면은 격리 영역(Shadow DOM)에 그린다. 시딩(Tailwind)과 조치(전역 CSS)가 `.btn`·`.card`·`.pill` 같은 같은 이름의 클래스를 써서, 한 페이지에 그대로 두면 서로의 모양을 덮어쓴다.
+- 시딩 화면은 틀·조치와 같은 문서에 그린다(HP-525). 시딩의 클래스는 모두 `sd-`로 시작하고(`seeding/app/src/seeding.css`) 색·버튼은 공용 기반(`core`)의 토큰과 클래스를 써서, 조치·틀과 클래스가 겹치지 않고 같은 모양으로 보인다. 종전의 격리 영역(Shadow DOM)과 Tailwind는 걷어 냈다.
 
 ## 개발
 
