@@ -16,7 +16,7 @@ import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { useLatestRequest } from '../useLatestRequest'
 import { selectableRow } from '../selectableRow'
-import { CHANGE_SET_STATUS_LABELS, changeSetEventLabel, RISK_LABELS } from '../recordLabels'
+import { CHANGE_SET_STATUS_LABELS, changeSetEventLabel, itemResultLabel, RISK_LABELS } from '../recordLabels'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
@@ -227,7 +227,7 @@ function ChangeSetDetail({ changeSet, onReload }: {
       return <div className="change-diff" key={item.flagKey}>
         <code>{item.flagKey}</code><span>{before.enabled ? 'ON' : 'OFF'} · {before.rolloutPercentage}%</span>
         <b>→</b><strong>{item.targetEnabled ? 'ON' : 'OFF'} · {item.targetRolloutPercentage}%</strong>
-        {item.resultCode && <small>{item.resultCode}</small>}
+        {item.resultCode && <small>{itemResultLabel(item.resultCode)}</small>}
       </div>
     })}</div>
     <div className="dry-run-box">

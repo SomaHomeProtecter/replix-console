@@ -12,6 +12,7 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(admin.listIncidents).mockResolv
 it('활성 primary 인시던트를 모든 화면에서 열 수 있는 배너로 표시한다', async () => {
   render(<MemoryRouter><IncidentPrimaryBanner /></MemoryRouter>)
   expect(await screen.findByText('SEV2 · INC-9')).toBeInTheDocument()
+  expect(screen.getByText('완화')).toBeInTheDocument() // 상태는 한글로(HP-527) — 서버 값 MITIGATING
   expect(screen.getByRole('link', { name: '인시던트 열기' }))
     .toHaveAttribute('href', '/feature-control/incident-mode?selected=9')
 })

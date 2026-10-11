@@ -179,7 +179,7 @@ function Detail({ incident, reload }: { incident: Incident; reload: (id: number)
       {error && <div className="error-box" role="alert">{error}</div>}<div className="dialog-actions"><button className="btn" disabled={!canNote()} onClick={() => void addNote()}>메모 추가</button>
         <Link className="btn" to={`/feature-control/incidents?reference=${encodeURIComponent(incident.reference)}`}>참조 타임라인</Link></div></div>
     <h3>인시던트 이벤트</h3><ol className="change-events">{incident.events.map((event) => <li key={event.id}><span>{formatKstShort(event.occurredAt)}</span><strong>{incidentEventLabel(event.type)}</strong>
-      <p>{event.summary}{event.sourceType && event.sourceId ? ` · ${event.sourceType} ${event.sourceId}` : ''}</p></li>)}</ol>
+      <p>{event.summary}{event.sourceType && event.sourceId ? ` · ${RESOURCE_LABEL[event.sourceType as IncidentResourceType] ?? event.sourceType} ${event.sourceId}` : ''}</p></li>)}</ol>
     {transitioning && <TransitionDialog incident={incident} close={() => setTransitioning(false)} done={(row) => { setTransitioning(false); void reload(row.id) }} />}
     {editing && <EditDialog incident={incident} close={() => setEditing(false)} done={(row) => { setEditing(false); void reload(row.id) }} />}
     {linking && <ResourceLinkDialog incident={incident} close={() => setLinking(false)} done={(row) => { setLinking(false); void reload(row.id) }} />}

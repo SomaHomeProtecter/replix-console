@@ -60,3 +60,11 @@ export const INCIDENT_RESOURCE_LABELS: Readonly<Record<IncidentResourceType, str
   CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', PRESET: '장애 대응 프리셋',
   RUNBOOK: '런북', DASHBOARD: '대시보드', JIRA: 'Jira',
 }
+
+/**
+ * 변경 세트 항목의 적용 결과 — 서버는 성공이면 SUCCESS, 실패면 그 실패의 오류 코드를 준다(FeatureChangeSetService).
+ * 실패 코드는 원인을 찾는 단서라 지우지 않고 '실패 · 코드'로 둔다.
+ */
+export function itemResultLabel(code: string): string {
+  return code === 'SUCCESS' ? '적용 완료' : `실패 · ${code}`
+}

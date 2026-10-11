@@ -7,6 +7,7 @@ import type {
 } from '../api/types'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { moderateDenied } from '../permissions'
+import { REASON_LABELS } from '../format'
 import { useLatestRequest } from '../useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { CASE_NOTE_LABELS, caseEventLabel } from '../recordLabels'
@@ -105,7 +106,7 @@ export default function OperationCasesPage() {
     <aside className="change-detail" aria-label="케이스 상세">
       {!selected ? <div className="empty-hint">케이스를 선택하세요</div> : <>
         <span className="feature-state">version {selected.item.version}</span><h2>신고 #{selected.item.reportId}</h2>
-        <p className="sub">{selected.item.targetUser.displayName} · {selected.item.reason} · 접수 {formatKstShort(selected.item.createdAt)}</p>
+        <p className="sub">{selected.item.targetUser.displayName} · {REASON_LABELS[selected.item.reason]} · 접수 {formatKstShort(selected.item.createdAt)}</p>
         {(selected.item.stale || selected.item.overdue) && <div className="incident-guide"><strong>동시 처리 확인 필요</strong><p>{selected.item.overdue ? '처리 기한을 지났습니다.' : '30분 이상 갱신되지 않은 상태입니다.'} 저장 전 최신 version을 다시 확인합니다.</p></div>}
         <div className="feature-form-grid"><label><span>담당자 사용자 ID</span><input value={assignee} placeholder="비우면 미배정" onChange={(e) => setAssignee(e.target.value)} /></label>
           <label><span>기한</span><input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></label>
