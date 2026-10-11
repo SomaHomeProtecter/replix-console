@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadProfile } from '@moderation/env'
+import { env, loadProfile } from '@core/env'
 import Shell from './Shell'
 
-vi.mock('@moderation/auth', () => ({
+vi.mock('@core/auth', () => ({
   userName: () => 'hyunbin',
   roleLabel: () => 'admin',
   logout: vi.fn(),
@@ -50,5 +50,36 @@ describe('공용 틀 — 개발 서버(localhost)', () => {
     expect(window.location.pathname).toBe('/')
     expect(screen.getByRole('combobox', { name: '연결 서버' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '로그아웃' })).toBeDisabled()
+  })
+
+  it('사용자 상세에서는 신고 큐가 켜지지 않는다 — 신고 큐(/)는 정확히 그 경로일 때만', () => {
+    render(<Shell section="moderation" path="/moderation/dev/users/9" search={null}>본문</Shell>)
+    expect(within(nav()).getByRole('link', { name: '신고 큐' })).not.toHaveAttribute('aria-current')
+  })
+})
+
+/**
+ * 지표 화면은 만들지 않는다(HP-223 확정 제약 ③). 대신 있는 곳으로 보낸다(HP-297) — 종전 조치 톱바의
+ * 링크를 공용 틀이 왼쪽 메뉴 '바깥 도구'로 옮겼다(HP-506). 이 검증은 조치 App.test에서 옮겨 왔다(HP-521).
+ */
+describe('공용 틀 — Grafana 딥링크(HP-297)', () => {
+  beforeEach(() => {
+    loadProfile('DEV')
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('VITE_GRAFANA_URL이 없으면 링크를 아예 그리지 않는다', () => {
+    env.grafanaUrl = null
+    render(<Shell section="home" path="/" search={null}>본문</Shell>)
+    expect(within(nav()).queryByRole('link', { name: /Grafana/ })).not.toBeInTheDocument()
+  })
+
+  it('값이 있으면 그 대시보드로 새 탭에서 열고 opener를 끊는다', () => {
+    env.grafanaUrl = 'https://grafana.test/d/moderation'
+    render(<Shell section="home" path="/" search={null}>본문</Shell>)
+    const link = within(nav()).getByRole('link', { name: /Grafana/ })
+    expect(link).toHaveAttribute('href', 'https://grafana.test/d/moderation')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'))
   })
 })

@@ -1,14 +1,15 @@
-import { getToken, initAuth, logout, realmRoles, userName } from '@moderation/auth'
-import { initEnv, loadProfile } from '@moderation/env'
-import { verifyEnvironment } from '@moderation/environmentGuard'
-import { confirmProductionWrite } from '@moderation/prodWriteConfirmation'
+import { getToken, initAuth, logout, realmRoles, userName } from '@core/auth'
+import { initEnv, loadProfile } from '@core/env'
+import { verifyEnvironment } from '@core/environmentGuard'
+import { confirmProductionWrite } from '@core/prodWriteConfirmation'
 import { bindHost } from '@seeding/host'
 import { isHostedConsole } from './navigation'
-import { hasConsoleRole, homeEnvironment, sectionOf } from './sections'
+import { hasConsoleRole } from '@core/roles'
+import { homeEnvironment, sectionOf } from './sections'
 
 export type BootResult = { kind: 'console' } | { kind: 'denied' }
 
-/** JWT 본문에서 sub만 읽는다 — 검증은 서버와 validateTokenClaims(조치 auth.ts)가 이미 했다. */
+/** JWT 본문에서 sub만 읽는다 — 검증은 서버와 validateTokenClaims(core/auth.ts)가 이미 했다. */
 function subjectOf(token: string): string {
   try {
     const body = token.split('.')[1] ?? ''

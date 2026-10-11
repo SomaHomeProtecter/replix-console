@@ -1,7 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { isFramed } from '@moderation/bootGuards'
-// 조치 콘솔의 스타일이 콘솔 전체의 시각 정본(토큰·톱바 부품·확인 창)이다. 틀은 그 토큰 위에 자기 클래스(cs-)만 더한다.
+import { isFramed } from '@core/bootGuards'
+// 콘솔 공용 기반의 스타일(토큰·기본 요소·버튼·다이얼로그·톱바 부품·PROD 확인 창, HP-522)을 가장 먼저 깐다. 조치 화면의 규칙과
+// 틀 자기 클래스(cs-)는 그 위에 더한다 — 순서가 곧 우선순위다.
+import '@core/styles/core.css'
 import '@moderation/styles.css'
 import './shell/shell.css'
 

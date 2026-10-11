@@ -6,7 +6,7 @@ import type { CleanbotPolicy } from '../api/types'
 import CleanbotPolicyPage from './CleanbotPolicyPage'
 
 vi.mock('../api/admin')
-vi.mock('../env', () => ({ env: { environment: 'DEV' } }))
+vi.mock('@core/env', () => ({ env: { environment: 'DEV' } }))
 const policy: CleanbotPolicy = { id: 1, name: '정책 후보 A', status: 'DRAFT', blockedTerms: ['욕설'],
   allowedTerms: ['욕설연구'], threshold: 0.7, categoryMapping: {}, basePolicyId: null,
   activatedChangeSetId: null, revision: 0, createdBy: { id: 2, displayName: '작성자' }, reviewedBy: null,

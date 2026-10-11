@@ -1,10 +1,10 @@
 // @vitest-environment-options { "url": "https://console.replix.tv/" }
 import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { loadProfile } from '@moderation/env'
+import { loadProfile } from '@core/env'
 import Shell from './Shell'
 
-vi.mock('@moderation/auth', () => ({
+vi.mock('@core/auth', () => ({
   userName: () => 'hyunbin',
   roleLabel: () => 'admin',
   logout: vi.fn(),

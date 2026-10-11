@@ -1,13 +1,12 @@
-import { env } from '../env'
-import { approveProductionBatch } from '../prodWriteConfirmation'
-import type { ProductionWriteApproval } from '../prodWriteConfirmation'
-import { apiDownload, apiFetch, qs } from './client'
+import { env } from '@core/env'
+import { approveProductionBatch } from '@core/prodWriteConfirmation'
+import type { ProductionWriteApproval } from '@core/prodWriteConfirmation'
+import { apiDownload, apiFetch, qs } from '@core/api/client'
 import type {
   AdminActionLogResponse, AdminActionType, AuthorMessages, ReportPage, ReportReason, ReportStatus,
   ModerationDecisionResult, ModerationReviewDecision, ModerationReviewPage, ResolutionAction,
   ModerationReviewStage, ModerationReviewView, ResolveResult, SuspendDuration, SuspendedUsers,
   SuspensionResult, UserDetail, UserSearchResult, WarningReason, WarningResult,
-  EnvironmentMetadata,
   FeatureChangeSet, FeatureChangeSetCreate, FeatureControlPreset, FeatureControlPresetApply,
   FeatureDriftReapply, FeatureDriftState, FeatureDryRunRow, FeatureFlagChange, FeatureFlagRow,
   Incident, IncidentDeclare, IncidentEventCreate, IncidentTimeline, IncidentTransition, IncidentUpdate,
@@ -18,10 +17,6 @@ import type {
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
-
-export function getEnvironmentMetadata(): Promise<EnvironmentMetadata> {
-  return apiFetch('/api/v1/admin/meta/environment')
-}
 
 export interface ReportFilters {
   status: ReportStatus | ''
@@ -245,8 +240,6 @@ export function simulateCleanbotPolicy(id: number, sampleLimit = 100): Promise<C
     method: 'POST', body: JSON.stringify({ sampleLimit }),
   }, { target: `클린봇 정책 #${id}`, change: `과거 표본 ${sampleLimit}건 dry-run · 원본 무변경`, reason: '정책 비교 검증' })
 }
-export const listCleanbotSimulations = (id: number): Promise<CleanbotSimulation[]> =>
-  apiFetch(`/api/v1/admin/moderation-policies/${id}/simulations`)
 
 export interface ModerationReviewFilters {
   view: ModerationReviewView

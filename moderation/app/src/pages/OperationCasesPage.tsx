@@ -5,7 +5,7 @@ import {
 import type {
   CaseNoteType, OperationCaseDetail, OperationCaseRow, OperationCaseView,
 } from '../api/types'
-import { formatKstShort, isoToKstInput, kstInputToIso } from '../format'
+import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 
 const VIEWS: Array<[OperationCaseView, string]> = [
   ['ALL', '전체'], ['MINE', '내 담당'], ['UNASSIGNED', '미배정'], ['OVERDUE', '기한 초과'],

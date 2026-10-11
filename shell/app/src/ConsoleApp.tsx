@@ -1,4 +1,4 @@
-import ProductionWriteGuard from '@moderation/ProductionWriteGuard'
+import ProductionWriteGuard from '@core/ProductionWriteGuard'
 import { useCurrentPath } from './navigation'
 import { sectionOf } from './sections'
 import HomeSection from './sections/HomeSection'

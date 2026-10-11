@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { changeFeatureFlag, listFeatureFlags } from '../api/admin'
 import type { FeatureFlagChange, FeatureFlagRow } from '../api/types'
-import { realmRoles } from '../auth'
-import { formatKstShort, isoToKstInput, kstInputToIso } from '../format'
-import { useWriting } from '../writing'
+import { realmRoles } from '@core/auth'
+import { can } from '@core/roles'
+import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
+import { useWriting } from '@core/writing'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { useNavigate } from 'react-router'
 
@@ -19,8 +20,7 @@ const POLICY_LABELS: Record<FeatureFlagRow['policyClass'], string> = {
 }
 
 function canChange() {
-  const roles = realmRoles()
-  return roles.includes('admin') || roles.includes('feature_flag_operator')
+  return can(realmRoles(), 'operateFeatures')
 }
 
 function statusOf(row: FeatureFlagRow) {

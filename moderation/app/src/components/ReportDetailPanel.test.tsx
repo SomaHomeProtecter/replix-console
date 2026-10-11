@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
-import { ApiHttpError } from '../api/client'
+import { ApiHttpError } from '@core/api/client'
 import { makeAuthorMessage, makeReportItem } from '../test/fixtures'
 import ReportDetailPanel from './ReportDetailPanel'
 

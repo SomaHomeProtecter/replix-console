@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import UserSearch from '@moderation/components/UserSearch'
-import { env } from '@moderation/env'
+import { env } from '@core/env'
 import { navigate } from './navigation'
 import { moderationBasename } from './sections'
 

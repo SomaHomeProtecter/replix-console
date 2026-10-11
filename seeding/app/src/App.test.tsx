@@ -3,24 +3,25 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /*
- * 시딩 작업 화면의 회귀 테스트(HP-517·518·519). 시딩 폴더에는 아직 테스트 실행기가 없어, 배포 빌드와 같은 도구인
- * 공용 틀의 vitest에서 돌린다. API 모듈은 가짜로 바꾸지 않고 fetch만 가짜 서버로 둔다 — 결함이 난 실제 경로를 거친다.
- * jsdom의 주소는 localhost라 작업 서버(WORKSPACE)는 개발, 다른 환경(OTHER)은 운영이다(env.ts).
+ * 시딩 작업 화면의 회귀 테스트(HP-517·518·519). API 모듈은 가짜로 바꾸지 않고 fetch만 가짜 서버로 둔다 — 결함이 난
+ * 실제 경로를 거친다. jsdom의 주소는 localhost라 작업 서버(WORKSPACE)는 개발, 다른 환경(OTHER)은 운영이다(env.ts).
  */
-vi.mock('@seeding/secondaryAuth', () => ({
+vi.mock('./secondaryAuth', () => ({
   secondaryToken: vi.fn(async () => 'other-token'),
   secondarySignedIn: () => false,
   secondaryLogout: vi.fn(),
 }))
 
-import { SeedingWorkspace } from '@seeding/App'
-import { bindHost } from '@seeding/host'
+import { SeedingWorkspace } from './App'
+import { bindHost } from './host'
 
 type Json = Record<string, unknown>
 type Handler = (match: RegExpMatchArray, body: Json | undefined) => unknown
 type Route = { method: string; host: 'workspace' | 'other'; path: RegExp; handle: Handler }
 
-const OTHER_API = 'https://api.replix.tv' // 작업 서버(개발)가 아닌 쪽 — env.ts의 OTHER
+// 작업 서버(개발)가 아닌 쪽 = 운영 — vite.config.ts의 PROD 테스트 값. env.ts에서 읽지 않고 고정값으로 둔다:
+// 시딩이 '다른 환경'으로 운영을 겨누는지까지 이 테스트가 함께 확인한다.
+const OTHER_API = 'http://prod-api.test'
 
 /* 회차 화면은 작품 → 회차 → 계획 순으로 읽기가 이어진다. 기본 대기(1초)는 바쁜 머신에서 모자라 결과가 흔들리므로
    넉넉히 기다린다 — 기다림이 길어질 뿐 판정은 같다. */

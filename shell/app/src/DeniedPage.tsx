@@ -1,13 +1,10 @@
-import { logout, userName } from '@moderation/auth'
-import { env } from '@moderation/env'
+import { logout, userName } from '@core/auth'
+import { env } from '@core/env'
+import { CAPABILITIES, SHOWN_CAPABILITIES } from '@core/roles'
 
-/** 역할별로 할 수 있는 일 — BE SecurityConfig와 조치 콘솔 README의 역할 정의를 따른다. */
-const ROLES: readonly [string, string][] = [
-  ['시딩과 조치 보기', 'admin · moderation_operator · admin_console_viewer'],
-  ['채팅 넣기, 신고와 계정 조치', 'admin · moderation_operator'],
-  ['기능 제어', 'admin · feature_flag_operator'],
-  ['PROD 고위험 변경 승인', 'admin · prod_change_approver'],
-]
+/** 역할별로 할 수 있는 일 — 콘솔 역할 표(core/roles.ts) 그대로 보인다. */
+const ROLES: readonly [string, string][] = SHOWN_CAPABILITIES.map((capability) =>
+  [CAPABILITIES[capability].label, CAPABILITIES[capability].roles.join(' · ')])
 
 /**
  * 콘솔 역할이 하나도 없는 계정(HP-506). 종전 조치 콘솔은 서버 대조 요청이 거부되어 "콘솔 초기화 실패"로 멈췄다.

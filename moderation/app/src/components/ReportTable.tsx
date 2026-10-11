@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import type { ReportItem } from '../api/types'
-import { elapsedSince, formatKst, formatKstTime } from '../format'
+import { elapsedSince } from '../format'
+import { formatKst, formatKstTime } from '@core/time'
 import { useMinuteTick } from '../useMinuteTick'
 import Pill from './Pill'
 import StatusBadge from './StatusBadge'

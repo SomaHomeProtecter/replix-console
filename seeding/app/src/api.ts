@@ -1,6 +1,6 @@
 /* 시딩 1단계 API(HP-434) — /api/v1/admin/seeding/**. 전부 관리자 롤 JWT 필요. */
 import { accessToken } from './auth'
-import { API_BASE } from './env'
+import { WORKSPACE } from './env'
 
 export type SourceKind = 'DCINSIDE' | 'THEQOO'
 export type WorkSource = { id: number; kind: SourceKind; boardId: string; enabled: boolean }
@@ -51,7 +51,7 @@ export class ApiError extends Error {
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const t = await accessToken()
   if (!t) throw new ApiError(401, 'NO_TOKEN', '로그인이 필요합니다')
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${WORKSPACE.api}${path}`, {
     method,
     headers: { Accept: 'application/json', Authorization: `Bearer ${t}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -77,11 +77,9 @@ export const api = {
   anchors: (episodeId: number) => call<SyncAnchor[]>('GET', `/api/v1/admin/seeding/episodes/${episodeId}/anchors`),
   deleteAnchor: (id: number) => call<void>('DELETE', `/api/v1/admin/seeding/anchors/${id}`),
   injections: (episodeId: number) => call<Injection[]>('GET', `/api/v1/admin/seeding/episodes/${episodeId}/injections`),
-  deleteInjection: (id: number) => call<void>('DELETE', `/api/v1/admin/seeding/injections/${id}`),
   rollbackPlan: (planId: number) => call<PlanView>('POST', `/api/v1/admin/seeding/plans/${planId}/rollback`),
   linkEpisode: (id: number, episodeId: number | null) => call<Episode>('POST', `/api/v1/admin/seeding/episodes/${id}/link`, { episodeId }),
   prompts: () => call<Prompt[]>('GET', '/api/v1/admin/seeding/prompts'),
-  prompt: (key: string) => call<Prompt>('GET', `/api/v1/admin/seeding/prompts/${key}`),
   savePrompt: (key: string, content: string, note: string | null) => call<Prompt>('PUT', `/api/v1/admin/seeding/prompts/${key}`, { content, note }),
   promptVersions: (key: string) => call<PromptVersion[]>('GET', `/api/v1/admin/seeding/prompts/${key}/versions`),
   revertPrompt: (key: string, version: number) => call<Prompt>('POST', `/api/v1/admin/seeding/prompts/${key}/revert/${version}`),
@@ -98,7 +96,6 @@ export const api = {
     call<Episode>('PATCH', `/api/v1/admin/seeding/episodes/${id}`, body),
   collections: (episodeId: number) => call<Collection[]>('GET', `/api/v1/admin/seeding/episodes/${episodeId}/collections`),
   startCollection: (episodeId: number) => call<Collection>('POST', `/api/v1/admin/seeding/episodes/${episodeId}/collections`),
-  collection: (id: number) => call<Collection>('GET', `/api/v1/admin/seeding/collections/${id}`),
   posts: (id: number, opts: { source?: SourceKind; cursor?: number | null; from?: string | null; order?: 'asc' | 'desc'; size?: number } = {}) => {
     const q = new URLSearchParams()
     if (opts.source) q.set('source', opts.source)
@@ -115,7 +112,7 @@ export const api = {
   async download(id: number): Promise<void> {
     const t = await accessToken()
     if (!t) throw new ApiError(401, 'NO_TOKEN', '로그인이 필요합니다')
-    const res = await fetch(`${API_BASE}/api/v1/admin/seeding/collections/${id}/export`, { headers: { Authorization: `Bearer ${t}` } })
+    const res = await fetch(`${WORKSPACE.api}/api/v1/admin/seeding/collections/${id}/export`, { headers: { Authorization: `Bearer ${t}` } })
     if (!res.ok) throw new ApiError(res.status, null, `${res.status} ${res.statusText}`)
     const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `seed-collection-${id}.json`
     const blob = await res.blob()

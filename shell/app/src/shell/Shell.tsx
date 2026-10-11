@@ -1,8 +1,9 @@
 import type { MouseEvent, ReactNode } from 'react'
-import { logout, roleLabel, switchEnvironment, userName } from '@moderation/auth'
-import { env } from '@moderation/env'
-import { CONSOLE_ENVIRONMENTS } from '@moderation/environment'
-import type { ConsoleEnvironment } from '@moderation/environment'
+import { logout, roleLabel, switchEnvironment, userName } from '@core/auth'
+import { env } from '@core/env'
+import { MODERATION_MENU } from '@moderation/routes'
+import { CONSOLE_ENVIRONMENTS } from '@core/environment'
+import type { ConsoleEnvironment } from '@core/environment'
 import { handleLinkClick, isHostedConsole } from '../navigation'
 import { environmentForPath, moderationBasename, SEEDING_PATH } from '../sections'
 import type { Section } from '../sections'
@@ -18,17 +19,6 @@ import { ExternalIcon, HomeIcon, LockIcon, ShieldIcon, SproutIcon } from './icon
  * <p>조치가 쓰기 요청을 처리하는 동안(locked)에는 이동 수단을 모두 잠근다 — 페이지를 떠나면 조치 성패를 알릴 곳이
  * 사라진다(HP-300). 종전 조치 톱바의 잠금과 같은 규칙을 틀 전체로 넓혔다.
  */
-
-const MODERATION_ITEMS: readonly { label: string; sub: string }[] = [
-  { label: '신고 큐', sub: '/' },
-  { label: '정지 현황', sub: '/suspensions' },
-  { label: '조치 로그', sub: '/actions' },
-  { label: '오탐 검토', sub: '/moderation-reviews' },
-  { label: '운영 협업', sub: '/operation-cases' },
-  { label: '정책 실험', sub: '/moderation-policies' },
-  { label: '기능 제어', sub: '/feature-control' },
-  { label: '피드백', sub: '/feedback' },
-]
 
 type NavItem = { label: string; href: string; active: boolean; target: ConsoleEnvironment }
 
@@ -65,7 +55,7 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
     { label: '회차 작업', href: SEEDING_PATH, active: section === 'seeding' && view !== 'prompts', target: targetOf(SEEDING_PATH) },
     { label: 'AI 프롬프트', href: `${SEEDING_PATH}?view=prompts`, active: section === 'seeding' && view === 'prompts', target: targetOf(SEEDING_PATH) },
   ]
-  const moderation: NavItem[] = MODERATION_ITEMS.map(({ label, sub }) => {
+  const moderation: NavItem[] = MODERATION_MENU.map(({ label, path: sub }) => {
     const href = sub === '/' ? `${basename}/` : `${basename}${sub}`
     return { label, href, active: section === 'moderation' && moderationActive(rest, sub), target: environment }
   })

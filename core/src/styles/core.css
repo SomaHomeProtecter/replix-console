@@ -1,0 +1,161 @@
+/* ── Replix 운영 콘솔 공용 기반 — 디자인 토큰·기본 요소·버튼·다이얼로그·톱바 부품·PROD 확인 창(HP-522).
+   시각 정본 = 2026-08-04 검토 아티팩트 v7 §4(콘솔 목업, 라이트 고정). 토큰·hex는 시안에서 그대로 옮겼다.
+   빨강(--red)은 정지처럼 되돌리기 어려운 조치 전용, PROD 표시는 호박색이다(HP-223 확정 제약, HP-456 D2).
+   공용 틀(shell/app)이 콘솔을 열 때 가장 먼저 불러온다 — 조치·시딩 화면은 이 위에 자기 규칙만 더한다. */
+:root {
+  --ground: #f7f8fa;
+  --panel: #ffffff;
+  --panel-2: #fbfcfd;
+  --ink: #212b35;
+  --body: #303b46;
+  --muted: #8a95a1;
+  --muted-2: #6a7683;
+  --label: #4a5865;
+  --line: #e2e7ec;
+  --line-2: #eef1f4;
+  --line-strong: #cfd7de;
+  --frame: #d9dee4;
+  --top: #1f2732;
+  --top-ink: #e8edf2;
+  --top-muted: #aeb9c5;
+  --top-chip: #3a4656;
+  --top-chip-ink: #cdd6e0;
+  --top-on: #303b49;
+  --logo-red: #f0424d;
+  --blue: #2f6da8;
+  --blue-soft: #f2f6fb;
+  --red: #b03030;              /* 정지 전용 */
+  --red-soft: #fdecec;
+  --red-border: #f2c9c9;
+  --green: #2e7d4f;
+  --green-soft: #e6f4ec;
+  --amber: #d9a441;
+  --amber-ink: #97650c;
+  --amber-soft: #fff3df;
+  --amber-bg: #fffaf0;
+  --warn-bg: #fff8ea;
+  --purple: #5b4bc4;
+  --purple-soft: #eae9fb;
+  --radius: 7px;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--body);
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard Variable", Pretendard,
+    "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+button { font: inherit; }
+
+/* ── 톱바 부품 — 서버 칩·PROD 띠·로그아웃(공용 틀 shell/app이 쓴다) ── */
+.env-selector {
+  position: relative; display: inline-flex; align-items: center; border-radius: 4px;
+  background: var(--top-chip); color: var(--top-chip-ink);
+}
+.env-selector select {
+  appearance: none; border: 0; outline: 0; border-radius: inherit; cursor: pointer;
+  padding: 2px 20px 2px 7px; color: inherit; background: transparent;
+  font: inherit; font-size: 11px; font-weight: 800;
+}
+.env-selector::after {
+  content: ""; pointer-events: none; position: absolute; right: 7px;
+  border-left: 3px solid transparent; border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+}
+.env-selector:focus-within { outline: 2px solid #8db5dc; outline-offset: 2px; }
+.env-selector.env-prod { background: #73561d; color: #ffe2a4; }
+.env-selector:has(select:disabled) { opacity: .45; cursor: not-allowed; }
+.env-selector select:disabled { cursor: not-allowed; }
+.prod-environment-banner {
+  flex: none; padding: 5px 14px; border-bottom: 1px solid #e7c783;
+  background: var(--amber-bg); color: var(--amber-ink); text-align: center;
+  font-size: 12px; font-weight: 800; letter-spacing: .01em;
+}
+.prod-confirm-backdrop { z-index: 30; }
+.prod-confirm-dialog { border-top: 4px solid var(--amber); }
+.prod-change-summary { margin: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.prod-change-summary div { display: grid; grid-template-columns: 64px 1fr; }
+.prod-change-summary div + div { border-top: 1px solid var(--line-2); }
+.prod-change-summary dt, .prod-change-summary dd { margin: 0; padding: 7px 9px; font-size: 12px; }
+.prod-change-summary dt { background: var(--panel-2); color: var(--muted-2); font-weight: 800; }
+.prod-change-summary dd { color: var(--body); overflow-wrap: anywhere; }
+.prod-change-summary dd strong { color: var(--amber-ink); }
+.prod-confirm-input { color: var(--body); font-size: 12px; }
+.prod-confirm-input input {
+  width: 100%; margin-top: 4px; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 8px 11px; color: var(--ink); background: var(--panel); font: var(--mono);
+}
+.prod-confirm-input input:focus { outline: 2px solid var(--amber); outline-offset: 1px; }
+.btn-prod-confirm { background: var(--amber-ink); border-color: var(--amber-ink); color: #fff; }
+/* 줄바꿈 금지(HP-456) — 좁은 톱바에서 "로그/아웃"으로 꺾이지 않게 한다. 자리가 모자라면 옆 계정 이름이
+   말줄임으로 줄어든다(shell.css .cs-operator). */
+.btn-logout { background: none; border: none; color: var(--top-muted); cursor: pointer; padding: 0; font-size: 12px; white-space: nowrap; }
+.btn-logout:hover { color: var(--top-ink); text-decoration: underline; }
+.content { flex: 1; min-height: 0; padding: 18px; display: flex; flex-direction: column; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+.btn {
+  border: 1px solid transparent; border-radius: var(--radius);
+  padding: 8px 14px; cursor: pointer; font-weight: 750; font-size: 12.5px;
+  background: var(--panel); color: var(--label); border-color: var(--line-strong);
+}
+.btn:hover { filter: brightness(0.97); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn:focus-visible, .btn-logout:focus-visible, a:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: 2px;
+}
+
+.btn-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--blue); text-decoration: none; font-weight: 600; font-size: 12px;
+}
+.btn-link:hover { text-decoration: underline; }
+.btn-link[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; text-decoration: none; }
+.btn-link[aria-disabled="true"]:hover { text-decoration: none; }
+
+.dialog-backdrop {
+  position: fixed; inset: 0; background: rgba(31, 39, 50, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 10;
+}
+.dialog {
+  position: relative; /* ✕(.modal-close) 절대 배치 기준 */
+  background: var(--panel); border-radius: 10px; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.25);
+  width: min(400px, calc(100vw - 40px)); padding: 18px; display: flex; flex-direction: column; gap: 10px;
+}
+.dialog h2 { margin: 0; font-size: 14px; color: var(--ink); font-weight: 800; }
+.dialog .sub { font-size: 12px; color: var(--muted); margin: 0; }
+
+.dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dialog-actions .btn { text-align: center; }
+
+.error-box { background: var(--red-soft); color: var(--red); border-radius: 6px; padding: 8px 11px; font-size: 12px; }
+
+/* 조치 결과 문구(HP-298 일부 실패·취소). <b>오류가 아니라 주의</b>다 — 빨강은 이 콘솔에서
+   파괴적 조치(정지) 전용이고(HP-223 확정 제약), 일부 실패는 "다시 손봐야 할 일"이지 고장이
+   아니다. 오류와 같은 외피를 입히면 운영자가 둘을 구분하지 못한다. */
+.notice-box {
+  background: var(--warn-bg); color: var(--amber-ink);
+  border: 1px solid var(--amber-soft); border-radius: 6px;
+  padding: 8px 11px; font-size: 12px;
+}
+
+.empty-hint { color: var(--muted); padding: 20px 0; text-align: center; }
+
+.boot-error { padding: 40px; color: var(--red); }
+.page-status { color: var(--muted); padding: 24px 0; text-align: center; }
+
+/* 좁은 화면 — 공용 부품 */
+@media (max-width: 640px) {
+  .env-selector { order: 2; }
+  .content { padding: 12px; }
+}

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { addIncidentEvent, addIncidentNote, declareIncident, getIncident, listIncidents, transitionIncident, updateIncident } from '../api/admin'
 import type { Incident, IncidentDeclare, IncidentResourceType, IncidentStatus, IncidentTransition } from '../api/types'
-import { realmRoles } from '../auth'
+import { realmRoles } from '@core/auth'
+import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { env } from '../env'
-import { formatKstShort, kstInputToIso } from '../format'
+import { env } from '@core/env'
+import { formatKstShort, kstInputToIso } from '@core/time'
 
 const STATUS: Record<IncidentStatus, string> = { DECLARED: '선언', INVESTIGATING: '조사', MITIGATING: '완화',
   MONITORING: '관찰', RESOLVED: '해결', CANCELLED: '취소' }
@@ -19,9 +20,10 @@ const RESOURCE_LABEL: Record<IncidentResourceType, string> = {
   RUNBOOK: '런북', DASHBOARD: '대시보드', JIRA: 'Jira',
 }
 const active = (status: IncidentStatus) => !['RESOLVED', 'CANCELLED'].includes(status)
-const writable = () => { const r = realmRoles(); return r.includes('admin') || (r.includes('feature_flag_operator')
-  && (env.environment !== 'PROD' || r.includes('prod_change_approver'))) }
-const canNote = () => { const r = realmRoles(); return r.some((role) => ['admin','moderation_operator','feature_flag_operator','prod_change_approver'].includes(role)) }
+// 인시던트 선언·전이는 기능 제어 역할이 하고, PROD에서는 승인 역할까지 함께 있어야 한다(admin은 늘 된다).
+const writable = () => { const r = realmRoles(); return r.includes('admin') || (can(r, 'operateFeatures')
+  && (env.environment !== 'PROD' || can(r, 'approveProd'))) }
+const canNote = () => can(realmRoles(), 'note')
 
 function DeclareDialog({ close, created }: { close: () => void; created: (row: Incident) => void }) {
   const [reference, setReference] = useState(''); const [title, setTitle] = useState('')

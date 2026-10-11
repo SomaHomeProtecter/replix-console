@@ -1,5 +1,5 @@
 /* ── 운영 콘솔 공용 틀(HP-506) — 톱바·왼쪽 메뉴·본문 자리·홈 ──
-   색·글꼴 토큰은 조치 콘솔 styles.css의 :root(시각 정본 v7)를 그대로 쓴다. 그 파일은 콘솔 전체에 실린다.
+   색·글꼴 토큰은 공용 기반 core/styles/core.css의 :root(시각 정본 v7)를 그대로 쓴다. 그 파일은 콘솔 전체에 실린다.
    이 파일의 클래스는 모두 cs- 로 시작해 조치 화면의 클래스와 겹치지 않는다. 시딩 화면은 격리 영역(Shadow DOM)
    안에 따로 그려 이 파일과 조치 CSS가 닿지 않는다. 빨강은 쓰지 않는다 — 정지 같은 되돌리기 어려운 조치 전용이다. */
 
@@ -180,7 +180,7 @@
 .cs-denied-actions .btn-primary-solid:hover { background: #245a8c; }
 .cs-denied-actions span { font-size: 12px; color: var(--muted-2); }
 
-/* 좁은 화면: 메뉴를 본문 위로 올리고 톱바를 접는다(조치 콘솔 styles.css의 640px 규칙과 순서를 맞춘다). */
+/* 좁은 화면: 메뉴를 본문 위로 올리고 톱바를 접는다(core/styles/core.css·조치 styles.css의 640px 규칙과 순서를 맞춘다). */
 @media (max-width: 760px) {
   .cs-body { flex-direction: column; }
   .cs-nav { width: auto; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }

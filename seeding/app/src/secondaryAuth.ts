@@ -41,7 +41,8 @@ export function secondaryLogout(cfg: EnvConfig) { save(cfg.env, null) }
 async function popupLogin(cfg: EnvConfig): Promise<Tokens> {
   const { verifier, challenge } = await pkce()
   const state = b64url(crypto.getRandomValues(new Uint8Array(16)).buffer)
-  const redirect = new URL('dev-callback.html', location.href.split('#')[0].split('?')[0]).href
+  // 시딩 화면의 주소(/seeding/, /seeding?view=…)에 기대지 않고 고정한다 — 공용 틀이 이 파일을 /seeding/ 아래에 둔다(shell/app/public).
+  const redirect = new URL('/seeding/dev-callback.html', location.origin).href
   const url = `${cfg.auth.url}/realms/${cfg.auth.realm}/protocol/openid-connect/auth?` + new URLSearchParams({
     client_id: cfg.auth.clientId, response_type: 'code', scope: 'openid', redirect_uri: redirect, state, code_challenge: challenge, code_challenge_method: 'S256',
   })

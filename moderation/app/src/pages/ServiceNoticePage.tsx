@@ -7,10 +7,11 @@ import {
 import type {
   FeatureControlPreset, ServiceNotice, ServiceNoticeCreate, ServiceNoticeKind,
 } from '../api/types'
-import { realmRoles } from '../auth'
+import { realmRoles } from '@core/auth'
+import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { formatKstShort, kstInputToIso } from '../format'
-import { useWriting } from '../writing'
+import { formatKstShort, kstInputToIso } from '@core/time'
+import { useWriting } from '@core/writing'
 
 const STATUS_LABEL: Record<ServiceNotice['status'], string> = {
   DRAFT: '초안', SCHEDULED: '예약됨', PUBLISHED: '게시 중', ENDED: '종료', CANCELLED: '취소',
@@ -33,8 +34,7 @@ const PRESETS: { value: FeatureControlPreset['id']; label: string }[] = [
 const HTTPS_LINK = /^https:\/\/\S+$/
 
 function canOperate() {
-  const roles = realmRoles()
-  return roles.includes('admin') || roles.includes('feature_flag_operator')
+  return can(realmRoles(), 'operateFeatures')
 }
 
 function NoticePreview({ kind, title, message, linkUrl }: {
