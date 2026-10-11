@@ -299,8 +299,13 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
         canceller.current = null
         return
       }
-      // 확인을 기다리는 사이 패널이 사라졌으면 보내지 않는다 — 결과를 알릴 화면이 없다(언마운트 효과 주석).
-      if (!alive.current || controller.signal.aborted) return
+      // 확인을 기다리는 사이 패널이 사라졌으면 보내지 않는다 — 진행을 보이고 끊을 화면이 없다(언마운트 효과 주석).
+      // 다만 조용히 끝내면 운영자는 'PROD'까지 입력했으니 가려졌다고 믿는다. 페이지에 남는 안내로 알린다.
+      if (!alive.current || controller.signal.aborted) {
+        canceller.current = null
+        onActionDone(`일괄 가림을 보내지 않았습니다 — 확인하는 사이 신고 상세가 닫혔습니다(${targets.length}건). 다시 열어 고르세요.`)
+        return
+      }
 
       const { failed, skipped } = await blindEach(
           report.episodeId, targets, controller.signal,

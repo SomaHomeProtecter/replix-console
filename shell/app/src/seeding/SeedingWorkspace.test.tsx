@@ -124,6 +124,33 @@ describe('회차 정보 — 그래프에서 적용한 방영 시각을 고치기
   }, TEST_TIMEOUT)
 })
 
+describe('회차 정보 — 편집하는 사이 바뀐 값(HP-517 리뷰)', () => {
+  it("'고치기'를 연 채 그래프에서 적용하면 손대지 않은 칸이 새 값으로 바뀌고, 그 값이 저장된다", async () => {
+    let episode: Json = { ...baseEpisode }
+    const patches: Json[] = []
+    const fetchMock = serve([
+      ...episodeRoutes(() => episode, { collections: [doneCollection] }),
+      { method: 'GET', host: 'workspace', path: /\/collections\/5\/density$/, handle: () => ({
+        from: '2026-10-08T13:10:00Z', to: '2026-10-08T16:30:00Z', bucketMinutes: 1,
+        buckets: [{ at: '2026-10-08T13:10:00Z', count: 3 }, { at: '2026-10-08T13:11:00Z', count: 9 }],
+        suggestedStartAt: null, suggestedEndAt: '2026-10-08T15:05:00Z', note: '' }) },
+      { method: 'PATCH', host: 'workspace', path: /\/seeding\/episodes\/11$/, handle: (_m, body) => {
+        patches.push(body!); episode = { ...episode, ...body }; return episode } },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+
+    await user.click(await screen.findByRole('button', { name: '고치기' }, WAIT))
+    await user.click(await screen.findByRole('button', { name: '회차 정보에 적용' }, WAIT))
+    // 종료 칸은 손대지 않았으니 방금 적용한 값으로 다시 채워진다
+    expect(await screen.findByDisplayValue('2026-10-09T00:05', {}, WAIT)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(patches).toHaveLength(2), WAIT)
+    expect(patches[1].airEndAt).toBe('2026-10-08T15:05:00Z')
+  }, TEST_TIMEOUT)
+})
+
 describe('운영에 넣기(작업 서버) — 응답보다 먼저 끝나도 잠금이 풀린다(HP-519)', () => {
   it('실행 응답이 곧바로 EXECUTED여도 버튼이 다시 눌린다', async () => {
     const episode = { ...baseEpisode, episodeId: 123 }
@@ -206,5 +233,45 @@ describe('다른 환경에 넣기 — 기록을 잃어도 같은 채팅을 다�
     await waitFor(() => expect(deleted).toHaveLength(1), WAIT)
     expect(deleted[0]).toMatch(/^plan:dev:7:/)
     await waitFor(() => expect(screen.queryByRole('button', { name: '운영에 넣은 것 모두 지우기' })).not.toBeInTheDocument(), WAIT)
+  }, TEST_TIMEOUT)
+
+  it('기록만 늦게 마친 묶음은 새로 넣을 행이 없어도 반응·감상 시간을 넣고, 오류를 띄우지 않는다(HP-518 리뷰)', async () => {
+    const engagements: string[] = []
+    let recordFails = true
+    const fetchMock = serve([
+      ...episodeRoutes(() => linked, { plans: [plan] }),
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/7$/, handle: () => planView('DRAFT', [planItem(1)]) },
+      { method: 'POST', host: 'other', path: /\/external-injections$/, handle: (_m, body) => ({
+        episodeId: 900, results: (body!.items as { ref: string }[]).map((x) => ({ ref: x.ref, injectionId: 7001, error: null })) }) },
+      { method: 'POST', host: 'other', path: /\/external-injections\/(.+)\/engagement$/, handle: (m) => {
+        engagements.push(decodeURIComponent(m[1])); return { emojis: 1, watchSeconds: 60 } } },
+      { method: 'PUT', host: 'workspace', path: /\/plans\/7\/external\/prod$/, handle: (_m, body) => {
+        if (recordFails) return new Response(JSON.stringify({ message: '일시 오류' }), { status: 503 })
+        return planView('DRAFT', [planItem(1, { external: JSON.stringify({ prod: { id: 7001, batchKey: body!.batchKey } }) })]) } },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+
+    await user.click(await screen.findByRole('button', { name: '운영에 1건 넣기' }, WAIT))
+    expect(await screen.findByText(/운영 서버에 기록하지 못했습니다/, {}, WAIT)).toBeInTheDocument()
+    expect(engagements).toHaveLength(0)
+
+    recordFails = false
+    await user.click(screen.getByRole('button', { name: '닫기' }))
+    await user.click(screen.getByRole('button', { name: '운영에 1건 넣기' }))
+    await waitFor(() => expect(engagements).toHaveLength(1), WAIT)
+    expect(screen.queryByText(/넣을 행이 없습니다/)).not.toBeInTheDocument()
+  }, TEST_TIMEOUT)
+
+  it('다른 서버에 넣은 채팅이 남은 계획은 지울 수 없다(HP-518 리뷰)', async () => {
+    const fetchMock = serve([
+      ...episodeRoutes(() => linked, { plans: [plan] }),
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/7$/, handle: () =>
+        planView('DRAFT', [planItem(1, { external: JSON.stringify({ prod: { id: 7001, batchKey: 'plan:dev:7:x' } }) })]) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SeedingWorkspace view="work" />)
+    expect(await screen.findByRole('button', { name: '계획 #7 지우기' }, WAIT)).toBeDisabled()
   }, TEST_TIMEOUT)
 })

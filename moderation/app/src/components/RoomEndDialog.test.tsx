@@ -29,4 +29,12 @@ describe('그룹방 종료 확인 — 키는 이 창에서 끝난다', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: '취소' }), { key: 'b' })
     expect(parentKey).not.toHaveBeenCalled()
   })
+
+  it('창의 빈 곳을 누른 뒤 Shift+Tab을 눌러도 포커스가 창 안에 남는다', () => {
+    renderOverParent()
+    const dialog = screen.getByRole('dialog', { name: '그룹방 종료' })
+    dialog.focus()
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true })
+    expect(screen.getByRole('button', { name: '방 종료' })).toHaveFocus()
+  })
 })

@@ -37,7 +37,12 @@ export default function RoomEndDialog({ busy, onConfirm, onCancel }: {
     if (buttons.length === 0) return
     const first = buttons[0]
     const last = buttons[buttons.length - 1]
-    if (event.shiftKey && document.activeElement === first) {
+    // 포커스가 창 자체(빈 곳을 누른 뒤)나 창 밖에 있으면 버튼 사이가 아니어도 창 안으로 돌린다 — 그대로 두면
+    // Shift+Tab이 아래 신고 상세 버튼으로 빠지고, 그 뒤 Esc·단축키가 상세로 간다(HP-520 리뷰).
+    if (!buttons.includes(document.activeElement as HTMLButtonElement)) {
+      event.preventDefault()
+      ;(event.shiftKey ? last : first).focus()
+    } else if (event.shiftKey && document.activeElement === first) {
       event.preventDefault()
       last.focus()
     } else if (!event.shiftKey && document.activeElement === last) {

@@ -109,4 +109,22 @@ describe('작성자 글 일괄 가림 — PROD 묶음 확인(HP-514)', () => {
     expect(screen.getByRole('button', { name: '선택 3건 가림' })).toBeEnabled()
     expect(onActionDone).not.toHaveBeenCalled()
   })
+
+  /**
+   * 확인 창은 콘솔 전체의 겹이라 신고 상세가 사라져도 남는다(앞선 조치의 큐 재조회가 그 신고를 빼는 경우).
+   * 그때 'PROD'까지 입력했는데 조용히 끝나면 운영자는 가려졌다고 믿는다 — 보내지 않았다는 안내를 페이지에 올린다.
+   */
+  it('확인하는 사이 상세가 닫히면 보내지 않고 그 사실을 알린다', async () => {
+    const user = userEvent.setup()
+    const view = renderPanel()
+    await user.click(await pickAll(user))
+    const dialog = await screen.findByRole('dialog', { name: 'PROD 변경 최종 확인' })
+
+    view.rerender(<ProductionWriteGuard>{null}</ProductionWriteGuard>)
+    await user.type(within(dialog).getByRole('textbox', { name: 'PROD 확인 입력' }), 'PROD')
+    await user.click(within(dialog).getByRole('button', { name: 'PROD에 적용' }))
+
+    await waitFor(() => expect(onActionDone).toHaveBeenCalledWith(expect.stringContaining('보내지 않았습니다')))
+    expect(blindPosts()).toHaveLength(0)
+  })
 })
