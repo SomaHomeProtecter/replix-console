@@ -218,6 +218,25 @@ describe('운영 쓰기 확인 — 지우기와 연결 끊기(HP-526)', () => {
   }, TEST_TIMEOUT)
 })
 
+describe('운영 쓰기 확인 — 진행 중인 수집 멈추기(2026-10-12 리뷰)', () => {
+  it('수집 멈추기는 PROD 확인을 거치고, 취소하면 보내지 않는다', async () => {
+    const running = { ...doneCollection, id: 6, status: 'RUNNING', postCount: 120, finishedAt: null }
+    const { fetchMock, writes } = prodServer({ collections: [running] })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+    const collect = await screen.findByRole('region', { name: /^1\s*수집$/ }, WAIT)
+
+    reject()
+    await user.click(await within(collect).findByRole('button', { name: '멈추기' }, WAIT))
+    await waitFor(() => expect(lastSummary()).toMatchObject({ target: '운영 서버 · 33기 9회 수집 #6', change: '진행 중인 수집 #6 멈추기' }), WAIT)
+    expect(writes).toHaveLength(0)
+
+    await user.click(within(collect).getByRole('button', { name: '멈추기' }))
+    await waitFor(() => expect(writes).toEqual([{ method: 'POST', path: '/collections/6/cancel', body: undefined }]), WAIT)
+  }, TEST_TIMEOUT)
+})
+
 describe('검수 대기 초안을 만드는 쓰기는 묻지 않는다(HP-526)', () => {
   it('계획 행 거부·계획 올리기·회차 추가·수집 시작은 PROD 확인 없이 보낸다', async () => {
     const { fetchMock, writes } = prodServer({ plans: [plan] })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Dialog from '@core/Dialog'
 import type { SuspendDuration } from '../api/types'
 import { DURATION_LABELS } from '../format'
@@ -18,10 +18,11 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
   const [duration, setDuration] = useState<SuspendDuration>('H24')
   const [reason, setReason] = useState('')
   const trimmed = reason.trim()
+  const reasonRef = useRef<HTMLTextAreaElement>(null)
   return (
-    // 최초 포커스는 사유 입력(autoFocus — 유일한 필수 입력). Esc·바깥 클릭·✕ = 취소, Tab 가두기, 닫힌 뒤 포커스
-    // 복귀는 공용 다이얼로그가 지킨다(HP-528).
-    <Dialog label="계정 정지" title={`${targetName} 계정 정지`} busy={busy} onClose={onCancel}>
+    // 최초 포커스는 사유 입력(유일한 필수 입력 — initialFocus로 이름을 붙여 둔다. autoFocus에 기대면 개발 서버의
+    // StrictMode에서 첫 라디오로 간다). Esc·바깥 클릭·✕ = 취소, Tab 가두기, 닫힌 뒤 포커스 복귀는 공용 다이얼로그가 지킨다(HP-528).
+    <Dialog label="계정 정지" title={`${targetName} 계정 정지`} busy={busy} onClose={onCancel} initialFocus={reasonRef}>
       <p className="sub">채팅·답글·이모지·좋아요 전송이 차단됩니다. 로그인과 시청·읽기는 막지 않습니다.</p>
       <div className="durs" role="radiogroup" aria-label="정지 기간">
         {PRESETS.map((preset) => (
@@ -38,7 +39,7 @@ export default function SuspendDialog({ targetName, busy, onConfirm, onCancel }:
         <label>
           정지 사유 <span className="must">*</span>
           <textarea
-              aria-label="정지 사유" rows={2} maxLength={200} value={reason} autoFocus
+              ref={reasonRef} aria-label="정지 사유" rows={2} maxLength={200} value={reason}
               placeholder="필수 — 감사 로그와 차단 안내에 남습니다"
               onChange={(e) => setReason(e.target.value)} />
         </label>

@@ -8,7 +8,7 @@ import {
   CHANGE_SET_STATUS_LABELS, changeSetEventLabel, INCIDENT_RESOURCE_LABELS, INCIDENT_STATUS_LABELS, incidentEventLabel,
   NOTICE_STATUS_LABELS, noticeEventLabel,
 } from '../recordLabels'
-import { useLatestRequest } from '../useLatestRequest'
+import { useLatestRequest } from '@core/useLatestRequest'
 
 const SOURCE_LABEL = { CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', INCIDENT: '인시던트' } as const
 /* 한 타임라인에 세 종류의 기록이 섞인다 — 기록 이름과 상태는 그 기록의 종류로 한글 표를 고른다(HP-527). */

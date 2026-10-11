@@ -8,7 +8,7 @@ import type {
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { moderateDenied } from '../permissions'
 import { REASON_LABELS } from '../format'
-import { useLatestRequest } from '../useLatestRequest'
+import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { CASE_NOTE_LABELS, caseEventLabel } from '../recordLabels'
 
@@ -79,8 +79,11 @@ export default function OperationCasesPage() {
     if (Number.isInteger(id) && id > 0) void open(id, false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const run = async (work: () => Promise<OperationCaseDetail>) => {
+    // 저장 응답이 오는 사이 다른 케이스를 열었으면 그 응답을 지금 상세에 그리지 않는다 — 그리면 열어 둔 케이스 화면에
+    // 앞 케이스의 담당·version이 들어가, 다음 저장이 앞 케이스에 간다(2026-10-12 리뷰).
+    const current = beginDetail()
     setBusy(true); setError(null)
-    try { applyDetail(await work()); await load() }
+    try { const detail = await work(); if (current()) applyDetail(detail); await load() }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }

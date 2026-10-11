@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CAPABILITIES } from '@core/roles'
 import { isoToKstInput, kstInputToIso } from '@core/time'
+import { useLatestRequest } from '@core/useLatestRequest'
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
 import { canRead, canWrite, currentUser, logout } from './auth'
 import { OTHER, WORKSPACE, type Env } from './env'
@@ -66,8 +67,10 @@ function errText(e: unknown) { return e instanceof ApiError ? `${e.message}${e.c
 /* 운영 쓰기의 최종 확인. 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력 확인 창(공용 틀, HP-506)을 쓰고, 개발
    서버는 브라우저 확인 창을 쓴다. 되돌리기 어렵거나 서버 동작을 바꾸는 쓰기가 모두 여기를 거친다(HP-526) — 채팅 넣기·지우기,
    프롬프트 저장·되돌리기·기본값 복원(저장 즉시 AI 작업이 새 내용을 쓴다, 시딩 결정 ⑥), 장면 메모 전체 교체·모두 지우기,
-   회차 정보·방영 시각(수집 범위와 시각 환산의 기준), 넷플릭스 연결 끊기, 수집·기준점·계획 지우기. 계획 행 수락·거부,
-   계획 올리기(검수 대기 초안), 회차 추가, 수집 시작(새 수집을 더할 뿐 지난 수집을 지우지 않는다)은 확인 없이 한다. */
+   회차 정보·방영 시각(수집 범위와 시각 환산의 기준), 넷플릭스 연결 끊기, 수집 멈추기, 수집·기준점·계획 지우기.
+   확인 없이 하는 것(작업 데이터만 늘리거나 사람이 검수하며 수백 번 누르는 일): 계획 행 수락·거부, 계획 올리기(검수 대기
+   초안), 회차 추가, 수집 시작(새 수집을 더할 뿐 지난 수집을 지우지 않는다), 그리고 다른 서버에 넣고 지울 때 작업 서버에
+   남기는 넣기 기록(그 넣기·지우기를 이미 확인받았다). 사용자에게 보이는 채팅을 바꾸는 넣기·지우기는 예외 없이 확인한다. */
 async function confirmWrite(env: Env, summary: ProductionWriteSummary, message: string): Promise<boolean> {
   const host = seedingHost()
   if (host && env === 'prod') return host.confirmProductionWrite(summary).then(() => true, () => false)
@@ -291,9 +294,29 @@ function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged }: { work:
   }, [])
   const dismiss = (step: Step) => () => setErrors((cur) => { const next = { ...cur }; delete next[step]; return next })
   // quiet = 뒤에서 다시 읽기(아래 30초 주기) — 실패를 띄우지 않고 다음 차례에 다시 읽는다. 사람이 누른 일의 실패는 띄운다.
-  const reloadCollections = useCallback((quiet?: boolean) => api.collections(episode.id).then(setCollections).catch((e) => { if (quiet !== true) report.collect(errText(e)) }), [episode.id, report])
-  const reloadSync = useCallback((quiet?: boolean) => Promise.all([api.anchors(episode.id), api.sceneNotes(episode.id)]).then(([a, n]) => { setAnchors(a); setNotes(n) }).catch((e) => { if (quiet !== true) report.sync(errText(e)) }), [episode.id, report])
-  const reloadPlans = useCallback((quiet?: boolean) => Promise.all([api.plans(episode.id), api.injections(episode.id)]).then(([p, i]) => { setPlans(p); setInjections(i) }).catch((e) => { if (quiet !== true) report.plan(errText(e)) }), [episode.id, report])
+  // 목록마다 마지막으로 시작한 읽기만 그린다: 뒤에서 읽는 사이 수집을 지우고 다시 읽으면, 먼저 출발한 뒤쪽 읽기의 늦은
+  // 응답이 지운 수집을 되살려 다음 주기까지 남았다(2026-10-12 리뷰). 계획 상태·넣은 수·장면 메모도 같다.
+  const beginCollections = useLatestRequest()
+  const beginSync = useLatestRequest()
+  const beginPlans = useLatestRequest()
+  const reloadCollections = useCallback((quiet?: boolean) => {
+    const current = beginCollections()
+    return api.collections(episode.id)
+      .then((rows) => { if (current()) setCollections(rows) })
+      .catch((e) => { if (quiet !== true && current()) report.collect(errText(e)) })
+  }, [episode.id, report, beginCollections])
+  const reloadSync = useCallback((quiet?: boolean) => {
+    const current = beginSync()
+    return Promise.all([api.anchors(episode.id), api.sceneNotes(episode.id)])
+      .then(([a, n]) => { if (current()) { setAnchors(a); setNotes(n) } })
+      .catch((e) => { if (quiet !== true && current()) report.sync(errText(e)) })
+  }, [episode.id, report, beginSync])
+  const reloadPlans = useCallback((quiet?: boolean) => {
+    const current = beginPlans()
+    return Promise.all([api.plans(episode.id), api.injections(episode.id)])
+      .then(([p, i]) => { if (current()) { setPlans(p); setInjections(i) } })
+      .catch((e) => { if (quiet !== true && current()) report.plan(errText(e)) })
+  }, [episode.id, report, beginPlans])
   useEffect(() => { reloadCollections(); reloadSync(); reloadPlans() }, [reloadCollections, reloadSync, reloadPlans])
   /* 파이프라인이 만든 계획·기준점·장면 메모와 다른 곳에서 시작한 수집이 도착하면 회차를 다시 고르지 않아도 보이게, 탭이
      보이는 동안 30초마다 다시 읽는다(HP-526). 목록만 바꾸므로 고른 계획·펼친 목록·스크롤은 그대로다. 탭이 가려지면
@@ -461,7 +484,11 @@ function CollectStep({ episode, collections, writable, reload, onEpisodeChanged,
   const selected = collections.find((c) => c.id === selectedId) ?? collections.find((c) => c.status === 'DONE') ?? collections[0] ?? null
   useEffect(() => { if (!active) return; const t = setInterval(reload, 2000); return () => clearInterval(t) }, [active, reload])
   const start = async () => { setBusy(true); try { await api.startCollection(episode.id); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
-  const cancel = async (id: number) => { try { await api.cancel(id); reload() } catch (e) { onError(errText(e)) } }
+  const cancel = async (c: Collection) => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 수집 #${c.id}`), change: `진행 중인 수집 #${c.id} 멈추기`, reason: '이미 모은 글은 그대로 남습니다. 더 모으려면 수집을 다시 시작해야 합니다' },
+      `수집 #${c.id}을 멈출까요? 이미 모은 글은 남습니다.`)) return
+    try { await api.cancel(c.id); reload() } catch (e) { onError(errText(e)) }
+  }
   const remove = async (c: Collection) => {
     if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 수집 #${c.id}`), change: `수집한 글 ${c.postCount.toLocaleString()}건 지우기`, reason: '이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다. 지운 글은 되돌릴 수 없습니다' },
       `수집 #${c.id}의 글 ${c.postCount.toLocaleString()}건을 서버에서 지웁니다. 이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다.`)) return
@@ -488,7 +515,7 @@ function CollectStep({ episode, collections, writable, reload, onEpisodeChanged,
                   <td className="sd-nowrap">{c.status === 'DONE' ? fmtDuration(c.startedAt, c.finishedAt) : c.status === 'RUNNING' ? fmtDuration(c.startedAt, new Date().toISOString()) : ''}</td>
                   <td className="sd-muted sd-small sd-col-progress">{c.status === 'RUNNING' ? c.progress : c.error ? <span className="sd-warn">{c.error}</span> : ''}</td>
                   <td className="sd-row-actions" onClick={(e) => e.stopPropagation()}>
-                    {writable && (c.status === 'RUNNING' || c.status === 'QUEUED') && <button className="btn sd-sm" onClick={() => cancel(c.id)}>취소</button>}
+                    {writable && (c.status === 'RUNNING' || c.status === 'QUEUED') && <button className="btn sd-sm" onClick={() => void cancel(c)}>멈추기</button>}
                     {c.status === 'DONE' && <button className="btn sd-sm" onClick={() => api.download(c.id).catch((e) => onError(errText(e)))}>JSON 내려받기</button>}
                     {writable && (c.status === 'DONE' || c.status === 'FAILED' || c.status === 'CANCELLED') && <button className="btn sd-sm sd-danger" onClick={() => remove(c)}>지우기</button>}
                   </td>

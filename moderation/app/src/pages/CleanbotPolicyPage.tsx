@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   activateCleanbotPolicy, approveCleanbotPolicy, createCleanbotPolicy, listCleanbotPolicies,
   requestCleanbotPolicyReview, retireCleanbotPolicy, simulateCleanbotPolicy, updateCleanbotPolicy,
@@ -8,7 +8,7 @@ import Dialog from '@core/Dialog'
 import { env } from '@core/env'
 import { formatKstShort } from '@core/time'
 import { moderateDenied } from '../permissions'
-import { useLatestRequest } from '../useLatestRequest'
+import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { CLEANBOT_STATUS_LABELS } from '../recordLabels'
 
@@ -46,9 +46,26 @@ export default function CleanbotPolicyPage() {
     finally { if (current()) setLoading(false) }
   }, [begin])
   useEffect(() => { void load() }, [load])
+  // 운영자가 정책을 고른 횟수 — 저장·dry-run 응답이 오는 사이 다른 정책을 골랐으면 그 결과를 지금 상세에 그리지 않는다
+  // (그리면 고른 정책의 화면에 앞 정책의 결과·revision이 섞여, 다음 조치가 엉뚱한 정책에 간다 — 2026-10-12 리뷰).
+  const picks = useRef(0)
+  const pick = (policy: CleanbotPolicy) => { picks.current += 1; setSelected(policy); setSimulation(null) }
   const run = async (work: () => Promise<CleanbotPolicy>) => {
+    const seen = picks.current
     setBusy(true); setError(null)
-    try { const result = await work(); setSelected(result); setReason(''); setChangeSetId(''); await load(result.id) }
+    try {
+      const result = await work()
+      const still = picks.current === seen
+      if (still) { setSelected(result); setReason(''); setChangeSetId('') }
+      await load(still ? result.id : undefined)
+    }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
+  const dryRun = async (policyId: number) => {
+    const seen = picks.current
+    setBusy(true)
+    try { const result = await simulateCleanbotPolicy(policyId, 100); if (picks.current === seen) setSimulation(result) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -72,7 +89,7 @@ export default function CleanbotPolicyPage() {
     {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
     <div className="change-workspace"><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
-      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...selectableRow(() => { setSelected(p); setSimulation(null) })}>
+      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...selectableRow(() => pick(p))}>
         <td><strong>{p.name}</strong><span>#{p.id} · rev {p.revision}</span></td><td>{CLEANBOT_STATUS_LABELS[p.status]}</td></tr>)}</tbody></table>
       {loading && policies.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && policies.length === 0 && <div className="empty-hint">정책 버전이 없습니다</div>}</div>
@@ -91,7 +108,7 @@ export default function CleanbotPolicyPage() {
             {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim() || denied !== null} title={denied ?? undefined} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
             {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId) || denied !== null} title={denied ?? undefined} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
             {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId) || denied !== null} title={denied ?? undefined} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
-            <button className="btn" disabled={busy || denied !== null} title={denied ?? undefined} onClick={async () => { setBusy(true); try { setSimulation(await simulateCleanbotPolicy(selected.id, 100)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }}>표본 dry-run</button>
+            <button className="btn" disabled={busy || denied !== null} title={denied ?? undefined} onClick={() => void dryRun(selected.id)}>표본 dry-run</button>
           </div>
         </div>
         {simulation && <div className="incident-guide"><strong>무변경 시뮬레이션 · 표본 {simulation.sampleCount}</strong>

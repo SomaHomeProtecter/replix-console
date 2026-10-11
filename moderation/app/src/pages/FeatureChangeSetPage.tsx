@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import {
   applyFeatureChangeSet, approveFeatureChangeSet, cancelFeatureChangeSet,
@@ -14,7 +14,7 @@ import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
-import { useLatestRequest } from '../useLatestRequest'
+import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { CHANGE_SET_STATUS_LABELS, changeSetEventLabel, itemResultLabel, RISK_LABELS } from '../recordLabels'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
@@ -272,26 +272,33 @@ export default function FeatureChangeSetPage() {
   const [error, setError] = useState<string | null>(null)
   const writable = permissions().operate
 
-  // 목록과 상세는 따로 순서를 지킨다(HP-527) — 새로고침 중에 다른 행을 골라도, 먼저 보낸 상세가 고른 행을 덮지 않는다.
+  // 목록과 상세는 따로 순서를 지킨다(HP-527). 새로고침이나 조치가 끝나 상세를 다시 열 때는, 그사이 운영자가 다른 행을
+  // 골랐으면 다시 열지 않는다 — 고른 행이 이전 행으로 되돌아가면 그 위의 승인·적용이 엉뚱한 것에 간다(2026-10-12 리뷰).
+  // 고른 횟수(picks)를 세어, 새로고침은 시작할 때의 수를, 상세 화면의 조치는 그 화면을 그린 때의 수(pickCount)를 넘긴다.
   const beginList = useLatestRequest()
   const beginDetail = useLatestRequest()
+  const picks = useRef(0)
+  const [pickCount, setPickCount] = useState(0)
+  const selectedId = useRef<number | null>(null)
+  useEffect(() => { selectedId.current = selected?.id ?? null }, [selected?.id])
   const open = useCallback(async (id: number) => {
     const current = beginDetail()
     try { const detail = await getFeatureChangeSet(id); if (current()) setSelected(detail) }
     catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
   }, [beginDetail])
-  const load = useCallback(async (detailId?: number) => {
+  const pick = (id: number) => { picks.current += 1; setPickCount(picks.current); void open(id) }
+  const load = useCallback(async (detailId?: number, seenPicks = picks.current) => {
     const current = beginList()
     setLoading(true)
     try {
       const [nextSets, nextFlags] = await Promise.all([listFeatureChangeSets(), listFeatureFlags()])
       if (!current()) return
       setSets(nextSets); setFlags(nextFlags); setError(null)
-      const id = detailId ?? selected?.id
-      if (id) await open(id)
+      const id = detailId ?? selectedId.current
+      if (id && picks.current === seenPicks) await open(id)
     } catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
     finally { if (current()) setLoading(false) }
-  }, [selected?.id, beginList, open])
+  }, [beginList, open])
   useEffect(() => {
     const id = Number(searchParams.get('selected'))
     void load(Number.isSafeInteger(id) && id > 0 ? id : undefined)
@@ -313,7 +320,7 @@ export default function FeatureChangeSetPage() {
       <div className="change-list report-table-wrap">
         <table><thead><tr><th>변경 세트</th><th>상태</th><th>범위</th><th>생성</th></tr></thead>
           <tbody>{sets.map((set) => <tr key={set.id} className={selected?.id === set.id ? 'selected' : ''}
-              aria-selected={selected?.id === set.id} {...selectableRow(() => void open(set.id))}>
+              aria-selected={selected?.id === set.id} {...selectableRow(() => pick(set.id))}>
             <td><strong>{set.title}</strong><span>#{set.id} · {set.jiraReference ?? '참조 없음'}</span></td>
             <td><span className={`feature-state status-${set.status.toLowerCase()}`}>{STATUS_LABEL[set.status]}</span></td>
             <td>{set.items.length}개 · {RISK_LABELS[set.risk]}</td><td>{formatKstShort(set.createdAt)}</td>
@@ -321,7 +328,7 @@ export default function FeatureChangeSetPage() {
         {loading && sets.length === 0 && <div className="page-status">불러오는 중…</div>}
         {!loading && sets.length === 0 && <div className="empty-hint">아직 변경 세트가 없습니다</div>}
       </div>
-      {selected ? <ChangeSetDetail changeSet={selected} onReload={load} />
+      {selected ? <ChangeSetDetail changeSet={selected} onReload={(id) => load(id, pickCount)} />
         : <div className="change-empty">변경 세트를 선택하면 diff와 승인 이력을 확인할 수 있습니다.</div>}
     </div>
     {creating && <ChangeSetCreateDialog flags={flags} onClose={() => setCreating(false)}

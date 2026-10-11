@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { addIncidentEvent, addIncidentNote, declareIncident, getIncident, listIncidents, transitionIncident, updateIncident } from '../api/admin'
 import type { Incident, IncidentDeclare, IncidentResourceType, IncidentStatus, IncidentTransition } from '../api/types'
@@ -6,7 +6,7 @@ import { realmRoles } from '@core/auth'
 import Dialog from '@core/Dialog'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
-import { useLatestRequest } from '../useLatestRequest'
+import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { INCIDENT_RESOURCE_LABELS, INCIDENT_STATUS_LABELS, incidentEventLabel } from '../recordLabels'
 import { env } from '@core/env'
@@ -189,22 +189,27 @@ function Detail({ incident, reload }: { incident: Incident; reload: (id: number)
 export default function IncidentModePage() {
   const [params] = useSearchParams(); const [rows, setRows] = useState<Incident[]>([]); const [selected, setSelected] = useState<Incident | null>(null)
   const [creating, setCreating] = useState(false); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null)
-  // 목록과 상세는 따로 순서를 지킨다(HP-527) — 새로고침 중에 다른 행을 골라도, 먼저 보낸 상세가 고른 행을 덮지 않는다.
+  // 목록과 상세는 따로 순서를 지킨다(HP-527). 새로고침이나 조치가 끝나 상세를 다시 열 때는, 그사이 운영자가 다른 행을
+  // 골랐으면 다시 열지 않는다 — 고른 행이 이전 행으로 되돌아가면 그 위의 승인·적용이 엉뚱한 것에 간다(2026-10-12 리뷰).
+  // 고른 횟수(picks)를 세어, 새로고침은 시작할 때의 수를, 상세 화면의 조치는 그 화면을 그린 때의 수(pickCount)를 넘긴다.
   const beginList = useLatestRequest()
   const beginDetail = useLatestRequest()
+  const picks = useRef(0)
+  const [pickCount, setPickCount] = useState(0)
   const open = useCallback(async (id: number) => {
     const current = beginDetail()
     try { const detail = await getIncident(id); if (current()) setSelected(detail) }
     catch (f) { if (current()) setError(f instanceof Error ? f.message : String(f)) }
   }, [beginDetail])
-  const load = useCallback(async (id?: number) => {
+  const pick = (id: number) => { picks.current += 1; setPickCount(picks.current); void open(id) }
+  const load = useCallback(async (id?: number, seenPicks = picks.current) => {
     const current = beginList()
     setLoading(true)
     try {
       const next = await listIncidents()
       if (!current()) return
       setRows(next); setError(null)
-      if (id) await open(id)
+      if (id && picks.current === seenPicks) await open(id)
     } catch (f) { if (current()) setError(f instanceof Error ? f.message : String(f)) }
     finally { if (current()) setLoading(false) }
   }, [beginList, open])
@@ -213,9 +218,9 @@ export default function IncidentModePage() {
   return <section className="feature-control incident-mode-page" aria-label="인시던트"><div className="board-head"><div><h1>{featureControlTitle('/feature-control/incident-mode')}</h1><p>장애 선언부터 완화·관찰·종료까지 책임과 근거를 관리합니다.</p></div>
     <span className="filter-note">활성 {counts.active} · primary {counts.primary}</span><button className="btn" disabled={!writable()} onClick={() => setCreating(true)}>인시던트 선언</button></div>
     <FeatureControlTabs />{error && <div className="error-box" role="alert">{error}</div>}<div className="change-workspace"><div className="change-list"><table><thead><tr><th>인시던트</th><th>SEV</th><th>상태</th><th>담당</th></tr></thead><tbody>
-      {rows.map((row) => <tr key={row.id} className={selected?.id === row.id ? 'selected' : ''} aria-selected={selected?.id === row.id} {...selectableRow(() => void open(row.id))}><td><strong>{row.title}</strong><span>{row.reference}{row.primary ? ' · primary' : ''}</span></td>
+      {rows.map((row) => <tr key={row.id} className={selected?.id === row.id ? 'selected' : ''} aria-selected={selected?.id === row.id} {...selectableRow(() => pick(row.id))}><td><strong>{row.title}</strong><span>{row.reference}{row.primary ? ' · primary' : ''}</span></td>
         <td><span className={`incident-sev ${row.severity.toLowerCase()}`}>{row.severity}</span></td><td>{STATUS[row.status]}</td><td>{row.ownerUserId ? `#${row.ownerUserId}` : '—'}</td></tr>)}</tbody></table>
       {loading && rows.length === 0 && <div className="page-status">불러오는 중…</div>}
-      {!loading && rows.length === 0 && <div className="empty-hint">현재 환경의 인시던트가 없습니다</div>}</div>{selected ? <Detail incident={selected} reload={load} /> : <div className="change-empty">인시던트를 선택하면 영향·상태·타임라인을 확인할 수 있습니다.</div>}</div>
+      {!loading && rows.length === 0 && <div className="empty-hint">현재 환경의 인시던트가 없습니다</div>}</div>{selected ? <Detail incident={selected} reload={(id) => load(id, pickCount)} /> : <div className="change-empty">인시던트를 선택하면 영향·상태·타임라인을 확인할 수 있습니다.</div>}</div>
     {creating && <DeclareDialog close={() => setCreating(false)} created={(row) => { setCreating(false); void load(row.id) }} />}</section>
 }

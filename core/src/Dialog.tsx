@@ -77,6 +77,20 @@ export default function Dialog({
     // 열 때 한 번 — 다시 그려질 때마다 포커스를 빼앗지 않는다.
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 처리 중에는 눌렀던 버튼이 꺼진다. 브라우저는 꺼진 버튼의 포커스를 body로 옮기므로, 그대로 두면 처리가 끝나도 Esc·Tab이
+  // 이 창을 거치지 않는다(2026-10-12 리뷰, Chrome 실측). 처리를 시작할 때 포커스가 이 창 안의 요소에 있었으면 창 상자로
+  // 옮기고, 끝났을 때 포커스가 body에 떨어져 있으면 창으로 되찾는다. 위에 다른 창(PROD 확인)이 떠 있으면 건드리지 않는다.
+  const wasBusy = useRef(busy)
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box || wasBusy.current === busy) return
+    wasBusy.current = busy
+    const active = document.activeElement
+    // 이 창의 요소인가 — 이 창 안에 겹쳐 그린 다른 창(가장 가까운 창이 그 창)의 요소는 그 창의 것이다
+    const ownsFocus = active instanceof Element && active !== box && active.closest('[role="dialog"]') === box
+    if (busy ? ownsFocus : active === null || active === document.body) box.focus()
+  }, [busy])
+
   const trapTab = (event: React.KeyboardEvent) => {
     const box = boxRef.current
     if (!box) return
@@ -99,7 +113,12 @@ export default function Dialog({
         // 누르기 시작한 곳도, 뗀 곳도 바깥일 때만 닫는다 — 창 안에서 글자를 고르다 바깥에서 손을 떼도 닫히지 않게.
         // 닫기는 mousedown이 아니라 click에서 한다: mousedown에 닫으면 뒤따르는 click이 아래 상세 모달의 바깥에
         // 떨어져 두 겹이 함께 닫힌다. click은 여기서 전파를 끊는다.
-        onMouseDown={(event) => { pressedOutside.current = event.target === event.currentTarget }}
+        // 바깥을 누를 때 포커스가 body로 빠지지 않게 한다 — 바깥 클릭으로 닫지 않는 창에서 빠지면 Tab이 창 뒤로 가고
+        // Esc가 듣지 않는다(2026-10-12 리뷰).
+        onMouseDown={(event) => {
+          pressedOutside.current = event.target === event.currentTarget
+          if (pressedOutside.current) event.preventDefault()
+        }}
         onClick={(event) => {
           event.stopPropagation()
           const outside = pressedOutside.current && event.target === event.currentTarget

@@ -7,7 +7,7 @@ import { can } from '@core/roles'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
-import { useLatestRequest } from '../useLatestRequest'
+import { useLatestRequest } from '@core/useLatestRequest'
 import { RISK_LABELS } from '../recordLabels'
 import { useNavigate } from 'react-router'
 

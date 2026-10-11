@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRef, useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -150,5 +150,34 @@ describe('공용 다이얼로그(HP-528)', () => {
     fireEvent.click(screen.getByRole('button', { name: '열기' }))
     fireEvent.keyDown(screen.getByRole('dialog', { name: 'PROD 확인' }), { key: 'Escape' })
     expect(screen.getByRole('dialog', { name: '기능 변경' })).toHaveFocus()
+  })
+
+  it('바깥을 눌러도 포커스가 창에서 빠지지 않는다 — 바깥 클릭으로 닫지 않는 창의 Tab·Esc가 계속 듣게(리뷰 2026-10-12)', () => {
+    render(<Dialog label="PROD 확인" onClose={() => {}} closeOnBackdrop={false}><input aria-label="PROD 입력" /></Dialog>)
+    const backdrop = screen.getByRole('dialog').parentElement!
+    const press = createEvent.mouseDown(backdrop)
+    fireEvent(backdrop, press)
+    expect(press.defaultPrevented).toBe(true)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('처리를 시작하면 누른 버튼 대신 창이 포커스를 갖고, 끝난 뒤 body로 떨어진 포커스를 되찾는다', () => {
+    function Busy() {
+      const [busy, setBusy] = useState(false)
+      return (
+        <Dialog label="기능 변경" onClose={() => {}} busy={busy}>
+          <button type="button" disabled={busy} onClick={() => setBusy(true)}>변경 적용</button>
+          <button type="button" onClick={() => setBusy(false)}>끝내기(테스트)</button>
+        </Dialog>
+      )
+    }
+    render(<Busy />)
+    const apply = screen.getByRole('button', { name: '변경 적용' })
+    apply.focus()
+    fireEvent.click(apply)
+    expect(screen.getByRole('dialog')).toHaveFocus() // 꺼진 버튼에 포커스를 두지 않는다
+    ;(document.activeElement as HTMLElement).blur() // 브라우저가 포커스를 body로 옮긴 상황
+    fireEvent.click(screen.getByRole('button', { name: '끝내기(테스트)' }))
+    expect(screen.getByRole('dialog')).toHaveFocus()
   })
 })
