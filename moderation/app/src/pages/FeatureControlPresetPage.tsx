@@ -4,6 +4,7 @@ import { createPresetChangeSet, listFeatureControlPresets } from '../api/admin'
 import type {
   FeatureChangeSet, FeatureControlPreset, FeatureControlPresetApply,
 } from '../api/types'
+import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
@@ -45,46 +46,43 @@ function PresetDialog({ preset, onClose, onCreated }: {
     finally { setBusy(false); setWriting(false) }
   }
 
-  return <div className="dialog-backdrop" role="presentation">
-    <div className="dialog preset-dialog" role="dialog" aria-modal="true" aria-labelledby="preset-dialog-title">
-      <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
-      <h2 id="preset-dialog-title">{preset.displayName} 변경 세트</h2>
-      <p className="sub">즉시 반영하지 않고 검토 가능한 초안을 생성합니다.</p>
-      <div className="preset-preview">
-        {preset.targets.map((target) => <div key={target.flagKey}>
-          <span><strong>{target.displayName}</strong><code>{target.flagKey}</code></span>
-          <b className={`feature-state ${target.enabled ? 'on' : 'off'}`}>
-            {target.enabled ? 'ON' : 'OFF'} · {target.rolloutPercentage}%
-          </b>
-        </div>)}
-      </div>
-      {error && <div className="error-box" role="alert">{error}</div>}
-      <div className="feature-form-grid">
-        <label className="span2"><span>적용 사유 <b>필수</b></span><textarea rows={3} maxLength={500}
-            value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} /></label>
-        <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
-            onChange={(event) => setJira(event.target.value)} /></label>
-        <label><span>인시던트</span><input value={incident} maxLength={100} disabled={busy}
-            placeholder="선택" onChange={(event) => setIncident(event.target.value)} /></label>
-        {preset.requiresExpiry && <label className="span2"><span>중지 만료 시각 {expiryRequired && <b>PROD 필수</b>}</span>
-          <input type="datetime-local" value={expiresAt} disabled={busy}
-              onChange={(event) => setExpiresAt(event.target.value)} /></label>}
-        <label className="span2 auto-rollback-policy">
-          <span><input type="checkbox" checked={autoRollback} disabled={busy}
-              onChange={(event) => setAutoRollback(event.target.checked)} /> runtime 불일치 자동 롤백</span>
-          <select aria-label="적용 관찰 구간" value={verificationWindow} disabled={busy || !autoRollback}
-              onChange={(event) => setVerificationWindow(Number(event.target.value))}>
-            <option value={30}>30초 관찰</option><option value={60}>1분 관찰</option>
-            <option value={300}>5분 관찰</option><option value={600}>10분 관찰</option>
-          </select>
-        </label>
-      </div>
-      <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
-        <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
-          {busy ? '생성 중…' : '변경 세트 초안 생성'}
-        </button></div>
+  return <Dialog label={`${preset.displayName} 변경 세트`} title={`${preset.displayName} 변경 세트`}
+      className="preset-dialog" busy={busy} onClose={onClose} closeOnBackdrop={false}>
+    <p className="sub">즉시 반영하지 않고 검토 가능한 초안을 생성합니다.</p>
+    <div className="preset-preview">
+      {preset.targets.map((target) => <div key={target.flagKey}>
+        <span><strong>{target.displayName}</strong><code>{target.flagKey}</code></span>
+        <b className={`feature-state ${target.enabled ? 'on' : 'off'}`}>
+          {target.enabled ? 'ON' : 'OFF'} · {target.rolloutPercentage}%
+        </b>
+      </div>)}
     </div>
-  </div>
+    {error && <div className="error-box" role="alert">{error}</div>}
+    <div className="feature-form-grid">
+      <label className="span2"><span>적용 사유 <b>필수</b></span><textarea rows={3} maxLength={500}
+          value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} /></label>
+      <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
+          onChange={(event) => setJira(event.target.value)} /></label>
+      <label><span>인시던트</span><input value={incident} maxLength={100} disabled={busy}
+          placeholder="선택" onChange={(event) => setIncident(event.target.value)} /></label>
+      {preset.requiresExpiry && <label className="span2"><span>중지 만료 시각 {expiryRequired && <b>PROD 필수</b>}</span>
+        <input type="datetime-local" value={expiresAt} disabled={busy}
+            onChange={(event) => setExpiresAt(event.target.value)} /></label>}
+      <label className="span2 auto-rollback-policy">
+        <span><input type="checkbox" checked={autoRollback} disabled={busy}
+            onChange={(event) => setAutoRollback(event.target.checked)} /> runtime 불일치 자동 롤백</span>
+        <select aria-label="적용 관찰 구간" value={verificationWindow} disabled={busy || !autoRollback}
+            onChange={(event) => setVerificationWindow(Number(event.target.value))}>
+          <option value={30}>30초 관찰</option><option value={60}>1분 관찰</option>
+          <option value={300}>5분 관찰</option><option value={600}>10분 관찰</option>
+        </select>
+      </label>
+    </div>
+    <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
+      <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
+        {busy ? '생성 중…' : '변경 세트 초안 생성'}
+      </button></div>
+  </Dialog>
 }
 
 export default function FeatureControlPresetPage() {

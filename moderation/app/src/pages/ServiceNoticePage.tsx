@@ -7,6 +7,7 @@ import {
 import type {
   FeatureControlPreset, ServiceNotice, ServiceNoticeCreate, ServiceNoticeKind,
 } from '../api/types'
+import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
@@ -90,44 +91,41 @@ function NoticeCreateDialog({ onClose, onCreated }: {
     finally { setBusy(false); setWriting(false) }
   }
 
-  return <div className="dialog-backdrop" role="presentation">
-    <div className="dialog notice-dialog" role="dialog" aria-modal="true" aria-labelledby="notice-create-title">
-      <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
-      <h2 id="notice-create-title">새 사용자 공지</h2>
-      <p className="sub">공개될 내용과 내부 운영 근거를 분리해 작성합니다.</p>
-      <NoticePreview kind={kind} title={title} message={message} linkUrl={linkUrl.trim()} />
-      {error && <div className="error-box" role="alert">{error}</div>}
-      <div className="feature-form-grid">
-        <label><span>유형</span><select value={kind} disabled={busy}
-            onChange={(event) => setKind(event.target.value as ServiceNoticeKind)}>
-          {Object.entries(KIND_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select></label>
-        <label><span>연결 프리셋</span><select value={presetId} disabled={busy}
-            onChange={(event) => setPresetId(event.target.value as typeof presetId)}>
-          <option value="">선택 안 함</option>{PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
-        </select></label>
-        <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
-            onChange={(event) => setTitle(event.target.value)} /></label>
-        <label className="span2"><span>공개 메시지</span><textarea value={message} rows={3} maxLength={1000}
-            disabled={busy} onChange={(event) => setMessage(event.target.value)} /></label>
-        <label className="span2"><span>내부 메모 <b>외부 비공개·필수</b></span><textarea value={internalNote}
-            rows={2} maxLength={1000} disabled={busy} onChange={(event) => setInternalNote(event.target.value)} /></label>
-        <label><span>변경 세트 ID</span><input inputMode="numeric" value={changeSetId} placeholder="선택"
-            disabled={busy} onChange={(event) => setChangeSetId(event.target.value)} /></label>
-        <label className="span2"><span>링크 URL <b>선택</b></span><input type="url" value={linkUrl}
-            maxLength={500} disabled={busy} placeholder="https://replix.tv/terms"
-            onChange={(event) => setLinkUrl(event.target.value)} /></label>
-        <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
-            onChange={(event) => setJira(event.target.value)} /></label>
-        <label className="span2"><span>인시던트</span><input value={incident} maxLength={100} placeholder="선택"
-            disabled={busy} onChange={(event) => setIncident(event.target.value)} /></label>
-      </div>
-      <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
-        <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
-          {busy ? '생성 중…' : '공지 초안 생성'}
-        </button></div>
+  return <Dialog label="새 사용자 공지" title="새 사용자 공지" className="notice-dialog" busy={busy} onClose={onClose}
+      closeOnBackdrop={false}>
+    <p className="sub">공개될 내용과 내부 운영 근거를 분리해 작성합니다.</p>
+    <NoticePreview kind={kind} title={title} message={message} linkUrl={linkUrl.trim()} />
+    {error && <div className="error-box" role="alert">{error}</div>}
+    <div className="feature-form-grid">
+      <label><span>유형</span><select value={kind} disabled={busy}
+          onChange={(event) => setKind(event.target.value as ServiceNoticeKind)}>
+        {Object.entries(KIND_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select></label>
+      <label><span>연결 프리셋</span><select value={presetId} disabled={busy}
+          onChange={(event) => setPresetId(event.target.value as typeof presetId)}>
+        <option value="">선택 안 함</option>{PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
+      </select></label>
+      <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
+          onChange={(event) => setTitle(event.target.value)} /></label>
+      <label className="span2"><span>공개 메시지</span><textarea value={message} rows={3} maxLength={1000}
+          disabled={busy} onChange={(event) => setMessage(event.target.value)} /></label>
+      <label className="span2"><span>내부 메모 <b>외부 비공개·필수</b></span><textarea value={internalNote}
+          rows={2} maxLength={1000} disabled={busy} onChange={(event) => setInternalNote(event.target.value)} /></label>
+      <label><span>변경 세트 ID</span><input inputMode="numeric" value={changeSetId} placeholder="선택"
+          disabled={busy} onChange={(event) => setChangeSetId(event.target.value)} /></label>
+      <label className="span2"><span>링크 URL <b>선택</b></span><input type="url" value={linkUrl}
+          maxLength={500} disabled={busy} placeholder="https://replix.tv/terms"
+          onChange={(event) => setLinkUrl(event.target.value)} /></label>
+      <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
+          onChange={(event) => setJira(event.target.value)} /></label>
+      <label className="span2"><span>인시던트</span><input value={incident} maxLength={100} placeholder="선택"
+          disabled={busy} onChange={(event) => setIncident(event.target.value)} /></label>
     </div>
-  </div>
+    <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
+      <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
+        {busy ? '생성 중…' : '공지 초안 생성'}
+      </button></div>
+  </Dialog>
 }
 
 function NoticeDetail({ notice, onReload }: {

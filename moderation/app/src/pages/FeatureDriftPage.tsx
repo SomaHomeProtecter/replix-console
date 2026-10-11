@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { createDriftReapplyChangeSet, listFeatureDrift } from '../api/admin'
 import type { FeatureChangeSet, FeatureDriftReapply, FeatureDriftState } from '../api/types'
+import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
@@ -48,10 +49,8 @@ function ReapplyDialog({ drift, onClose, onCreated }: {
     finally { setBusy(false); setWriting(false) }
   }
 
-  return <div className="dialog-backdrop" role="presentation"><div className="dialog drift-dialog"
-      role="dialog" aria-modal="true" aria-labelledby="drift-reapply-title">
-    <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
-    <h2 id="drift-reapply-title">원하는 revision 재적용</h2>
+  return <Dialog label="원하는 revision 재적용" title="원하는 revision 재적용" className="drift-dialog" busy={busy}
+      onClose={onClose} closeOnBackdrop={false}>
     <p className="sub">현재 DB 상태는 유지하고 revision을 새로 발행하는 변경 세트 초안을 만듭니다.</p>
     <div className="drift-reapply-target"><strong>{drift.displayName}</strong><code>{drift.flagKey}</code>
       <span>desired r{drift.desiredRevision} · mismatch {drift.mismatchedInstances}/{drift.activeInstances}</span></div>
@@ -77,7 +76,7 @@ function ReapplyDialog({ drift, onClose, onCreated }: {
     <div className="dialog-actions"><button className="btn" disabled={busy} onClick={onClose}>취소</button>
       <button className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
         {busy ? '생성 중…' : '재적용 초안 생성'}</button></div>
-  </div></div>
+  </Dialog>
 }
 
 export default function FeatureDriftPage() {

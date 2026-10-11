@@ -3,10 +3,12 @@ import { Link, useSearchParams } from 'react-router'
 import { addIncidentEvent, addIncidentNote, declareIncident, getIncident, listIncidents, transitionIncident, updateIncident } from '../api/admin'
 import type { Incident, IncidentDeclare, IncidentResourceType, IncidentStatus, IncidentTransition } from '../api/types'
 import { realmRoles } from '@core/auth'
+import Dialog from '@core/Dialog'
 import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { env } from '@core/env'
 import { formatKstShort, kstInputToIso } from '@core/time'
+import { useWriting } from '@core/writing'
 
 const STATUS: Record<IncidentStatus, string> = { DECLARED: '선언', INVESTIGATING: '조사', MITIGATING: '완화',
   MONITORING: '관찰', RESOLVED: '해결', CANCELLED: '취소' }
@@ -25,17 +27,36 @@ const writable = () => { const r = realmRoles(); return r.includes('admin') || (
   && (env.environment !== 'PROD' || can(r, 'approveProd'))) }
 const canNote = () => can(realmRoles(), 'note')
 
+/**
+ * 인시던트 다이얼로그의 제출(HP-528). 처리 중에는 제출·닫기를 잠근다 — 잠그지 않던 동안 연타하면 두 번째 요청이 버전
+ * 충돌로 실패해, 성공했는데도 오류가 보였다. 쓰는 동안은 서버 전환·이탈도 막는다(다른 기능 제어 창과 같다).
+ * requestId는 창을 열 때 한 번 만든다: 다시 보내도 감사 기록에서 같은 제출의 재시도로 묶인다. 중복 저장을 막는 것은
+ * 서버의 참조 중복·버전 검사다(requestId는 기록용이라 서버가 중복을 거르지 않는다).
+ */
+function useSubmission(setError: (message: string | null) => void) {
+  const [busy, setBusy] = useState(false)
+  const [requestId] = useState(() => crypto.randomUUID())
+  const { setWriting } = useWriting()
+  const run = async (work: () => Promise<void>) => {
+    setBusy(true); setWriting(true); setError(null)
+    try { await work() }
+    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { setBusy(false); setWriting(false) }
+  }
+  return { busy, requestId, run }
+}
+
 function DeclareDialog({ close, created }: { close: () => void; created: (row: Incident) => void }) {
   const [reference, setReference] = useState(''); const [title, setTitle] = useState('')
   const [severity, setSeverity] = useState<IncidentDeclare['severity']>('SEV3'); const [primary, setPrimary] = useState(false)
   const [impact, setImpact] = useState(''); const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
-  const submit = async () => { if (!reference.trim() || !title.trim() || impact.trim().length < 10 || reason.trim().length < 10) {
+  const { busy, requestId, run } = useSubmission(setError)
+  const submit = () => { if (!reference.trim() || !title.trim() || impact.trim().length < 10 || reason.trim().length < 10) {
     setError('참조·제목과 10자 이상의 영향·선언 사유를 입력하세요'); return }
-    try { created(await declareIncident({ reference: reference.trim(), title: title.trim(), severity, primary,
-      impactSummary: impact.trim(), reason: reason.trim(), requestId: crypto.randomUUID() })) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) } }
-  return <div className="dialog-backdrop"><div className="dialog incident-dialog" role="dialog" aria-modal="true" aria-labelledby="declare-title">
-    <button className="modal-close" aria-label="닫기" onClick={close}>✕</button><h2 id="declare-title">인시던트 선언</h2>
+    void run(async () => created(await declareIncident({ reference: reference.trim(), title: title.trim(), severity, primary,
+      impactSummary: impact.trim(), reason: reason.trim(), requestId }))) }
+  return <Dialog label="인시던트 선언" title="인시던트 선언" className="incident-dialog" busy={busy} onClose={close}
+      closeOnBackdrop={false}>
     <p className="sub">대상 환경 {env.environment} · 선언 뒤 삭제할 수 없으며 모든 변경이 타임라인에 남습니다.</p>
     {error && <div className="error-box" role="alert">{error}</div>}<div className="feature-form-grid">
       <label><span>인시던트 참조</span><input value={reference} maxLength={100} onChange={(e) => setReference(e.target.value)} /></label>
@@ -45,8 +66,9 @@ function DeclareDialog({ close, created }: { close: () => void; created: (row: I
       <label className="span2"><span>현재 영향</span><textarea rows={3} value={impact} maxLength={1000} onChange={(e) => setImpact(e.target.value)} /></label>
       <label className="span2"><span>선언 사유</span><textarea rows={2} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} /></label>
       <label className="span2 auto-rollback-policy"><span><input type="checkbox" checked={primary} onChange={(e) => setPrimary(e.target.checked)} /> 현재 환경 primary 인시던트</span></label>
-    </div><div className="dialog-actions"><button className="btn" onClick={close}>취소</button>
-      <button className="btn btn-danger-solid" onClick={() => void submit()}>인시던트 선언</button></div></div></div>
+    </div><div className="dialog-actions"><button className="btn" disabled={busy} onClick={close}>취소</button>
+      <button className="btn btn-danger-solid" disabled={busy} onClick={submit}>{busy ? '선언 중…' : '인시던트 선언'}</button></div>
+  </Dialog>
 }
 
 function TransitionDialog({ incident, close, done }: { incident: Incident; close: () => void; done: (row: Incident) => void }) {
@@ -55,16 +77,16 @@ function TransitionDialog({ incident, close, done }: { incident: Incident; close
   const [metrics, setMetrics] = useState(''); const [criteria, setCriteria] = useState(''); const [monitorEnd, setMonitorEnd] = useState('')
   const [revisions, setRevisions] = useState(''); const [impactEnd, setImpactEnd] = useState(''); const [risk, setRisk] = useState('')
   const [jira, setJira] = useState(''); const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
-  const submit = async () => { if (reason.trim().length < 10) { setError('전이 사유를 10자 이상 입력하세요'); return }
+  const { busy, requestId, run } = useSubmission(setError)
+  const submit = () => { if (reason.trim().length < 10) { setError('전이 사유를 10자 이상 입력하세요'); return }
     const request: IncidentTransition = { expectedVersion: incident.version, targetStatus: target,
       ownerUserId: owner ? Number(owner) : null, nextUpdateAt: kstInputToIso(next), observationMetrics: metrics.trim() || null,
       successCriteria: criteria.trim() || null, monitoringEndsAt: kstInputToIso(monitorEnd), recoveryRevisions: revisions.trim() || null,
       impactEndedAt: kstInputToIso(impactEnd), residualRisk: risk.trim() || null, followUpJira: jira.trim() || null,
-      reason: reason.trim(), requestId: crypto.randomUUID() }
-    try { done(await transitionIncident(incident.id, request)) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) } }
-  return <div className="dialog-backdrop"><div className="dialog incident-dialog" role="dialog" aria-modal="true" aria-labelledby="transition-title">
-    <button className="modal-close" aria-label="닫기" onClick={close}>✕</button><h2 id="transition-title">인시던트 상태 변경</h2>
+      reason: reason.trim(), requestId }
+    void run(async () => done(await transitionIncident(incident.id, request))) }
+  return <Dialog label="인시던트 상태 변경" title="인시던트 상태 변경" className="incident-dialog" busy={busy} onClose={close}
+      closeOnBackdrop={false}>
     <p className="sub">{incident.reference} · {STATUS[incident.status]} → {STATUS[target]} · {incident.environment}</p>
     {error && <div className="error-box" role="alert">{error}</div>}<div className="feature-form-grid">
       <label className="span2"><span>다음 상태</span><select value={target} onChange={(e) => setTarget(e.target.value as IncidentStatus)}>
@@ -80,8 +102,9 @@ function TransitionDialog({ incident, close, done }: { incident: Incident; close
         <label><span>후속 Jira</span><input value={jira} onChange={(e) => setJira(e.target.value)} /></label>
         <label><span>잔여 위험</span><input value={risk} onChange={(e) => setRisk(e.target.value)} /></label></>}
       <label className="span2"><span>전이 사유</span><textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-    </div><div className="dialog-actions"><button className="btn" onClick={close}>취소</button>
-      <button className="btn btn-blind" onClick={() => void submit()}>상태 변경</button></div></div></div>
+    </div><div className="dialog-actions"><button className="btn" disabled={busy} onClick={close}>취소</button>
+      <button className="btn btn-blind" disabled={busy} onClick={submit}>{busy ? '변경 중…' : '상태 변경'}</button></div>
+  </Dialog>
 }
 
 function EditDialog({ incident, close, done }: { incident: Incident; close: () => void; done: (row: Incident) => void }) {
@@ -89,12 +112,13 @@ function EditDialog({ incident, close, done }: { incident: Incident; close: () =
   const [primary, setPrimary] = useState(incident.primary); const [impact, setImpact] = useState(incident.impactSummary)
   const [owner, setOwner] = useState(incident.ownerUserId?.toString() ?? ''); const [next, setNext] = useState('')
   const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
-  const submit = async () => { if (!title.trim() || impact.trim().length < 10 || reason.trim().length < 10) { setError('제목과 10자 이상의 영향·수정 사유를 입력하세요'); return }
-    try { done(await updateIncident(incident.id, { expectedVersion: incident.version, title: title.trim(), severity, primary,
+  const { busy, requestId, run } = useSubmission(setError)
+  const submit = () => { if (!title.trim() || impact.trim().length < 10 || reason.trim().length < 10) { setError('제목과 10자 이상의 영향·수정 사유를 입력하세요'); return }
+    void run(async () => done(await updateIncident(incident.id, { expectedVersion: incident.version, title: title.trim(), severity, primary,
       impactSummary: impact.trim(), ownerUserId: owner ? Number(owner) : null, nextUpdateAt: kstInputToIso(next),
-      reason: reason.trim(), requestId: crypto.randomUUID() })) } catch (f) { setError(f instanceof Error ? f.message : String(f)) } }
-  return <div className="dialog-backdrop"><div className="dialog incident-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-title">
-    <button className="modal-close" aria-label="닫기" onClick={close}>✕</button><h2 id="edit-title">인시던트 정보 수정</h2>
+      reason: reason.trim(), requestId }))) }
+  return <Dialog label="인시던트 정보 수정" title="인시던트 정보 수정" className="incident-dialog" busy={busy} onClose={close}
+      closeOnBackdrop={false}>
     <p className="sub">{incident.reference} · version {incident.version} · SEV·담당·영향 변경은 감사 이벤트로 남습니다.</p>
     {error && <div className="error-box" role="alert">{error}</div>}<div className="feature-form-grid">
       <label><span>SEV</span><select value={severity} onChange={(e) => setSeverity(e.target.value as typeof severity)}><option>SEV1</option><option>SEV2</option><option>SEV3</option><option>SEV4</option></select></label>
@@ -104,22 +128,23 @@ function EditDialog({ incident, close, done }: { incident: Incident; close: () =
       <label><span>다음 업데이트</span><input type="datetime-local" value={next} onChange={(e) => setNext(e.target.value)} /></label>
       <label className="auto-rollback-policy"><span><input type="checkbox" checked={primary} onChange={(e) => setPrimary(e.target.checked)} /> primary</span></label>
       <label className="span2"><span>수정 사유</span><textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-    </div><div className="dialog-actions"><button className="btn" onClick={close}>취소</button><button className="btn btn-blind" onClick={() => void submit()}>정보 수정</button></div>
-  </div></div>
+    </div><div className="dialog-actions"><button className="btn" disabled={busy} onClick={close}>취소</button>
+      <button className="btn btn-blind" disabled={busy} onClick={submit}>{busy ? '수정 중…' : '정보 수정'}</button></div>
+  </Dialog>
 }
 
 function ResourceLinkDialog({ incident, close, done }: { incident: Incident; close: () => void; done: (row: Incident) => void }) {
   const [sourceType, setSourceType] = useState<IncidentResourceType>('CHANGE_SET')
   const [sourceId, setSourceId] = useState(''); const [summary, setSummary] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const submit = async () => {
+  const { busy, requestId, run } = useSubmission(setError)
+  const submit = () => {
     if (!sourceId.trim() || summary.trim().length < 10) { setError('리소스 ID와 10자 이상의 연결 사유를 입력하세요'); return }
-    try { done(await addIncidentEvent(incident.id, { expectedVersion: incident.version, sourceType,
-      sourceId: sourceId.trim(), summary: summary.trim(), structuredPayload: '{}', requestId: crypto.randomUUID() })) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
+    void run(async () => done(await addIncidentEvent(incident.id, { expectedVersion: incident.version, sourceType,
+      sourceId: sourceId.trim(), summary: summary.trim(), structuredPayload: '{}', requestId })))
   }
-  return <div className="dialog-backdrop"><div className="dialog incident-dialog" role="dialog" aria-modal="true" aria-labelledby="resource-title">
-    <button className="modal-close" aria-label="닫기" onClick={close}>✕</button><h2 id="resource-title">완화 리소스 연결</h2>
+  return <Dialog label="완화 리소스 연결" title="완화 리소스 연결" className="incident-dialog" busy={busy} onClose={close}
+      closeOnBackdrop={false}>
     <p className="sub">{incident.reference} · 연결 사실과 근거는 삭제할 수 없는 이벤트로 남습니다.</p>
     {error && <div className="error-box" role="alert">{error}</div>}<div className="feature-form-grid">
       <label><span>리소스 유형</span><select value={sourceType} onChange={(event) => { setSourceType(event.target.value as IncidentResourceType); setSourceId('') }}>
@@ -131,8 +156,9 @@ function ResourceLinkDialog({ incident, close, done }: { incident: Incident; clo
         <option value="VIDEO_OVERLAY_MINIMIZE">비디오 오버레이 최소화</option><option value="DISNEY_PLUS_ISOLATION">Disney+ 격리</option>
       </select></label> : <label><span>리소스 ID</span><input value={sourceId} placeholder={sourceType === 'CHANGE_SET' || sourceType === 'NOTICE' ? '숫자 ID' : 'URL 또는 식별자'} onChange={(event) => setSourceId(event.target.value)} /></label>}
       <label className="span2"><span>연결 사유</span><textarea rows={3} value={summary} maxLength={500} onChange={(event) => setSummary(event.target.value)} /></label>
-    </div><div className="dialog-actions"><button className="btn" onClick={close}>취소</button>
-      <button className="btn btn-blind" onClick={() => void submit()}>리소스 연결</button></div></div></div>
+    </div><div className="dialog-actions"><button className="btn" disabled={busy} onClick={close}>취소</button>
+      <button className="btn btn-blind" disabled={busy} onClick={submit}>{busy ? '연결 중…' : '리소스 연결'}</button></div>
+  </Dialog>
 }
 
 function Detail({ incident, reload }: { incident: Incident; reload: (id: number) => Promise<void> }) {

@@ -4,6 +4,7 @@ import {
   requestCleanbotPolicyReview, retireCleanbotPolicy, simulateCleanbotPolicy, updateCleanbotPolicy,
 } from '../api/admin'
 import type { CleanbotPolicy, CleanbotSimulation } from '../api/types'
+import Dialog from '@core/Dialog'
 import { env } from '@core/env'
 import { formatKstShort } from '@core/time'
 
@@ -82,19 +83,19 @@ export default function CleanbotPolicyPage() {
         {simulation && <div className="incident-guide"><strong>무변경 시뮬레이션 · 표본 {simulation.sampleCount}</strong>
           <p>신규 차단 {simulation.newlyBlocked} · 신규 허용 {simulation.newlyAllowed} · 유지 {simulation.unchanged} · 실패 {simulation.failures}</p><p>{simulation.limitation}</p></div>}
       </>}</aside></div>
-    {formOpen && <div className="dialog-backdrop"><div className="dialog feature-dialog" role="dialog" aria-modal="true" aria-labelledby="cleanbot-form-title">
-      <h2 id="cleanbot-form-title">{editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'}</h2>
+    {formOpen && <Dialog label={editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'} title={editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'}
+        className="feature-dialog" busy={busy} onClose={() => setFormOpen(false)} closeOnBackdrop={false}>
       <div className="feature-form-grid"><label className="span2"><span>이름</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="span2"><span>차단어 (쉼표 구분)</span><textarea value={blocked} onChange={(e) => setBlocked(e.target.value)} /></label>
         <label className="span2"><span>허용어 (쉼표 구분)</span><textarea value={allowed} onChange={(e) => setAllowed(e.target.value)} /></label>
         <label><span>임계값 0~1</span><input type="number" min="0" max="1" step="0.05" value={threshold} onChange={(e) => setThreshold(e.target.value)} /></label>
         <label className="span2"><span>카테고리 매핑 (한 줄에 원본=표준)</span><textarea value={mapping} placeholder="지역=regional_hate" onChange={(e) => setMapping(e.target.value)} /></label></div>
-      <div className="dialog-actions"><button className="btn" type="button" onClick={() => setFormOpen(false)}>취소</button><button className="btn" type="button" disabled={busy || !name.trim() || Number(threshold) < 0 || Number(threshold) > 1} onClick={async () => {
+      <div className="dialog-actions"><button className="btn" type="button" disabled={busy} onClick={() => setFormOpen(false)}>취소</button><button className="btn" type="button" disabled={busy || !name.trim() || Number(threshold) < 0 || Number(threshold) > 1} onClick={async () => {
         setBusy(true); setError(null); try {
           const payload = { name, blockedTerms: blocked.split(',').map((v) => v.trim()).filter(Boolean), allowedTerms: allowed.split(',').map((v) => v.trim()).filter(Boolean), threshold: Number(threshold), categoryMapping: categoryMapping(), basePolicyId: editing?.basePolicyId ?? selected?.id ?? null }
           const p = editing ? await updateCleanbotPolicy(editing.id, editing.revision, payload) : await createCleanbotPolicy(payload)
           setFormOpen(false); setSelected(p); await load(p.id)
         } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
-      }}>{editing ? '초안 저장' : '초안 생성'}</button></div></div></div>}
+      }}>{editing ? '초안 저장' : '초안 생성'}</button></div></Dialog>}
   </section>
 }

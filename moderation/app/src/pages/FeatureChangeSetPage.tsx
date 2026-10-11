@@ -10,6 +10,7 @@ import type {
   FeatureChangeSet, FeatureChangeSetCreate, FeatureChangeSetItemInput,
   FeatureDryRunRow, FeatureFlagRow,
 } from '../api/types'
+import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
@@ -84,67 +85,64 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <div className="dialog change-set-create" role="dialog" aria-modal="true" aria-labelledby="change-set-create-title">
-        <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
-        <h2 id="change-set-create-title">새 변경 세트</h2>
-        <p className="sub">여러 기능을 하나의 승인·적용·롤백 단위로 묶습니다.</p>
-        {error && <div className="error-box" role="alert">{error}</div>}
-        <div className="feature-form-grid">
-          <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
-              onChange={(event) => setTitle(event.target.value)} /></label>
-          <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
-              onChange={(event) => setJira(event.target.value)} /></label>
-          <label><span>인시던트</span><input value={incident} maxLength={100} disabled={busy}
-              placeholder="선택" onChange={(event) => setIncident(event.target.value)} /></label>
-          <label className="span2"><span>변경 목적 <b>필수</b></span><textarea value={purpose} rows={2}
-              maxLength={500} disabled={busy} onChange={(event) => setPurpose(event.target.value)} /></label>
-          <label className="span2 auto-rollback-policy">
-            <span><input type="checkbox" checked={autoRollback} disabled={busy}
-                onChange={(event) => setAutoRollback(event.target.checked)} /> runtime 불일치 자동 롤백</span>
-            <select aria-label="적용 관찰 구간" value={verificationWindow} disabled={busy || !autoRollback}
-                onChange={(event) => setVerificationWindow(Number(event.target.value))}>
-              <option value={30}>30초 관찰</option><option value={60}>1분 관찰</option>
-              <option value={300}>5분 관찰</option><option value={600}>10분 관찰</option>
-            </select>
-          </label>
-        </div>
-        <div className="change-picks" aria-label="변경 기능 선택">
-          {flags.map((flag) => {
-            const item = items[flag.key]
-            return <div className={`change-pick ${item ? 'selected' : ''}`} key={flag.key}>
-              <label className="change-pick-main">
-                <input type="checkbox" checked={Boolean(item)} disabled={busy || !flag.connected}
-                    onChange={() => toggle(flag)} />
-                <span><strong>{flag.displayName}</strong><code>{flag.key}</code></span>
-                <small>{flag.risk}{flag.globalOnly ? ' · 전역' : ''}</small>
-              </label>
-              {item && <div className="change-target">
-                <button type="button" className="chip-f" aria-pressed={item.enabled}
-                    onClick={() => patchItem(flag.key, { enabled: true })}>ON</button>
-                <button type="button" className="chip-f" aria-pressed={!item.enabled}
-                    onClick={() => patchItem(flag.key, { enabled: false })}>OFF</button>
-                {flag.globalOnly
-                  ? <span className="preset-label">전역 적용 · Rollout 100%</span>
-                  : <><span className="preset-label">Rollout</span>
-                    {ROLLOUT_PRESETS.map((preset) => <button key={preset} type="button" className="chip-f"
-                        aria-pressed={item.rolloutPercentage === preset}
-                        onClick={() => patchItem(flag.key, { rolloutPercentage: preset })}>{preset}%</button>)}</>}
-                <input aria-label={`${flag.displayName} 만료 시각`} type="datetime-local"
-                    value={isoToKstInput(item.expiresAt)}
-                    onChange={(event) => patchItem(flag.key, { expiresAt: kstInputToIso(event.target.value) })} />
-              </div>}
-            </div>
-          })}
-        </div>
-        <div className="dialog-actions">
-          <button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
-          <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
-            {busy ? '생성 중…' : `초안 생성 (${Object.keys(items).length})`}
-          </button>
-        </div>
+    <Dialog label="새 변경 세트" title="새 변경 세트" className="change-set-create" busy={busy} onClose={onClose}
+        closeOnBackdrop={false}>
+      <p className="sub">여러 기능을 하나의 승인·적용·롤백 단위로 묶습니다.</p>
+      {error && <div className="error-box" role="alert">{error}</div>}
+      <div className="feature-form-grid">
+        <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
+            onChange={(event) => setTitle(event.target.value)} /></label>
+        <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
+            onChange={(event) => setJira(event.target.value)} /></label>
+        <label><span>인시던트</span><input value={incident} maxLength={100} disabled={busy}
+            placeholder="선택" onChange={(event) => setIncident(event.target.value)} /></label>
+        <label className="span2"><span>변경 목적 <b>필수</b></span><textarea value={purpose} rows={2}
+            maxLength={500} disabled={busy} onChange={(event) => setPurpose(event.target.value)} /></label>
+        <label className="span2 auto-rollback-policy">
+          <span><input type="checkbox" checked={autoRollback} disabled={busy}
+              onChange={(event) => setAutoRollback(event.target.checked)} /> runtime 불일치 자동 롤백</span>
+          <select aria-label="적용 관찰 구간" value={verificationWindow} disabled={busy || !autoRollback}
+              onChange={(event) => setVerificationWindow(Number(event.target.value))}>
+            <option value={30}>30초 관찰</option><option value={60}>1분 관찰</option>
+            <option value={300}>5분 관찰</option><option value={600}>10분 관찰</option>
+          </select>
+        </label>
       </div>
-    </div>
+      <div className="change-picks" aria-label="변경 기능 선택">
+        {flags.map((flag) => {
+          const item = items[flag.key]
+          return <div className={`change-pick ${item ? 'selected' : ''}`} key={flag.key}>
+            <label className="change-pick-main">
+              <input type="checkbox" checked={Boolean(item)} disabled={busy || !flag.connected}
+                  onChange={() => toggle(flag)} />
+              <span><strong>{flag.displayName}</strong><code>{flag.key}</code></span>
+              <small>{flag.risk}{flag.globalOnly ? ' · 전역' : ''}</small>
+            </label>
+            {item && <div className="change-target">
+              <button type="button" className="chip-f" aria-pressed={item.enabled}
+                  onClick={() => patchItem(flag.key, { enabled: true })}>ON</button>
+              <button type="button" className="chip-f" aria-pressed={!item.enabled}
+                  onClick={() => patchItem(flag.key, { enabled: false })}>OFF</button>
+              {flag.globalOnly
+                ? <span className="preset-label">전역 적용 · Rollout 100%</span>
+                : <><span className="preset-label">Rollout</span>
+                  {ROLLOUT_PRESETS.map((preset) => <button key={preset} type="button" className="chip-f"
+                      aria-pressed={item.rolloutPercentage === preset}
+                      onClick={() => patchItem(flag.key, { rolloutPercentage: preset })}>{preset}%</button>)}</>}
+              <input aria-label={`${flag.displayName} 만료 시각`} type="datetime-local"
+                  value={isoToKstInput(item.expiresAt)}
+                  onChange={(event) => patchItem(flag.key, { expiresAt: kstInputToIso(event.target.value) })} />
+            </div>}
+          </div>
+        })}
+      </div>
+      <div className="dialog-actions">
+        <button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
+        <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
+          {busy ? '생성 중…' : `초안 생성 (${Object.keys(items).length})`}
+        </button>
+      </div>
+    </Dialog>
   )
 }
 
