@@ -774,6 +774,13 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .incident-summary dt { color: var(--muted); font-size: 10px; font-weight: 800; }
 .incident-summary dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--body); font-size: 11.5px; }
 .incident-summary .feature-state { min-width: 0; padding-block: 1px; }
+/* 운영 협업의 메모·감사 기록 — 시각 · 유형 한 줄, 그 아래 내용. 종전에는 인시던트 타임라인의 칸 구조(시각 | 점 | 카드)를
+   빌려 써서 유형 글자가 18px 점 칸을 넘쳐 내용과 겹쳤다(HP-520). */
+.case-log { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line-2); }
+.case-log li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 2px 10px; padding: 7px 0; border-bottom: 1px solid var(--line-2); }
+.case-log li > span { color: var(--muted); font: 11px var(--mono); font-variant-numeric: tabular-nums; }
+.case-log li > strong { color: var(--ink); font: 10.5px var(--mono); overflow-wrap: anywhere; }
+.case-log li > p { grid-column: 2; margin: 0; color: var(--body); font-size: 12px; line-height: 1.45; white-space: pre-wrap; }
 .incident-timeline { list-style: none; margin: 0; padding: 0; }
 .incident-timeline li { position: relative; display: grid; grid-template-columns: 112px 18px minmax(0, 1fr); gap: 8px; }
 .incident-timeline li:not(:last-child)::after { content: ''; position: absolute; left: 128px; top: 19px; bottom: -1px; width: 1px; background: var(--line-strong); }

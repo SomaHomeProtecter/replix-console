@@ -101,11 +101,11 @@ export default function OperationCasesPage() {
         <button className="btn" type="button" disabled={busy || !note.trim()} onClick={() => void run(async () => {
           const next = await addOperationCaseNote(selected.item.reportId, selected.item.version, noteType, note); setNote(''); return next
         })}>기록 추가</button>
-        <h3>협업 메모</h3><ol className="incident-timeline">{selected.notes.map((entry) => <li key={entry.id}>
+        <h3>협업 메모</h3><ol className="case-log">{selected.notes.map((entry) => <li key={entry.id}>
           <span>{formatKstShort(entry.createdAt)}</span><strong>{entry.type}</strong>
           <p>{entry.body} · {entry.author.displayName ?? `#${entry.author.id}`}</p></li>)}</ol>
         {selected.notes.length === 0 && <div className="empty-hint">아직 등록된 메모가 없습니다</div>}
-        <h3>감사 타임라인</h3><ol className="incident-timeline">{selected.events.map((event) => <li key={event.id}>
+        <h3>감사 타임라인</h3><ol className="case-log">{selected.events.map((event) => <li key={event.id}>
           <span>{formatKstShort(event.createdAt)}</span><strong>{event.type}</strong><p>{event.detail} · {event.actor.displayName ?? `#${event.actor.id}`}</p></li>)}</ol>
         {selected.events.length === 0 && <div className="empty-hint">아직 기록된 변경이 없습니다</div>}
       </>}
