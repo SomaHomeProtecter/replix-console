@@ -22,6 +22,11 @@ type Route = { method: string; host: 'workspace' | 'other'; path: RegExp; handle
 
 const OTHER_API = 'https://api.replix.tv' // 작업 서버(개발)가 아닌 쪽 — env.ts의 OTHER
 
+/* 회차 화면은 작품 → 회차 → 계획 순으로 읽기가 이어진다. 기본 대기(1초)는 바쁜 머신에서 모자라 결과가 흔들리므로
+   넉넉히 기다린다 — 기다림이 길어질 뿐 판정은 같다. */
+const WAIT = { timeout: 10_000 }
+const TEST_TIMEOUT = 40_000
+
 /** 경로별 처리기를 받는 가짜 서버. 처리기가 Response를 돌려주면 그대로, 아니면 JSON 200으로 감싼다. */
 function serve(routes: Route[]) {
   return vi.fn(async (url: string, init?: RequestInit) => {
@@ -104,19 +109,19 @@ describe('회차 정보 — 그래프에서 적용한 방영 시각을 고치기
     const user = userEvent.setup()
     render(<SeedingWorkspace view="work" />)
 
-    await user.click(await screen.findByRole('button', { name: '회차 정보에 적용' }))
-    await waitFor(() => expect(patches).toHaveLength(1))
+    await user.click(await screen.findByRole('button', { name: '회차 정보에 적용' }, WAIT))
+    await waitFor(() => expect(patches).toHaveLength(1), WAIT)
     expect(patches[0].airEndAt).toBe('2026-10-08T15:05:00Z')
 
     await user.click(screen.getByRole('button', { name: '고치기' }))
     // 편집 칸은 '고치기'를 누른 순간의 값이다 — 종전에는 회차를 처음 열 때의 빈 값이 남아 있었다
-    expect(await screen.findByDisplayValue('2026-10-09T00:05')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('2026-10-09T00:05', {}, WAIT)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '저장' }))
 
-    await waitFor(() => expect(patches).toHaveLength(2))
+    await waitFor(() => expect(patches).toHaveLength(2), WAIT)
     expect(patches[1].airEndAt).toBe('2026-10-08T15:05:00Z')
     expect(patches[1].airStartAt).toBe('2026-10-08T13:30:00Z')
-  })
+  }, TEST_TIMEOUT)
 })
 
 describe('운영에 넣기(작업 서버) — 응답보다 먼저 끝나도 잠금이 풀린다(HP-519)', () => {
@@ -136,10 +141,10 @@ describe('운영에 넣기(작업 서버) — 응답보다 먼저 끝나도 잠�
     const user = userEvent.setup()
     render(<SeedingWorkspace view="work" />)
 
-    await user.click(await screen.findByRole('button', { name: '개발에 1건 넣기' }))
+    await user.click(await screen.findByRole('button', { name: '개발에 1건 넣기' }, WAIT))
     // 종전에는 busy가 영영 참으로 남아 이 버튼이 꺼진 채였다
-    expect(await screen.findByRole('button', { name: '개발에 넣은 것 모두 지우기' })).toBeEnabled()
-  })
+    expect(await screen.findByRole('button', { name: '개발에 넣은 것 모두 지우기' }, WAIT)).toBeEnabled()
+  }, TEST_TIMEOUT)
 })
 
 describe('다른 환경에 넣기 — 기록을 잃어도 같은 채팅을 다시 넣지 않는다(HP-518)', () => {
@@ -167,18 +172,18 @@ describe('다른 환경에 넣기 — 기록을 잃어도 같은 채팅을 다�
     const user = userEvent.setup()
     render(<SeedingWorkspace view="work" />)
 
-    await user.click(await screen.findByRole('button', { name: '운영에 2건 넣기' }))
+    await user.click(await screen.findByRole('button', { name: '운영에 2건 넣기' }, WAIT))
     // 기록을 세 번 시도한 뒤(1초·2초 간격) 멈추고 알린다
-    expect(await screen.findByText(/운영 서버에 기록하지 못했습니다/, {}, { timeout: 6000 })).toBeInTheDocument()
+    expect(await screen.findByText(/운영 서버에 기록하지 못했습니다/, {}, WAIT)).toBeInTheDocument()
     expect(posts).toHaveLength(1)
 
     recordFails = false
     await user.click(screen.getByRole('button', { name: '운영에 2건 넣기' }))
     // 남겨 둔 결과를 기록했고, 다시 넣지 않았다 — 두 행 모두 이미 들어갔기 때문이다
-    await waitFor(() => expect(records).toHaveLength(1))
+    await waitFor(() => expect(records).toHaveLength(1), WAIT)
     expect(records[0].batchKey).toBe(posts[0].batchKey)
     expect(posts).toHaveLength(1)
-  }, 15_000)
+  }, TEST_TIMEOUT)
 
   it('보낸 뒤 응답을 못 받은 묶음도 모두 지우기가 지운다', async () => {
     const deleted: string[] = []
@@ -194,12 +199,12 @@ describe('다른 환경에 넣기 — 기록을 잃어도 같은 채팅을 다�
     const user = userEvent.setup()
     render(<SeedingWorkspace view="work" />)
 
-    await user.click(await screen.findByRole('button', { name: '운영에 1건 넣기' }))
+    await user.click(await screen.findByRole('button', { name: '운영에 1건 넣기' }, WAIT))
     // 기록된 묶음이 없어도 시도한 묶음이 있으니 지우기가 보인다 — 종전에는 숨어 있어 지울 길이 없었다
-    await user.click(await screen.findByRole('button', { name: '운영에 넣은 것 모두 지우기' }))
+    await user.click(await screen.findByRole('button', { name: '운영에 넣은 것 모두 지우기' }, WAIT))
 
-    await waitFor(() => expect(deleted).toHaveLength(1))
+    await waitFor(() => expect(deleted).toHaveLength(1), WAIT)
     expect(deleted[0]).toMatch(/^plan:dev:7:/)
-    await waitFor(() => expect(screen.queryByRole('button', { name: '운영에 넣은 것 모두 지우기' })).not.toBeInTheDocument())
-  })
+    await waitFor(() => expect(screen.queryByRole('button', { name: '운영에 넣은 것 모두 지우기' })).not.toBeInTheDocument(), WAIT)
+  }, TEST_TIMEOUT)
 })
