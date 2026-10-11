@@ -13,15 +13,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "types": ["vite/client"],
-    /* 시딩·조치 소스는 각자 node_modules가 있어, 그대로 두면 그 파일들이 자기 폴더의 React 타입을 읽는다.
-       한 프로그램에 React 타입이 두 벌 섞이지 않게 이 틀의 것으로 모은다 — vite.config.ts의 resolve.dedupe와 짝. */
+    /* 시딩·조치 소스를 별칭으로 불러온다(vite.config.ts의 resolve.alias와 짝). 의존성은 루트에 한 벌이다(HP-524). */
     "paths": {
-      "react": ["./node_modules/@types/react/index.d.ts"],
-      "react/*": ["./node_modules/@types/react/*"],
-      "react-dom": ["./node_modules/@types/react-dom/index.d.ts"],
-      "react-dom/*": ["./node_modules/@types/react-dom/*"],
-      "react-router": ["./node_modules/react-router"],
-      "keycloak-js": ["./node_modules/keycloak-js"],
       "@seeding/*": ["../../seeding/app/src/*"],
       "@moderation/*": ["../../moderation/app/src/*"]
     }

@@ -9,6 +9,7 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 // 운영 콘솔 공용 틀(HP-506). 이 틀이 로그인·환경·화면 틀·홈을 맡고, 시딩(seeding/app/src)과 조치(moderation/app/src)
 // 소스를 그대로 불러 자기완결 HTML 한 장으로 빌드한다. GitHub Pages는 빌드 단계가 없어 docs/에 커밋한 산출물이
 // 곧 배포물이다(main 머지 = 배포).
+const ROOT = fileURLToPath(new URL('.', import.meta.url))
 const REPO = fileURLToPath(new URL('../..', import.meta.url))
 const DOCS = fileURLToPath(new URL('../../docs', import.meta.url))
 const MODERATION = fileURLToPath(new URL('../../moderation/app', import.meta.url))
@@ -31,6 +32,8 @@ function copyToToolPaths(): Plugin {
 }
 
 export default defineConfig(({ command }) => ({
+  // 의존성은 저장소 루트에 한 벌이고(HP-524) 명령도 루트에서 돈다(npm run dev·build) — 이 폴더를 앱 뿌리로 못박는다.
+  root: ROOT,
   base: '/',
   // ⚠️ 싱글파일 플러그인은 base를 './'로 바꾼다 — 경로마다 같은 파일을 두므로 '/'로 되돌린다.
   plugins: [
@@ -38,11 +41,9 @@ export default defineConfig(({ command }) => ({
     tailwindcss(),
     ...(command === 'build' ? [viteSingleFile({ overrideConfig: { base: '/' } }), copyToToolPaths()] : []),
   ],
-  // 시딩·조치 소스는 각자 node_modules를 갖고 있다. 그 파일들이 자기 폴더의 React를 따로 불러오면 훅이 깨지므로
-  // 이 틀의 것 하나로 모은다(tsconfig.json paths와 짝).
+  // 담당 폴더(HP-456 D3)는 그대로 두고 소스만 불러온다 — 시딩 = 조현빈, 조치 = 김지호. 의존성은 저장소 루트에 한 벌이라
+  // (HP-524) 예전처럼 폴더마다 React가 따로 깔려 훅이 깨질 일이 없다 — 그래서 dedupe도 두지 않는다.
   resolve: {
-    dedupe: ['react', 'react-dom', 'react-router', 'keycloak-js'],
-    // 담당 폴더(HP-456 D3)는 그대로 두고 소스만 불러온다 — 시딩 = 조현빈, 조치 = 김지호.
     alias: { '@seeding': `${REPO}seeding/app/src`, '@moderation': `${REPO}moderation/app/src` },
   },
   // 연결 환경 값(API·Keycloak 주소)은 조치 콘솔의 호스팅 프로필이 정본이다. 개발 서버는 이 폴더의 .env.local.
@@ -53,7 +54,9 @@ export default defineConfig(({ command }) => ({
   // docs/에는 CNAME·404.html·도구별 보조 파일이 함께 있다 — 비우지 않는다.
   build: { outDir: DOCS, emptyOutDir: false },
   test: {
+    name: 'shell', // 루트 vitest.config.ts의 프로젝트 이름(npx vitest --project shell)
     environment: 'jsdom',
+    testTimeout: 20_000, // 화면 테스트는 사용자 입력을 흉내 내 느리다 — 바쁜 머신에서 5초 기본값은 흔들린다
     css: false,
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],

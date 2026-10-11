@@ -3,18 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /*
- * 시딩 작업 화면의 회귀 테스트(HP-517·518·519). 시딩 폴더에는 아직 테스트 실행기가 없어, 배포 빌드와 같은 도구인
- * 공용 틀의 vitest에서 돌린다. API 모듈은 가짜로 바꾸지 않고 fetch만 가짜 서버로 둔다 — 결함이 난 실제 경로를 거친다.
- * jsdom의 주소는 localhost라 작업 서버(WORKSPACE)는 개발, 다른 환경(OTHER)은 운영이다(env.ts).
+ * 시딩 작업 화면의 회귀 테스트(HP-517·518·519). API 모듈은 가짜로 바꾸지 않고 fetch만 가짜 서버로 둔다 — 결함이 난
+ * 실제 경로를 거친다. jsdom의 주소는 localhost라 작업 서버(WORKSPACE)는 개발, 다른 환경(OTHER)은 운영이다(env.ts).
  */
-vi.mock('@seeding/secondaryAuth', () => ({
+vi.mock('./secondaryAuth', () => ({
   secondaryToken: vi.fn(async () => 'other-token'),
   secondarySignedIn: () => false,
   secondaryLogout: vi.fn(),
 }))
 
-import { SeedingWorkspace } from '@seeding/App'
-import { bindHost } from '@seeding/host'
+import { SeedingWorkspace } from './App'
+import { bindHost } from './host'
 
 type Json = Record<string, unknown>
 type Handler = (match: RegExpMatchArray, body: Json | undefined) => unknown

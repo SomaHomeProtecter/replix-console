@@ -7,7 +7,9 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   test: {
+    name: 'moderation', // 루트 vitest.config.ts의 프로젝트 이름(npx vitest --project moderation)
     environment: 'jsdom',
+    testTimeout: 20_000, // 화면 테스트는 사용자 입력을 흉내 내 느리다 — 바쁜 머신에서 5초 기본값은 흔들린다
     setupFiles: ['./src/test/setup.ts'],
     css: false,
     // env.ts가 부트스트랩에서 누락을 throw 하므로(모듈 평가 시점) 테스트 전역에 채워 둔다.
