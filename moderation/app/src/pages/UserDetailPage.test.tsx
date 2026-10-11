@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import { makeActionRow, makeReceivedReport, makeUserDetail } from '../test/fixtures'
@@ -291,5 +291,48 @@ describe('신고자 신뢰도(HP-270) — 정지 판단의 근거', () => {
     getUserDetail.mockResolvedValue(makeUserDetail())
     renderPage()
     expect(await screen.findByText('보낸 신고 없음')).toBeInTheDocument()
+  })
+})
+
+/**
+ * 다른 사용자로 옮겨도 이전 사용자의 기록이 남지 않는다(HP-515). 라우트가 같은 부품을 다시 써서
+ * A의 통합 타임라인이 B 화면에 그대로 보였다 — "이미 읽었으면 다시 읽지 않는다"가 원인이었다.
+ */
+describe('다른 사용자로 옮기면 그 사용자의 기록만 보인다', () => {
+  const getUserTimeline = vi.mocked(admin.getUserTimeline)
+  const timelineOf = (userId: number, summary: string) => ({
+    userId, events: [{ id: `e-${userId}`, occurredAt: '2026-10-01T00:00:00Z', type: 'REPORT',
+      summary, sourcePath: '/', sensitiveMasked: false }],
+    signals: [], automaticEnforcement: false as const, limitation: '참고용',
+  })
+
+  function Jump() {
+    const navigate = useNavigate()
+    return <button type="button" onClick={() => navigate('/users/10')}>B로 이동</button>
+  }
+
+  it('A의 통합 타임라인을 연 채 B로 옮기면 B의 타임라인을 새로 읽는다', async () => {
+    getUserDetail.mockImplementation(async (id: number) => makeUserDetail({
+      profile: { ...makeUserDetail().profile, id, displayName: id === 9 ? '사용자A' : '사용자B' } }))
+    getUserTimeline.mockImplementation(async (id: number) =>
+      timelineOf(id, id === 9 ? 'A가 받은 신고' : 'B가 받은 신고'))
+    render(
+        <MemoryRouter initialEntries={['/users/9']}>
+          <Jump />
+          <Routes>
+            <Route path="/users/:userId" element={<UserDetailPage />} />
+          </Routes>
+        </MemoryRouter>)
+
+    await screen.findByRole('heading', { name: /사용자A/ })
+    await userEvent.click(screen.getByRole('tab', { name: /통합 타임라인/ }))
+    expect(await screen.findByText('A가 받은 신고')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'B로 이동' }))
+    await screen.findByRole('heading', { name: /사용자B/ })
+    expect(screen.queryByText('A가 받은 신고')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: /통합 타임라인/ }))
+    expect(await screen.findByText('B가 받은 신고')).toBeInTheDocument()
+    expect(getUserTimeline).toHaveBeenLastCalledWith(10)
   })
 })
