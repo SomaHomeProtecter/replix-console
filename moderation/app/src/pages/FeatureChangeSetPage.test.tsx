@@ -4,11 +4,11 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import type { FeatureChangeSet, FeatureFlagRow } from '../api/types'
-import { WritingProvider } from '../writing'
+import { WritingProvider } from '@core/writing'
 import FeatureChangeSetPage from './FeatureChangeSetPage'
 
 vi.mock('../api/admin')
-vi.mock('../auth', () => ({ realmRoles: () => ['admin'] }))
+vi.mock('@core/auth', () => ({ realmRoles: () => ['admin'] }))
 
 const flag: FeatureFlagRow = {
   key: 'chat.message.send.enabled', displayName: '채팅 전송', description: '채팅 제어',

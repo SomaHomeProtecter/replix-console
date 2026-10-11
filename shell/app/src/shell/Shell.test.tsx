@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { env, loadProfile } from '@moderation/env'
+import { env, loadProfile } from '@core/env'
 import Shell from './Shell'
 
-vi.mock('@moderation/auth', () => ({
+vi.mock('@core/auth', () => ({
   userName: () => 'hyunbin',
   roleLabel: () => 'admin',
   logout: vi.fn(),

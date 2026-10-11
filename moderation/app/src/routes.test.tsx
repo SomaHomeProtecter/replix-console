@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from './api/admin'
 import { ModerationRoutes } from './routes'
-import { WritingProvider } from './writing'
+import { WritingProvider } from '@core/writing'
 
 // 톱바·메뉴는 공용 틀(shell/app)이 그리고 그 동작은 공용 틀 테스트가 지킨다. 여기서는 경로마다 맞는 화면이
 // 걸려 있는지만 본다(종전 App.test의 경로 검증을 옮겼다 — HP-521).
@@ -13,8 +13,8 @@ const envMock = vi.hoisted(() => ({
   expectedAudience: 'account', expectedAzp: 'replix-web',
   grafanaUrl: null as string | null,
 }))
-vi.mock('./env', () => ({ env: envMock }))
-vi.mock('./auth', () => ({
+vi.mock('@core/env', () => ({ env: envMock }))
+vi.mock('@core/auth', () => ({
   userName: () => '지호', roleLabel: () => 'admin', logout: vi.fn(),
   switchEnvironment: vi.fn(), getToken: vi.fn(), realmRoles: () => ['admin'],
 }))

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../auth', () => ({ getToken: vi.fn(async () => 'test-token') }))
-vi.mock('../env', () => ({
+vi.mock('@core/auth', () => ({ getToken: vi.fn(async () => 'test-token') }))
+vi.mock('@core/env', () => ({
   env: { apiBaseUrl: 'http://api.test', kcUrl: '', kcRealm: '', kcClientId: '' },
 }))
 

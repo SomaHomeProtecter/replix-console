@@ -4,8 +4,8 @@ import {
   requestCleanbotPolicyReview, retireCleanbotPolicy, simulateCleanbotPolicy, updateCleanbotPolicy,
 } from '../api/admin'
 import type { CleanbotPolicy, CleanbotSimulation } from '../api/types'
-import { env } from '../env'
-import { formatKstShort } from '../format'
+import { env } from '@core/env'
+import { formatKstShort } from '@core/time'
 
 export default function CleanbotPolicyPage() {
   const [policies, setPolicies] = useState<CleanbotPolicy[]>([])

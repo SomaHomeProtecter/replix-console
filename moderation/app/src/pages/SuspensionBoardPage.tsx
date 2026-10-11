@@ -3,11 +3,10 @@ import { Link } from 'react-router'
 import { listSuspendedUsers, unsuspendUser } from '../api/admin'
 import type { SuspendedUserRow, SuspendedUsers } from '../api/types'
 import Avatar from '../components/Avatar'
-import {
-  SUSPENSION_STATE_LABELS, formatKstShort, suspensionState, type SuspensionState,
-} from '../format'
+import { SUSPENSION_STATE_LABELS, suspensionState, type SuspensionState } from '../format'
+import { formatKstShort } from '@core/time'
 import { useMinuteTick } from '../useMinuteTick'
-import { useWriting } from '../writing'
+import { useWriting } from '@core/writing'
 
 /** 화면에 세는 갈래(정지가 아닌 것은 애초에 오지 않는다). 선언 순서 = 칩 순서 = 세는 순서. */
 type Counted = Exclude<SuspensionState, 'none'>

@@ -5,11 +5,12 @@
 | 경로 | 화면 | 소스 | 담당 |
 | --- | --- | --- | --- |
 | `/` | 콘솔 홈 · 공용 틀(톱바·왼쪽 메뉴·로그인) | `shell/app` | 공용 |
+| (모든 경로) | 공용 기반 — 로그인·연결 환경·PROD 확인·API 호출·시각 표기·디자인 토큰 | `core` | 공용 |
 | `/seeding/` | 시딩(HP-434~436) | `seeding/app/src` | 조현빈 |
 | `/moderation/<env>/` | 조치(HP-223·HP-293·HP-336, 이관 HP-456) | `moderation/app/src` | 김지호 |
 | 없는 주소 | 404 안내 + 조치 깊은 주소 복원 | `docs/404.html` | 공용 |
 
-세 경로의 `index.html`은 같은 한 장이다(빌드가 도구 경로에 복사한다). 도구 폴더는 담당자가 맡고(HP-456 D3), 공용 파일(`shell/app`, `docs/404.html`)은 서로 확인한 뒤 머지한다.
+세 경로의 `index.html`은 같은 한 장이다(빌드가 도구 경로에 복사한다). 도구 폴더는 담당자가 맡고(HP-456 D3), 공용 파일(`core`, `shell/app`, `docs/404.html`, 루트 `package.json`)은 서로 확인한 뒤 머지한다.
 
 ## 로그인과 연결 서버 (HP-506)
 
@@ -23,17 +24,18 @@
 ## 개발
 
 ```bash
-cd shell/app && npm install
-cp .env.example .env.local   # 개발 서버용 LOCAL/DEV/PROD 값
-npm run dev                  # http://localhost:5173/ — 홈·시딩은 DEV, 조치는 /moderation/<env>/
-npm test                     # 공용 틀 vitest
-npm run build                # tsc + docs/index.html 과 도구 경로 복사본 갱신 — 빌드 결과를 함께 커밋한다
+npm install                                     # 저장소 루트에서 한 번 — 의존성은 한 벌이다(HP-524)
+cp shell/app/.env.example shell/app/.env.local  # 개발 서버용 LOCAL/DEV/PROD 값
+npm run dev                                     # http://localhost:5173/ — 홈·시딩은 DEV, 조치는 /moderation/<env>/
+npm test                                        # 네 폴더(core·shell·moderation·seeding) vitest — 한 폴더만: npx vitest --project moderation
+npm run typecheck                               # 네 폴더 tsc
+npm run build                                   # typecheck + docs/index.html 과 도구 경로 복사본 갱신 — 빌드 결과를 함께 커밋한다
 ```
 
 - 포트 5173 고정: Keycloak `replix-web` redirect URI에 등록된 개발 주소다. 포트가 밀리면 로그인이 조용히 깨져 기동을 실패시킨다.
-- 호스팅 빌드는 조치의 호스팅 프로필 `moderation/app/hosted-env/.env.production`만 읽는다(DEV·PROD만 싣고 LOCAL은 없다).
-- 조치 테스트: `cd moderation/app && npm ci && npm test`. 시딩·조치 폴더의 `npm run build`는 그 도구만 따로 확인하는 빌드라 각자 `dist/`에 쓴다 — 배포물이 아니다.
-- 조치 환경 규칙(주소 경로 `/moderation/prod|dev/`, 깊은 주소 복원, 쓰기 중 이탈 차단)은 `moderation/app/README.md`.
+- 호스팅 빌드는 공용 기반의 호스팅 프로필 `core/hosted-env/.env.production`만 읽는다(DEV·PROD만 싣고 LOCAL은 없다).
+- 시딩·조치 폴더에는 따로 띄우는 개발 서버·빌드가 없다(HP-521) — 공용 틀 하나로 개발하고 빌드한다.
+- 연결 환경 규칙(주소 경로 `/moderation/prod|dev/`, 깊은 주소 복원, 쓰기 중 이탈 차단)은 `core/README.md`.
 
 `docs/404.html`이 필요한 이유: GitHub Pages는 없는 경로에 404를 주는데, 조치는 주소마다 화면이 달라 `/moderation/prod/users/42` 같은 깊은 주소에서 새로고침하거나 로그인에서 돌아오면 그 404를 받는다. 404.html이 `/moderation/*` 경로를 `/moderation/?p=`로 넘기고, 콘솔 부팅이 원래 주소를 되살린다. 시딩은 쿼리(`?view=prompts`, `?work=&episode=`)만 써서 영향이 없다.
 

@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import type { MouseEvent } from 'react'
-import { env } from '@moderation/env'
-import { HOSTED_CONSOLE_HOSTNAME } from '@moderation/environment'
-import type { ConsoleEnvironment } from '@moderation/environment'
+import { env } from '@core/env'
+import { HOSTED_CONSOLE_HOSTNAME } from '@core/environment'
+import type { ConsoleEnvironment } from '@core/environment'
 import { environmentForPath } from './sections'
 
 /*

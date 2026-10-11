@@ -7,10 +7,10 @@ import {
 import type {
   FeatureControlPreset, ServiceNotice, ServiceNoticeCreate, ServiceNoticeKind,
 } from '../api/types'
-import { realmRoles } from '../auth'
+import { realmRoles } from '@core/auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { formatKstShort, kstInputToIso } from '../format'
-import { useWriting } from '../writing'
+import { formatKstShort, kstInputToIso } from '@core/time'
+import { useWriting } from '@core/writing'
 
 const STATUS_LABEL: Record<ServiceNotice['status'], string> = {
   DRAFT: '초안', SCHEDULED: '예약됨', PUBLISHED: '게시 중', ENDED: '종료', CANCELLED: '취소',

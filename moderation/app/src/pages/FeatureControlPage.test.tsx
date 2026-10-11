@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import type { FeatureFlagRow } from '../api/types'
 import FeatureControlPage from './FeatureControlPage'
-import { WritingProvider } from '../writing'
+import { WritingProvider } from '@core/writing'
 import { MemoryRouter } from 'react-router'
 
 vi.mock('../api/admin')
-vi.mock('../auth', () => ({ realmRoles: () => ['admin'] }))
+vi.mock('@core/auth', () => ({ realmRoles: () => ['admin'] }))
 
 const row = (overrides: Partial<FeatureFlagRow> = {}): FeatureFlagRow => ({
   key: 'chat.message.send.enabled', displayName: '채팅 전송',

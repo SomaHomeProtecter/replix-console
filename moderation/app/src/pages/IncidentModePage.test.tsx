@@ -7,7 +7,7 @@ import type { Incident } from '../api/types'
 import IncidentModePage from './IncidentModePage'
 
 vi.mock('../api/admin')
-vi.mock('../auth', () => ({ realmRoles: () => ['admin'] }))
+vi.mock('@core/auth', () => ({ realmRoles: () => ['admin'] }))
 
 const incident: Incident = { id: 9, environment: 'DEV', reference: 'INC-9', title: '채팅 지연', severity: 'SEV2',
   status: 'INVESTIGATING', primary: true, impactSummary: '다수 사용자의 채팅이 지연되고 있습니다', ownerUserId: 77,

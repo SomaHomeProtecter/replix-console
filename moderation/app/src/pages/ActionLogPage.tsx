@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { listActions, type ActionLogFilters } from '../api/admin'
 import type { AdminActionLogRow, AdminActionType, AdminActor } from '../api/types'
-import { ACTION_LABELS, actionLabel, formatKstShort } from '../format'
+import { ACTION_LABELS, actionLabel } from '../format'
+import { formatKstShort } from '@core/time'
 
 interface FilterInputs {
   adminUserId: number | ''

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { getIncidentTimeline } from '../api/admin'
 import type { IncidentTimeline } from '../api/types'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { formatKstShort } from '../format'
+import { formatKstShort } from '@core/time'
 
 const SOURCE_LABEL = { CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', INCIDENT: '인시던트' } as const
 

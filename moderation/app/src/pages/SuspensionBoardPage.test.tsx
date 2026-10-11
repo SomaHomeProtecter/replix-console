@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import { makeSuspendedRow } from '../test/fixtures'
-import { useWriting, WritingProvider } from '../writing'
+import { useWriting, WritingProvider } from '@core/writing'
 import SuspensionBoardPage from './SuspensionBoardPage'
 
 vi.mock('../api/admin')

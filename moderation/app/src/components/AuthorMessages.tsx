@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { approveBlindBatch, blindMessage, listAuthorMessages } from '../api/admin'
 import type { AuthorMessage, ReportItem } from '../api/types'
-import type { ProductionWriteApproval } from '../prodWriteConfirmation'
+import type { ProductionWriteApproval } from '@core/prodWriteConfirmation'
 
 /**
  * 상태 표식(HP-298). Redis {@code status}는 네 값이다 — {@code visible} ·

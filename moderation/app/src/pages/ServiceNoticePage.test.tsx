@@ -4,11 +4,11 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import type { ServiceNotice } from '../api/types'
-import { WritingProvider } from '../writing'
+import { WritingProvider } from '@core/writing'
 import ServiceNoticePage from './ServiceNoticePage'
 
 vi.mock('../api/admin')
-vi.mock('../auth', () => ({ realmRoles: () => ['admin'] }))
+vi.mock('@core/auth', () => ({ realmRoles: () => ['admin'] }))
 
 const notice: ServiceNotice = {
   id: 31, environment: 'DEV', kind: 'MAINTENANCE', title: '서비스 점검 안내',

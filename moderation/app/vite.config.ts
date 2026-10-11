@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
@@ -6,6 +7,8 @@ import { defineConfig } from 'vite'
 // 개발 서버도 공용 틀의 것을 쓴다 — 조치만 따로 띄우던 단독 앱·빌드는 지웠다(HP-521).
 export default defineConfig({
   plugins: [react()],
+  // 콘솔 공용 기반(HP-522) — 공용 틀 vite 설정의 별칭과 같다.
+  resolve: { alias: { '@core': fileURLToPath(new URL('../../core/src', import.meta.url)) } },
   test: {
     name: 'moderation', // 루트 vitest.config.ts의 프로젝트 이름(npx vitest --project moderation)
     environment: 'jsdom',

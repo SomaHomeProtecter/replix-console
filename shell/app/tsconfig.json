@@ -15,6 +15,7 @@
     "types": ["vite/client"],
     /* 시딩·조치 소스를 별칭으로 불러온다(vite.config.ts의 resolve.alias와 짝). 의존성은 루트에 한 벌이다(HP-524). */
     "paths": {
+      "@core/*": ["../../core/src/*"],
       "@seeding/*": ["../../seeding/app/src/*"],
       "@moderation/*": ["../../moderation/app/src/*"]
     }

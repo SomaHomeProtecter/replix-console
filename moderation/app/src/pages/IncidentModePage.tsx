@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { addIncidentEvent, addIncidentNote, declareIncident, getIncident, listIncidents, transitionIncident, updateIncident } from '../api/admin'
 import type { Incident, IncidentDeclare, IncidentResourceType, IncidentStatus, IncidentTransition } from '../api/types'
-import { realmRoles } from '../auth'
+import { realmRoles } from '@core/auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { env } from '../env'
-import { formatKstShort, kstInputToIso } from '../format'
+import { env } from '@core/env'
+import { formatKstShort, kstInputToIso } from '@core/time'
 
 const STATUS: Record<IncidentStatus, string> = { DECLARED: '선언', INVESTIGATING: '조사', MITIGATING: '완화',
   MONITORING: '관찰', RESOLVED: '해결', CANCELLED: '취소' }

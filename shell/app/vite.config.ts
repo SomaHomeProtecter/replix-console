@@ -12,7 +12,6 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 const ROOT = fileURLToPath(new URL('.', import.meta.url))
 const REPO = fileURLToPath(new URL('../..', import.meta.url))
 const DOCS = fileURLToPath(new URL('../../docs', import.meta.url))
-const MODERATION = fileURLToPath(new URL('../../moderation/app', import.meta.url))
 
 /**
  * 같은 한 장을 도구 경로에도 둔다. 북마크·직접 입력한 /seeding/, /moderation/ 주소가 이 파일로 바로 열리고,
@@ -44,10 +43,10 @@ export default defineConfig(({ command }) => ({
   // 담당 폴더(HP-456 D3)는 그대로 두고 소스만 불러온다 — 시딩 = 조현빈, 조치 = 김지호. 의존성은 저장소 루트에 한 벌이라
   // (HP-524) 예전처럼 폴더마다 React가 따로 깔려 훅이 깨질 일이 없다 — 그래서 dedupe도 두지 않는다.
   resolve: {
-    alias: { '@seeding': `${REPO}seeding/app/src`, '@moderation': `${REPO}moderation/app/src` },
+    alias: { '@core': `${REPO}core/src`, '@seeding': `${REPO}seeding/app/src`, '@moderation': `${REPO}moderation/app/src` },
   },
-  // 연결 환경 값(API·Keycloak 주소)은 조치 콘솔의 호스팅 프로필이 정본이다. 개발 서버는 이 폴더의 .env.local.
-  envDir: command === 'build' ? `${MODERATION}/hosted-env` : '.',
+  // 연결 환경 값(API·Keycloak 주소)은 공용 기반의 호스팅 프로필(core/hosted-env)이 정본이다. 개발 서버는 이 폴더의 .env.local.
+  envDir: command === 'build' ? `${REPO}core/hosted-env` : '.',
   // 5173 = Keycloak replix-web에 등록된 개발 서버 주소(조치 개발 서버와 같은 자리). 포트가 밀리면 로그인이 조용히
   // 깨지므로 차라리 기동을 실패시킨다. 시딩·조치 소스가 이 폴더 밖에 있어 저장소 전체를 열어 둔다.
   server: { port: 5173, strictPort: true, fs: { allow: [REPO] } },

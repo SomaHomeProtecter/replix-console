@@ -4,7 +4,7 @@ import type {
   CoveredElement, FeedbackCategory, FeedbackFilters, FeedbackItem, FeedbackSurface,
   FeedbackTrigger, UninstallReason, WantedService,
 } from '../api/types'
-import { formatKstShort } from '../format'
+import { formatKstShort } from '@core/time'
 
 /** 익스텐션·웹의 제출 화면과 1:1(세트 A 문구). 값이 아니라 사람이 읽는 말로 보여 준다. */
 const SURFACE_LABELS: Record<FeedbackSurface, string> = { EXT: '익스텐션', WEB: '웹' }

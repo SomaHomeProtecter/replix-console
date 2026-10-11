@@ -7,9 +7,8 @@ import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import WarningDialog from '../components/WarningDialog'
-import {
-  actionLabel, formatKstShort, isSuspensionActive, reporterTrustLine, suspensionChip, withRo,
-} from '../format'
+import { actionLabel, isSuspensionActive, reporterTrustLine, suspensionChip, withRo } from '../format'
+import { formatKstShort } from '@core/time'
 
 const CHIP_CLASSES: Record<UserStatus, string> = {
   ACTIVE: 'ustatus',

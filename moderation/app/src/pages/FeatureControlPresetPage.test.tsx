@@ -4,11 +4,11 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import type { FeatureChangeSet, FeatureControlPreset } from '../api/types'
-import { WritingProvider } from '../writing'
+import { WritingProvider } from '@core/writing'
 import FeatureControlPresetPage from './FeatureControlPresetPage'
 
 vi.mock('../api/admin')
-vi.mock('../auth', () => ({ realmRoles: () => ['admin'] }))
+vi.mock('@core/auth', () => ({ realmRoles: () => ['admin'] }))
 
 const preset: FeatureControlPreset = {
   id: 'CHAT_BLOCK', displayName: '채팅 차단', description: '새 채팅을 중지합니다.',

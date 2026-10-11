@@ -700,7 +700,3 @@ export interface FeedbackFilters {
   category: FeedbackCategory | ''
   score: number | ''
 }
-
-import type { EnvironmentMetadata } from '../environment'
-
-export type { EnvironmentMetadata }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const apiFetchMock = vi.hoisted(() => vi.fn())
-vi.mock('./client', () => ({ apiFetch: apiFetchMock, qs: vi.fn() }))
+vi.mock('@core/api/client', () => ({ apiFetch: apiFetchMock, qs: vi.fn() }))
 
 import { dryRunFeatureChangeSet } from './admin'
 

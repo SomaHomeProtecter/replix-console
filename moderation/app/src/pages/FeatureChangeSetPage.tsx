@@ -10,10 +10,10 @@ import type {
   FeatureChangeSet, FeatureChangeSetCreate, FeatureChangeSetItemInput,
   FeatureDryRunRow, FeatureFlagRow,
 } from '../api/types'
-import { realmRoles } from '../auth'
+import { realmRoles } from '@core/auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { formatKstShort, isoToKstInput, kstInputToIso } from '../format'
-import { useWriting } from '../writing'
+import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
+import { useWriting } from '@core/writing'
 
 const ROLLOUT_PRESETS = [0, 10, 25, 50, 100]
 const STATUS_LABEL: Record<FeatureChangeSet['status'], string> = {

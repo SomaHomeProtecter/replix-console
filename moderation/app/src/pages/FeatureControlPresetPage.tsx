@@ -4,11 +4,11 @@ import { createPresetChangeSet, listFeatureControlPresets } from '../api/admin'
 import type {
   FeatureChangeSet, FeatureControlPreset, FeatureControlPresetApply,
 } from '../api/types'
-import { realmRoles } from '../auth'
+import { realmRoles } from '@core/auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { env } from '../env'
-import { useWriting } from '../writing'
-import { kstInputToIso } from '../format'
+import { env } from '@core/env'
+import { useWriting } from '@core/writing'
+import { kstInputToIso } from '@core/time'
 
 function canOperate() {
   const roles = realmRoles()

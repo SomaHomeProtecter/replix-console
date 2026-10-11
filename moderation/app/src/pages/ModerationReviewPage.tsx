@@ -4,7 +4,7 @@ import type {
   ModerationReviewDecision, ModerationReviewPage as ReviewPage, ModerationReviewStage,
   ModerationReviewView,
 } from '../api/types'
-import { formatKstShort } from '../format'
+import { formatKstShort } from '@core/time'
 
 type StageFilter = 'ALL' | ModerationReviewStage
 type LoadMode = 'replace' | 'refresh' | 'append'

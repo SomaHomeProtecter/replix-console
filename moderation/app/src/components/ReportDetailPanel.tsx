@@ -4,7 +4,8 @@ import {
   blindMessage, fixSpoilerScore, reopenReport, resolveReport, suspendUser, unblindMessage, warnUser,
 } from '../api/admin'
 import type { ReportItem, SuspendDuration, WarningReason } from '../api/types'
-import { DURATION_LABELS, REASON_LABELS, formatKstShort } from '../format'
+import { DURATION_LABELS, REASON_LABELS } from '../format'
+import { formatKstShort } from '@core/time'
 import AuthorMessages from './AuthorMessages'
 import Avatar from './Avatar'
 import RoomEndDialog from './RoomEndDialog'

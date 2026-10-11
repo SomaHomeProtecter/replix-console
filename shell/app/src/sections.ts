@@ -2,8 +2,8 @@ import {
   ALL_CONSOLE_ENVIRONMENTS,
   MODERATION_BASE_PATH,
   environmentBasename,
-} from '@moderation/environment'
-import type { ConsoleEnvironment } from '@moderation/environment'
+} from '@core/environment'
+import type { ConsoleEnvironment } from '@core/environment'
 
 /** 콘솔의 세 구역 — 주소 첫 조각으로 가른다. */
 export type Section = 'home' | 'seeding' | 'moderation'

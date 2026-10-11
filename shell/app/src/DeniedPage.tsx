@@ -1,5 +1,5 @@
-import { logout, userName } from '@moderation/auth'
-import { env } from '@moderation/env'
+import { logout, userName } from '@core/auth'
+import { env } from '@core/env'
 
 /** 역할별로 할 수 있는 일 — BE SecurityConfig와 조치 콘솔 README의 역할 정의를 따른다. */
 const ROLES: readonly [string, string][] = [

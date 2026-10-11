@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { env } from '@moderation/env'
+import { env } from '@core/env'
 import { elapsedSince } from '@moderation/format'
 import GlobalUserSearch from '../GlobalUserSearch'
 import { airDateLabel, loadModerationSummary, loadRecentEpisodes, OPEN_REPORT_PAGE } from '../home/homeData'
