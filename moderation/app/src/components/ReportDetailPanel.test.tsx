@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import { ApiHttpError } from '@core/api/client'
+import { realmRoles } from '@core/auth'
 import { makeAuthorMessage, makeReportItem } from '../test/fixtures'
 import ReportDetailPanel from './ReportDetailPanel'
 
@@ -655,5 +656,40 @@ describe('잠금 사슬 — 패널 쓰기가 자식을 막는가', () => {
     expect(screen.getByRole('button', { name: /선택 1건 가림/ })).toBeDisabled()
     expect(screen.getAllByRole('checkbox').every((c) => (c as HTMLInputElement).disabled)).toBe(true)
     expect(admin.blindMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('조회 전용 계정(HP-529) — 조치 버튼을 끄고 이유를 보인다', () => {
+  const REASON = '조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다'
+
+  it('쓰기 버튼을 모두 끄고, 같은 이유를 버튼과 조치 칸에 보인다 — 단축키로도 조치하지 않는다', async () => {
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    render(
+        <MemoryRouter>
+          <ReportDetailPanel
+            report={makeReportItem()} onActionDone={onActionDone} onBusyChange={onBusyChange}
+            shortcutCommand={{ key: 'b', sequence: 1 }} />
+        </MemoryRouter>)
+    for (const name of ['점수 정정', '가림', '경고…', '계정 정지…', '조치 없이 종결', '기각']) {
+      const button = screen.getByRole('button', { name })
+      expect(button).toBeDisabled()
+      expect(button).toHaveAttribute('title', REASON)
+    }
+    expect(screen.getByText(REASON, { selector: '.readonly-note' })).toBeInTheDocument()
+    expect(blindMessage).not.toHaveBeenCalled()
+  })
+
+  it('가림 해제·신고 재오픈도 끈다', () => {
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    renderPanel(makeReportItem({ currentStatus: 'blinded', status: 'RESOLVED' }))
+    expect(screen.getByRole('button', { name: '가림 해제' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '신고 재오픈' })).toBeDisabled()
+  })
+
+  it('조치 역할(moderation_operator)이면 켜져 있고 안내도 없다', () => {
+    vi.mocked(realmRoles).mockReturnValue(['moderation_operator'])
+    renderPanel()
+    expect(screen.getByRole('button', { name: '조치 없이 종결' })).toBeEnabled()
+    expect(screen.queryByText(REASON)).not.toBeInTheDocument()
   })
 })

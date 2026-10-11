@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { changeFeatureFlag, listFeatureFlags } from '../api/admin'
 import type { FeatureFlagChange, FeatureFlagRow } from '../api/types'
+import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '@core/useLatestRequest'
+import { RISK_LABELS } from '../recordLabels'
 import { useNavigate } from 'react-router'
 
 type View = 'ALL' | 'ON' | 'OFF' | 'PARTIAL' | 'ATTENTION'
@@ -46,14 +49,6 @@ function ChangeDialog({ row, onClose, onChanged }: {
   const [busy, setBusy] = useState(false)
   const { setWriting } = useWriting()
 
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) onClose()
-    }
-    document.addEventListener('keydown', closeOnEscape)
-    return () => document.removeEventListener('keydown', closeOnEscape)
-  }, [busy, onClose])
-
   const apply = async () => {
     const ids = row.globalOnly || allowlist.trim() === ''
       ? [] : allowlist.split(',').map((part) => Number(part.trim()))
@@ -91,41 +86,37 @@ function ChangeDialog({ row, onClose, onChanged }: {
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation"
-        onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
-      <div className="dialog feature-dialog" role="dialog" aria-modal="true" aria-labelledby="feature-title">
-        <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
-        <h2 id="feature-title">{row.displayName} 변경</h2>
-        <p className="sub"><code>{row.key}</code> · revision {row.revision}</p>
-        {row.globalOnly && <div className="warnline">전역 정책 기능은 모든 사용자에게 즉시 동일하게 적용됩니다. Rollout은 100%, Allowlist는 비워 둡니다.</div>}
-        {error && <div className="error-box" role="alert">{error}</div>}
-        <div className="feature-toggle" aria-label="기능 상태">
-          <button type="button" className="chip-f" aria-pressed={enabled} disabled={busy}
-              onClick={() => setEnabled(true)}>ON</button>
-          <button type="button" className="chip-f" aria-pressed={!enabled} disabled={busy}
-              onClick={() => setEnabled(false)}>OFF</button>
-        </div>
-        <div className="feature-form-grid">
-          <label><span>Rollout</span><input type="number" min="0" max="100" value={rollout}
-              disabled={busy || row.globalOnly} onChange={(e) => setRollout(Math.min(100, Math.max(0, Number(e.target.value))))} /></label>
-          <label><span>만료 시각</span><input type="datetime-local" value={expiresAt}
-              disabled={busy} onChange={(e) => setExpiresAt(e.target.value)} /></label>
-          <label className="span2"><span>Owner</span><input value={owner} maxLength={100}
-              disabled={busy} onChange={(e) => setOwner(e.target.value)} /></label>
-          <label className="span2"><span>Allowlist 사용자 ID</span><input value={allowlist}
-              placeholder={row.globalOnly ? '전역 정책에서는 사용할 수 없습니다' : '예: 17, 29'}
-              disabled={busy || row.globalOnly} onChange={(e) => setAllowlist(e.target.value)} /></label>
-          <label className="span2"><span>변경 사유 <b>필수</b></span><textarea value={reason}
-              maxLength={500} rows={3} disabled={busy} onChange={(e) => setReason(e.target.value)} /></label>
-        </div>
-        {!enabled && <div className="warnline">OFF는 신규 실행만 차단하며 기존 데이터와 관리 조치는 유지됩니다.</div>}
-        <div className="dialog-actions">
-          <button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
-          <button type="button" className="btn btn-blind" disabled={busy || !owner.trim()}
-              onClick={() => void apply()}>{busy ? '적용 중…' : '변경 적용'}</button>
-        </div>
+    <Dialog label={`${row.displayName} 변경`} title={`${row.displayName} 변경`} className="feature-dialog" busy={busy}
+        onClose={onClose}>
+      <p className="sub"><code>{row.key}</code> · revision {row.revision}</p>
+      {row.globalOnly && <div className="warnline">전역 정책 기능은 모든 사용자에게 즉시 동일하게 적용됩니다. Rollout은 100%, Allowlist는 비워 둡니다.</div>}
+      {error && <div className="error-box" role="alert">{error}</div>}
+      <div className="feature-toggle" aria-label="기능 상태">
+        <button type="button" className="chip-f" aria-pressed={enabled} disabled={busy}
+            onClick={() => setEnabled(true)}>ON</button>
+        <button type="button" className="chip-f" aria-pressed={!enabled} disabled={busy}
+            onClick={() => setEnabled(false)}>OFF</button>
       </div>
-    </div>
+      <div className="feature-form-grid">
+        <label><span>Rollout</span><input type="number" min="0" max="100" value={rollout}
+            disabled={busy || row.globalOnly} onChange={(e) => setRollout(Math.min(100, Math.max(0, Number(e.target.value))))} /></label>
+        <label><span>만료 시각</span><input type="datetime-local" value={expiresAt}
+            disabled={busy} onChange={(e) => setExpiresAt(e.target.value)} /></label>
+        <label className="span2"><span>Owner</span><input value={owner} maxLength={100}
+            disabled={busy} onChange={(e) => setOwner(e.target.value)} /></label>
+        <label className="span2"><span>Allowlist 사용자 ID</span><input value={allowlist}
+            placeholder={row.globalOnly ? '전역 정책에서는 사용할 수 없습니다' : '예: 17, 29'}
+            disabled={busy || row.globalOnly} onChange={(e) => setAllowlist(e.target.value)} /></label>
+        <label className="span2"><span>변경 사유 <b>필수</b></span><textarea value={reason}
+            maxLength={500} rows={3} disabled={busy} onChange={(e) => setReason(e.target.value)} /></label>
+      </div>
+      {!enabled && <div className="warnline">OFF는 신규 실행만 차단하며 기존 데이터와 관리 조치는 유지됩니다.</div>}
+      <div className="dialog-actions">
+        <button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
+        <button type="button" className="btn btn-blind" disabled={busy || !owner.trim()}
+            onClick={() => void apply()}>{busy ? '적용 중…' : '변경 적용'}</button>
+      </div>
+    </Dialog>
   )
 }
 
@@ -139,20 +130,24 @@ export default function FeatureControlPage() {
   const [selected, setSelected] = useState<FeatureFlagRow | null>(null)
   const writable = canChange()
 
+  const begin = useLatestRequest()
   const load = useCallback(async () => {
+    const current = begin() // 늦게 온 응답이 새 목록을 덮지 않게(HP-527)
     setLoading(true)
     try {
       const result = await listFeatureFlags()
+      if (!current()) return
       setRows(result)
       setStale(false)
       setError(null)
     } catch (failure) {
+      if (!current()) return
       setStale(true)
       setError(failure instanceof Error ? failure.message : String(failure))
     } finally {
-      setLoading(false)
+      if (current()) setLoading(false)
     }
-  }, [])
+  }, [begin])
 
   useEffect(() => { void load() }, [load])
 
@@ -172,7 +167,7 @@ export default function FeatureControlPage() {
   return (
     <section className="feature-control" aria-label="기능 제어">
       <div className="board-head">
-        <div><h1>기능 제어</h1><p>저장 상태와 실행 인스턴스의 적용 수렴을 함께 확인합니다.</p></div>
+        <div><h1>{featureControlTitle('/feature-control')}</h1><p>저장 상태와 실행 인스턴스의 적용 수렴을 함께 확인합니다.</p></div>
         <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button>
       </div>
       <FeatureControlTabs />
@@ -198,7 +193,7 @@ export default function FeatureControlPage() {
                   <td><span className={`feature-state ${status.className}`}>{status.label}</span></td>
                   <td className="mono">{row.rolloutPercentage}%</td>
                   <td><strong>{row.owner}</strong><span className="feature-meta">
-                    {row.risk} · {POLICY_LABELS[row.policyClass]}{row.globalOnly ? ' · 전역' : ''}
+                    {RISK_LABELS[row.risk]} · {POLICY_LABELS[row.policyClass]}{row.globalOnly ? ' · 전역' : ''}
                   </span></td>
                   <td className="feature-runtime">
                     <strong>{row.activeInstances}개 활성 · 불일치 {row.mismatchedInstances}</strong>

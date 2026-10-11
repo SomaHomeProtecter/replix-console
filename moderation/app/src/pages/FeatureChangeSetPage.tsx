@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import {
   applyFeatureChangeSet, approveFeatureChangeSet, cancelFeatureChangeSet,
@@ -10,18 +10,18 @@ import type {
   FeatureChangeSet, FeatureChangeSetCreate, FeatureChangeSetItemInput,
   FeatureDryRunRow, FeatureFlagRow,
 } from '../api/types'
+import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '@core/useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { CHANGE_SET_STATUS_LABELS, changeSetEventLabel, itemResultLabel, RISK_LABELS } from '../recordLabels'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
 const ROLLOUT_PRESETS = [0, 10, 25, 50, 100]
-const STATUS_LABEL: Record<FeatureChangeSet['status'], string> = {
-  DRAFT: '초안', REVIEW_REQUESTED: '검토 요청', APPROVED: '승인됨', REJECTED: '반려',
-  SCHEDULED: '예약됨', RUNNING: '적용 중', SUCCEEDED: '적용 완료',
-  PARTIALLY_FAILED: '일부 실패', FAILED: '실패', ROLLED_BACK: '롤백 완료', CANCELLED: '취소',
-}
+const STATUS_LABEL = CHANGE_SET_STATUS_LABELS
 
 function permissions() {
   const roles = realmRoles()
@@ -84,67 +84,64 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <div className="dialog change-set-create" role="dialog" aria-modal="true" aria-labelledby="change-set-create-title">
-        <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
-        <h2 id="change-set-create-title">새 변경 세트</h2>
-        <p className="sub">여러 기능을 하나의 승인·적용·롤백 단위로 묶습니다.</p>
-        {error && <div className="error-box" role="alert">{error}</div>}
-        <div className="feature-form-grid">
-          <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
-              onChange={(event) => setTitle(event.target.value)} /></label>
-          <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
-              onChange={(event) => setJira(event.target.value)} /></label>
-          <label><span>인시던트</span><input value={incident} maxLength={100} disabled={busy}
-              placeholder="선택" onChange={(event) => setIncident(event.target.value)} /></label>
-          <label className="span2"><span>변경 목적 <b>필수</b></span><textarea value={purpose} rows={2}
-              maxLength={500} disabled={busy} onChange={(event) => setPurpose(event.target.value)} /></label>
-          <label className="span2 auto-rollback-policy">
-            <span><input type="checkbox" checked={autoRollback} disabled={busy}
-                onChange={(event) => setAutoRollback(event.target.checked)} /> runtime 불일치 자동 롤백</span>
-            <select aria-label="적용 관찰 구간" value={verificationWindow} disabled={busy || !autoRollback}
-                onChange={(event) => setVerificationWindow(Number(event.target.value))}>
-              <option value={30}>30초 관찰</option><option value={60}>1분 관찰</option>
-              <option value={300}>5분 관찰</option><option value={600}>10분 관찰</option>
-            </select>
-          </label>
-        </div>
-        <div className="change-picks" aria-label="변경 기능 선택">
-          {flags.map((flag) => {
-            const item = items[flag.key]
-            return <div className={`change-pick ${item ? 'selected' : ''}`} key={flag.key}>
-              <label className="change-pick-main">
-                <input type="checkbox" checked={Boolean(item)} disabled={busy || !flag.connected}
-                    onChange={() => toggle(flag)} />
-                <span><strong>{flag.displayName}</strong><code>{flag.key}</code></span>
-                <small>{flag.risk}{flag.globalOnly ? ' · 전역' : ''}</small>
-              </label>
-              {item && <div className="change-target">
-                <button type="button" className="chip-f" aria-pressed={item.enabled}
-                    onClick={() => patchItem(flag.key, { enabled: true })}>ON</button>
-                <button type="button" className="chip-f" aria-pressed={!item.enabled}
-                    onClick={() => patchItem(flag.key, { enabled: false })}>OFF</button>
-                {flag.globalOnly
-                  ? <span className="preset-label">전역 적용 · Rollout 100%</span>
-                  : <><span className="preset-label">Rollout</span>
-                    {ROLLOUT_PRESETS.map((preset) => <button key={preset} type="button" className="chip-f"
-                        aria-pressed={item.rolloutPercentage === preset}
-                        onClick={() => patchItem(flag.key, { rolloutPercentage: preset })}>{preset}%</button>)}</>}
-                <input aria-label={`${flag.displayName} 만료 시각`} type="datetime-local"
-                    value={isoToKstInput(item.expiresAt)}
-                    onChange={(event) => patchItem(flag.key, { expiresAt: kstInputToIso(event.target.value) })} />
-              </div>}
-            </div>
-          })}
-        </div>
-        <div className="dialog-actions">
-          <button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
-          <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
-            {busy ? '생성 중…' : `초안 생성 (${Object.keys(items).length})`}
-          </button>
-        </div>
+    <Dialog label="새 변경 세트" title="새 변경 세트" className="change-set-create" busy={busy} onClose={onClose}
+        closeOnBackdrop={false}>
+      <p className="sub">여러 기능을 하나의 승인·적용·롤백 단위로 묶습니다.</p>
+      {error && <div className="error-box" role="alert">{error}</div>}
+      <div className="feature-form-grid">
+        <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
+            onChange={(event) => setTitle(event.target.value)} /></label>
+        <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
+            onChange={(event) => setJira(event.target.value)} /></label>
+        <label><span>인시던트</span><input value={incident} maxLength={100} disabled={busy}
+            placeholder="선택" onChange={(event) => setIncident(event.target.value)} /></label>
+        <label className="span2"><span>변경 목적 <b>필수</b></span><textarea value={purpose} rows={2}
+            maxLength={500} disabled={busy} onChange={(event) => setPurpose(event.target.value)} /></label>
+        <label className="span2 auto-rollback-policy">
+          <span><input type="checkbox" checked={autoRollback} disabled={busy}
+              onChange={(event) => setAutoRollback(event.target.checked)} /> runtime 불일치 자동 롤백</span>
+          <select aria-label="적용 관찰 구간" value={verificationWindow} disabled={busy || !autoRollback}
+              onChange={(event) => setVerificationWindow(Number(event.target.value))}>
+            <option value={30}>30초 관찰</option><option value={60}>1분 관찰</option>
+            <option value={300}>5분 관찰</option><option value={600}>10분 관찰</option>
+          </select>
+        </label>
       </div>
-    </div>
+      <div className="change-picks" aria-label="변경 기능 선택">
+        {flags.map((flag) => {
+          const item = items[flag.key]
+          return <div className={`change-pick ${item ? 'selected' : ''}`} key={flag.key}>
+            <label className="change-pick-main">
+              <input type="checkbox" checked={Boolean(item)} disabled={busy || !flag.connected}
+                  onChange={() => toggle(flag)} />
+              <span><strong>{flag.displayName}</strong><code>{flag.key}</code></span>
+              <small>{RISK_LABELS[flag.risk]}{flag.globalOnly ? ' · 전역' : ''}</small>
+            </label>
+            {item && <div className="change-target">
+              <button type="button" className="chip-f" aria-pressed={item.enabled}
+                  onClick={() => patchItem(flag.key, { enabled: true })}>ON</button>
+              <button type="button" className="chip-f" aria-pressed={!item.enabled}
+                  onClick={() => patchItem(flag.key, { enabled: false })}>OFF</button>
+              {flag.globalOnly
+                ? <span className="preset-label">전역 적용 · Rollout 100%</span>
+                : <><span className="preset-label">Rollout</span>
+                  {ROLLOUT_PRESETS.map((preset) => <button key={preset} type="button" className="chip-f"
+                      aria-pressed={item.rolloutPercentage === preset}
+                      onClick={() => patchItem(flag.key, { rolloutPercentage: preset })}>{preset}%</button>)}</>}
+              <input aria-label={`${flag.displayName} 만료 시각`} type="datetime-local"
+                  value={isoToKstInput(item.expiresAt)}
+                  onChange={(event) => patchItem(flag.key, { expiresAt: kstInputToIso(event.target.value) })} />
+            </div>}
+          </div>
+        })}
+      </div>
+      <div className="dialog-actions">
+        <button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
+        <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
+          {busy ? '생성 중…' : `초안 생성 (${Object.keys(items).length})`}
+        </button>
+      </div>
+    </Dialog>
   )
 }
 
@@ -206,7 +203,7 @@ function ChangeSetDetail({ changeSet, onReload }: {
   return <aside className="change-detail" aria-label={`변경 세트 #${changeSet.id} 상세`}>
     <div className="change-detail-head">
       <div><span className={`feature-state status-${changeSet.status.toLowerCase()}`}>{STATUS_LABEL[changeSet.status]}</span>
-        <h2>{changeSet.title}</h2><p>#{changeSet.id} · {changeSet.environment} · {changeSet.risk}</p></div>
+        <h2>{changeSet.title}</h2><p>#{changeSet.id} · {changeSet.environment} · {RISK_LABELS[changeSet.risk]}</p></div>
       <button type="button" className="btn" disabled={busy} onClick={() => void onReload(changeSet.id)}>새로고침</button>
     </div>
     <dl className="change-summary">
@@ -230,7 +227,7 @@ function ChangeSetDetail({ changeSet, onReload }: {
       return <div className="change-diff" key={item.flagKey}>
         <code>{item.flagKey}</code><span>{before.enabled ? 'ON' : 'OFF'} · {before.rolloutPercentage}%</span>
         <b>→</b><strong>{item.targetEnabled ? 'ON' : 'OFF'} · {item.targetRolloutPercentage}%</strong>
-        {item.resultCode && <small>{item.resultCode}</small>}
+        {item.resultCode && <small>{itemResultLabel(item.resultCode)}</small>}
       </div>
     })}</div>
     <div className="dry-run-box">
@@ -260,7 +257,7 @@ function ChangeSetDetail({ changeSet, onReload }: {
     </div>}
     <h3>불변 이벤트</h3>
     <ol className="change-events">{changeSet.events.map((event) => <li key={event.id}>
-      <span>{formatKstShort(event.createdAt)}</span><strong>{event.type}</strong><p>{event.reason}</p>
+      <span>{formatKstShort(event.createdAt)}</span><strong>{changeSetEventLabel(event.type)}</strong><p>{event.reason}</p>
     </li>)}</ol>
   </aside>
 }
@@ -275,16 +272,33 @@ export default function FeatureChangeSetPage() {
   const [error, setError] = useState<string | null>(null)
   const writable = permissions().operate
 
-  const load = useCallback(async (detailId?: number) => {
+  // 목록과 상세는 따로 순서를 지킨다(HP-527). 새로고침이나 조치가 끝나 상세를 다시 열 때는, 그사이 운영자가 다른 행을
+  // 골랐으면 다시 열지 않는다 — 고른 행이 이전 행으로 되돌아가면 그 위의 승인·적용이 엉뚱한 것에 간다(2026-10-12 리뷰).
+  // 고른 횟수(picks)를 세어, 새로고침은 시작할 때의 수를, 상세 화면의 조치는 그 화면을 그린 때의 수(pickCount)를 넘긴다.
+  const beginList = useLatestRequest()
+  const beginDetail = useLatestRequest()
+  const picks = useRef(0)
+  const [pickCount, setPickCount] = useState(0)
+  const selectedId = useRef<number | null>(null)
+  useEffect(() => { selectedId.current = selected?.id ?? null }, [selected?.id])
+  const open = useCallback(async (id: number) => {
+    const current = beginDetail()
+    try { const detail = await getFeatureChangeSet(id); if (current()) setSelected(detail) }
+    catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+  }, [beginDetail])
+  const pick = (id: number) => { picks.current += 1; setPickCount(picks.current); void open(id) }
+  const load = useCallback(async (detailId?: number, seenPicks = picks.current) => {
+    const current = beginList()
     setLoading(true)
     try {
       const [nextSets, nextFlags] = await Promise.all([listFeatureChangeSets(), listFeatureFlags()])
+      if (!current()) return
       setSets(nextSets); setFlags(nextFlags); setError(null)
-      const id = detailId ?? selected?.id
-      if (id) setSelected(await getFeatureChangeSet(id))
-    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
-    finally { setLoading(false) }
-  }, [selected?.id])
+      const id = detailId ?? selectedId.current
+      if (id && picks.current === seenPicks) await open(id)
+    } catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { if (current()) setLoading(false) }
+  }, [beginList, open])
   useEffect(() => {
     const id = Number(searchParams.get('selected'))
     void load(Number.isSafeInteger(id) && id > 0 ? id : undefined)
@@ -296,7 +310,7 @@ export default function FeatureChangeSetPage() {
   }), [sets])
 
   return <section className="feature-control change-set-page" aria-label="기능 변경 세트">
-    <div className="board-head"><div><h1>기능 제어</h1><p>변경을 승인·예약·적용·복구 가능한 단위로 관리합니다.</p></div>
+    <div className="board-head"><div><h1>{featureControlTitle('/feature-control/change-sets')}</h1><p>변경을 승인·예약·적용·복구 가능한 단위로 관리합니다.</p></div>
       <span className="filter-note">대기 {counts.waiting} · 실패 {counts.failed}</span>
       <button type="button" className="btn" disabled={!writable || loading} onClick={() => setCreating(true)}>새 변경 세트</button>
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>
@@ -306,14 +320,15 @@ export default function FeatureChangeSetPage() {
       <div className="change-list report-table-wrap">
         <table><thead><tr><th>변경 세트</th><th>상태</th><th>범위</th><th>생성</th></tr></thead>
           <tbody>{sets.map((set) => <tr key={set.id} className={selected?.id === set.id ? 'selected' : ''}
-              onClick={() => void getFeatureChangeSet(set.id).then(setSelected)}>
+              aria-selected={selected?.id === set.id} {...selectableRow(() => pick(set.id))}>
             <td><strong>{set.title}</strong><span>#{set.id} · {set.jiraReference ?? '참조 없음'}</span></td>
             <td><span className={`feature-state status-${set.status.toLowerCase()}`}>{STATUS_LABEL[set.status]}</span></td>
-            <td>{set.items.length}개 · {set.risk}</td><td>{formatKstShort(set.createdAt)}</td>
+            <td>{set.items.length}개 · {RISK_LABELS[set.risk]}</td><td>{formatKstShort(set.createdAt)}</td>
           </tr>)}</tbody></table>
+        {loading && sets.length === 0 && <div className="page-status">불러오는 중…</div>}
         {!loading && sets.length === 0 && <div className="empty-hint">아직 변경 세트가 없습니다</div>}
       </div>
-      {selected ? <ChangeSetDetail changeSet={selected} onReload={load} />
+      {selected ? <ChangeSetDetail changeSet={selected} onReload={(id) => load(id, pickCount)} />
         : <div className="change-empty">변경 세트를 선택하면 diff와 승인 이력을 확인할 수 있습니다.</div>}
     </div>
     {creating && <ChangeSetCreateDialog flags={flags} onClose={() => setCreating(false)}

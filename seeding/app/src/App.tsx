@@ -1,17 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { CAPABILITIES } from '@core/roles'
 import { isoToKstInput, kstInputToIso } from '@core/time'
+import { useLatestRequest } from '@core/useLatestRequest'
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
 import { canRead, canWrite, currentUser, logout } from './auth'
 import { OTHER, WORKSPACE, type Env } from './env'
 import { seedingHost, type ProductionWriteSummary } from './host'
+import { episodeProgress } from './progress'
 import { callOther, type EngagementSummary, type ExternalItem, type ExternalResult, type PlanItem } from './api'
 import { secondaryToken, secondarySignedIn, secondaryLogout } from './secondaryAuth'
+import './seeding.css'
 
 /* 시딩 도구 화면(HP-435/436) — 2026-09-26 전면 재설계.
    원칙(조현빈): 함축·생략보다 각 기능의 용도가 문장으로 이해돼야 한다. 직관적인 것은 단순한 것이 아니고, 친절한 것은 장황한 것이
    아니다. 표·그래프·목록은 담길 분량에 맞게 넓게 잡는다.
    구조: 왼쪽에 작품·회차 목록, 오른쪽에 고른 회차의 네 단계를 위에서 아래로. 단계마다 "무엇을 하는 단계"와 "지금 상태"를 먼저 말한다.
-   라우팅은 없다(관리자 한 명이 한 회차씩 다루는 도구). 진행 중인 작업은 2초마다 다시 읽는다. */
+   라우팅은 없다(관리자 한 명이 한 회차씩 다루는 도구). 진행 중인 작업은 2초마다, 고른 회차는 탭이 보이는 동안 30초마다
+   다시 읽는다. 고른 작품·회차는 주소와 이 탭의 세션 저장소에 남고, 오류는 그 단계 카드 안에 뜬다(HP-526).
+   모양은 콘솔 공용 기반의 토큰·버튼과 seeding.css(sd- 클래스)를 쓴다 — 조치 화면과 같은 패널·표·상태 알약(HP-525). */
 
 const KST = 'Asia/Seoul'
 const WEEKDAYS = ['', '월', '화', '수', '목', '금', '토', '일']
@@ -24,12 +30,15 @@ const KIND_DESC: Record<InjectionKind, string> = {
   VARIANT: '뜻과 감정은 지키고 문장을 다시 씁니다. 욕설이 문장의 뼈대라 한두 군데 고쳐서는 안 되는 글에 씁니다.',
   MANUAL: '수집한 글이 적은 구간에 AI가 자막과 장면 메모에 있는 사실만 근거로 새로 씁니다.',
 }
-const COLL_STATUS: Record<Collection['status'], { label: string; cls: string }> = {
-  QUEUED: { label: '대기 중', cls: 'bg-soft text-muted' }, RUNNING: { label: '수집 중', cls: 'bg-warnw text-warn' },
-  DONE: { label: '완료', cls: 'bg-okw text-ok' }, FAILED: { label: '실패', cls: 'bg-badw text-bad' }, CANCELLED: { label: '취소됨', cls: 'bg-soft text-muted' },
+/* 상태 알약의 색 — 조치 화면의 상태 표기와 같은 뜻으로 쓴다: 초록 = 끝남, 파랑 = 진행·사람 차례, 호박 = 손볼 일(실패), 회색 = 대기·취소.
+   빨강은 쓰지 않는다 — 콘솔에서 빨강은 되돌리기 어려운 조치(지우기) 전용이다. */
+type Tone = 'on' | 'pending' | 'warn' | 'idle'
+const COLL_STATUS: Record<Collection['status'], { label: string; tone: Tone }> = {
+  QUEUED: { label: '대기 중', tone: 'idle' }, RUNNING: { label: '수집 중', tone: 'pending' },
+  DONE: { label: '완료', tone: 'on' }, FAILED: { label: '실패', tone: 'warn' }, CANCELLED: { label: '취소됨', tone: 'idle' },
 }
-const PLAN_STATUS: Record<Plan['status'], { label: string; cls: string }> = {
-  DRAFT: { label: '검수 대기', cls: 'bg-infow text-info' }, RUNNING: { label: '넣는 중', cls: 'bg-warnw text-warn' }, EXECUTED: { label: '넣기 완료', cls: 'bg-okw text-ok' },
+const PLAN_STATUS: Record<Plan['status'], { label: string; tone: Tone }> = {
+  DRAFT: { label: '검수 대기', tone: 'pending' }, RUNNING: { label: '넣는 중', tone: 'pending' }, EXECUTED: { label: '넣기 완료', tone: 'on' },
 }
 
 function fmtKst(iso: string | null | undefined, opts: Intl.DateTimeFormatOptions = {}) {
@@ -55,12 +64,53 @@ function lastAirDate(weekday: number | null): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 function errText(e: unknown) { return e instanceof ApiError ? `${e.message}${e.code ? ` (${e.code})` : ''}` : e instanceof Error ? e.message : String(e) }
-/* 채팅을 넣고 지우는 일의 최종 확인. 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력 확인 창(공용 틀, HP-506)을
-   쓰고, 개발 서버는 브라우저 확인 창을 쓴다. */
+/* 운영 쓰기의 최종 확인. 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력 확인 창(공용 틀, HP-506)을 쓰고, 개발
+   서버는 브라우저 확인 창을 쓴다. 되돌리기 어렵거나 서버 동작을 바꾸는 쓰기가 모두 여기를 거친다(HP-526) — 채팅 넣기·지우기,
+   프롬프트 저장·되돌리기·기본값 복원(저장 즉시 AI 작업이 새 내용을 쓴다, 시딩 결정 ⑥), 장면 메모 전체 교체·모두 지우기,
+   회차 정보·방영 시각(수집 범위와 시각 환산의 기준), 넷플릭스 연결 끊기, 수집 멈추기, 수집·기준점·계획 지우기.
+   확인 없이 하는 것(작업 데이터만 늘리거나 사람이 검수하며 수백 번 누르는 일): 계획 행 수락·거부, 계획 올리기(검수 대기
+   초안), 회차 추가, 수집 시작(새 수집을 더할 뿐 지난 수집을 지우지 않는다), 그리고 다른 서버에 넣고 지울 때 작업 서버에
+   남기는 넣기 기록(그 넣기·지우기를 이미 확인받았다). 사용자에게 보이는 채팅을 바꾸는 넣기·지우기는 예외 없이 확인한다. */
 async function confirmWrite(env: Env, summary: ProductionWriteSummary, message: string): Promise<boolean> {
   const host = seedingHost()
   if (host && env === 'prod') return host.confirmProductionWrite(summary).then(() => true, () => false)
   return confirm(message)
+}
+/** 확인 창의 '대상' 칸 — 작업 서버(이 콘솔이 붙은 서버)의 무엇을 바꾸는지. */
+function workspaceTarget(what: string) { return `${WORKSPACE.label} 서버 · ${what}` }
+function episodeName(e: Episode) { return e.label ?? e.airDate }
+const AIR_TIME_REASON = '방영 시각은 글을 모을 범위와 채팅 시각 계산의 기준입니다'
+const PROMPT_REASON = '저장하는 순간 AI 작업과 서버의 "다시 써서 넣기"가 새 내용을 씁니다. 지금 내용은 이력에 남아 되돌릴 수 있습니다'
+
+/* ─── 고른 작품·회차 기억(HP-526) ─────────────────────────────────── */
+/* 고른 작품·회차를 주소(?work=&episode=)와 이 탭의 세션 저장소에 남긴다. 주소는 새로고침과 뒤로 가기('AI 프롬프트'에
+   다녀올 때)가, 세션 저장소는 쿼리 없는 왼쪽 메뉴 '회차 작업'·홈의 '열기'로 돌아올 때가 읽는다. 작업 서버마다 id가
+   다르므로 서버별로 둔다. */
+type Selection = { workId: number | null; episodeId: number | null }
+const selectionKey = () => `replix_seeding_selection_${WORKSPACE.env}`
+function readSelection(): Selection {
+  const id = (x: unknown) => (typeof x === 'number' && Number.isInteger(x) && x > 0 ? x : null)
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(selectionKey()) ?? 'null') as Partial<Selection> | null
+    return { workId: id(saved?.workId), episodeId: id(saved?.episodeId) }
+  } catch { return { workId: null, episodeId: null } }
+}
+function rememberSelection(workId: number, episodeId: number | null) {
+  try { sessionStorage.setItem(selectionKey(), JSON.stringify({ workId, episodeId })) } catch { /* 저장할 수 없으면 주소에만 남긴다 */ }
+  /* replaceState만 쓰고 popstate는 내지 않는다 — 공용 틀은 popstate로 주소를 다시 읽고, 쿼리가 바뀌면 시딩 화면을 처음부터
+     다시 그린다(SeedingSection의 key). 고를 때마다 다시 그리면 펼친 목록·고른 계획·스크롤이 날아간다. */
+  const url = new URL(window.location.href)
+  url.searchParams.set('work', String(workId))
+  if (episodeId != null) url.searchParams.set('episode', String(episodeId))
+  else url.searchParams.delete('episode')
+  const next = `${url.pathname}${url.search}${url.hash}`
+  if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history.replaceState(window.history.state, '', next)
+}
+/** 처음 열 회차 — 주소가 먼저(홈의 최근 회차·새로고침·뒤로 가기), 없으면 이 탭에서 마지막으로 고른 회차. */
+function initialSelection(workId: number | null, episodeId: number | null): Selection {
+  const saved = readSelection()
+  if (workId == null && episodeId == null) return saved
+  return { workId, episodeId: episodeId ?? (saved.workId != null && saved.workId === workId ? saved.episodeId : null) }
 }
 
 /* ─── 틀 ─────────────────────────────────────────────────────────── */
@@ -69,39 +119,81 @@ async function confirmWrite(env: Env, summary: ProductionWriteSummary, message: 
 export function SeedingWorkspace({ view, workId, episodeId }: { view: 'work' | 'prompts'; workId?: number | null; episodeId?: number | null }) {
   const user = currentUser()
   if (!user) return null
-  if (!canRead(user)) return <Gate title="이 계정에는 시딩 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(admin, moderation_operator, admin_console_viewer 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn" onClick={logout}>다른 계정으로 로그인</button></Gate>
-  return view === 'work'
-    ? <Workspace writable={canWrite(user)} initialWorkId={workId ?? null} initialEpisodeId={episodeId ?? null} />
-    : <PromptsView writable={canWrite(user)} />
-}
-
-function Gate({ title, body, children }: { title: string; body: string; children: ReactNode }) {
   return (
-    <div className="max-w-md mx-auto mt-24 card p-6 flex flex-col gap-3">
-      <h1 className="text-lg font-bold">{title}</h1>
-      <p className="text-sm text-ink2 leading-relaxed">{body}</p>
-      <div>{children}</div>
+    <div className="sd-root">
+      {!canRead(user)
+        ? <Gate title="이 계정에는 시딩 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(${CAPABILITIES.view.roles.join(', ')} 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn sd-primary" onClick={logout}>다른 계정으로 로그인</button></Gate>
+        : view === 'work'
+          ? <Workspace writable={canWrite(user)} initialWorkId={workId ?? null} initialEpisodeId={episodeId ?? null} />
+          : <PromptsView writable={canWrite(user)} />}
     </div>
   )
 }
 
-function Banner({ kind, children, onClose }: { kind: 'bad' | 'info'; children: ReactNode; onClose?: () => void }) {
+function Gate({ title, body, children }: { title: string; body: string; children: ReactNode }) {
   return (
-    <div className={`rounded-lg px-4 py-3 text-sm flex items-start gap-3 ${kind === 'bad' ? 'bg-badw text-bad' : 'bg-infow text-info'}`}>
-      <div className="flex-1 leading-relaxed">{children}</div>
-      {onClose && <button className="text-xs underline" onClick={onClose}>닫기</button>}
+    <div className="sd-page">
+      <div className="sd-panel sd-gate">
+        <h1>{title}</h1>
+        <p>{body}</p>
+        <div>{children}</div>
+      </div>
     </div>
+  )
+}
+
+/* 알림 칸 — bad = 오류(공용 .error-box), notice = 주의(공용 .notice-box — 일부 실패처럼 고장이 아니라 다시 손볼 일),
+   info = 안내. 일부 실패를 오류와 같은 외피로 그리면 둘을 구분하지 못한다(core.css .notice-box). */
+type AlertTone = 'bad' | 'notice'
+function Banner({ kind, children, onClose }: { kind: AlertTone | 'info'; children: ReactNode; onClose?: () => void }) {
+  return (
+    <div className={`sd-banner ${kind === 'bad' ? 'error-box' : kind === 'notice' ? 'notice-box' : 'sd-info'}`} role={kind === 'info' ? 'status' : 'alert'}>
+      <div>{children}</div>
+      {onClose && <button type="button" className="sd-banner-close" onClick={onClose}>닫기</button>}
+    </div>
+  )
+}
+
+function State({ tone, children }: { tone: Tone; children: ReactNode }) {
+  return <span className={`sd-state is-${tone}`}>{children}</span>
+}
+
+/* 단계 카드 — 머리에 "무엇을 하는 단계인지"(제목·설명)와 그 단계의 버튼, 몸에 지금 상태. 그 단계에서 난 오류는 카드 몸
+   맨 위에 뜨고 닫을 수 있다(HP-526) — 종전에는 오른쪽 열 맨 위 한 칸에만 떠서 아래쪽 단계의 오류를 놓쳤다. */
+function Card({ no, title, lead, actions, error, errorTone = 'bad', onCloseError, notice, children }: {
+  no?: number; title: ReactNode; lead?: ReactNode; actions?: ReactNode
+  error?: string | null; errorTone?: AlertTone; onCloseError?: () => void; notice?: string | null; children: ReactNode
+}) {
+  const titleId = useId()
+  return (
+    <section className="sd-panel" aria-labelledby={titleId}>
+      <div className="sd-card-head">
+        <div className="sd-card-title">
+          <h2 id={titleId}>{no != null && <span className="sd-step-no">{no}</span>}{title}</h2>
+          {lead}
+        </div>
+        {actions ? <div className="sd-card-actions">{actions}</div> : null}
+      </div>
+      <div className="sd-card-body">
+        {error && <Banner kind={errorTone} onClose={onCloseError}>{error}</Banner>}
+        {notice && <Banner kind="info">{notice}</Banner>}
+        {children}
+      </div>
+    </section>
   )
 }
 
 /* ─── 작업 공간: 왼쪽 작품·회차, 오른쪽 단계 ───────────────────────── */
 /* initialWorkId·initialEpisodeId: 공용 틀 홈의 '최근 회차'에서 고른 회차로 바로 연다(HP-506). 없거나 지워졌으면 첫 작품·첫 회차. */
 function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: { writable: boolean; initialWorkId?: number | null; initialEpisodeId?: number | null }) {
+  const [initial] = useState(() => initialSelection(initialWorkId, initialEpisodeId))
   const [works, setWorks] = useState<Work[] | null>(null)
-  const [workId, setWorkId] = useState<number | null>(initialWorkId)
+  const [workId, setWorkId] = useState<number | null>(initial.workId)
   const [episodes, setEpisodes] = useState<Episode[]>([])
-  const [episodeId, setEpisodeId] = useState<number | null>(initialEpisodeId)
+  const [episodeId, setEpisodeId] = useState<number | null>(initial.episodeId)
+  // 작업 공간 맨 위 오류 칸은 작품·회차 목록을 읽다 난 오류만 — 단계에서 난 오류는 그 단계 카드에 뜬다(HP-526).
   const [error, setError] = useState<string | null>(null)
+  const workSelectId = useId()
   const work = useMemo(() => works?.find((w) => w.id === workId) ?? null, [works, workId])
   const episode = useMemo(() => episodes.find((e) => e.id === episodeId) ?? null, [episodes, episodeId])
 
@@ -109,66 +201,74 @@ function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: 
   const loadEpisodes = useCallback((wid: number) => api.episodes(wid).then((es) => { setEpisodes(es); setEpisodeId((cur) => es.some((e) => e.id === cur) ? cur : (es[0]?.id ?? null)) }).catch((e) => setError(errText(e))), [])
   useEffect(() => { loadWorks() }, [loadWorks])
   useEffect(() => { if (workId != null) loadEpisodes(workId) }, [workId, loadEpisodes])
+  // 고른 작품·회차가 정해지면 남긴다. 작품을 바꾸는 사이(새 회차 목록 전)와 회차 목록을 읽는 중에는 남기지 않는다.
+  useEffect(() => {
+    if (!work) return
+    if (episode ? episode.workId !== work.id : episodeId != null) return
+    rememberSelection(work.id, episode?.id ?? null)
+  }, [work, episode, episodeId])
 
   return (
-    <div className="grid grid-cols-[300px_minmax(0,1fr)] min-h-full">
-      <aside className="border-r border-line bg-raise flex flex-col">
-        <div className="px-5 pt-5 pb-3">
-          <div className="text-[11px] font-semibold text-muted mb-2">작품</div>
-          <select value={workId ?? ''} onChange={(e) => setWorkId(Number(e.target.value))} className="input w-full">
+    <div className="sd-layout">
+      <aside className="sd-panel sd-side">
+        <div className="sd-side-block">
+          <label className="sd-caption" htmlFor={workSelectId}>작품</label>
+          <select id={workSelectId} value={workId ?? ''} onChange={(e) => setWorkId(Number(e.target.value))} className="sd-input sd-w-full">
             {works == null && <option>불러오는 중</option>}
             {works?.map((w) => <option key={w.id} value={w.id}>{w.title}</option>)}
           </select>
           {work && (
-            <p className="note mt-2">
+            <p className="sd-note">
               {work.airWeekday ? `${WEEKDAYS[work.airWeekday]}요일 ${work.airTime ?? ''} 방영` : '정기 편성 없음'}
               {work.defaultRuntimeSec ? ` · 본편 약 ${Math.round(work.defaultRuntimeSec / 60)}분` : ''}
               <br />글을 모으는 곳: {work.sources.map((s) => `${SOURCE_LABEL[s.kind]} ${s.kind === 'DCINSIDE' ? '갤러리' : '게시판'} ${s.boardId}`).join(', ') || '없음'}
             </p>
           )}
         </div>
-        <div className="px-5 pb-2 text-[11px] font-semibold text-muted">회차</div>
-        <ul className="px-3 pb-3 flex flex-col gap-1 overflow-auto">
-          {work && episodes.length === 0 && <li className="px-2 py-2 text-sm text-muted">아직 회차가 없습니다. 아래에서 방영일을 추가하세요.</li>}
+        <div className="sd-side-caption">회차</div>
+        <ul className="sd-list">
+          {work && episodes.length === 0 && <li className="sd-list-empty">아직 회차가 없습니다. 아래에서 방영일을 추가하세요.</li>}
           {episodes.map((e) => (
             <li key={e.id}>
-              <button onClick={() => setEpisodeId(e.id)} className={`w-full text-left rounded-lg px-3 py-2.5 border ${e.id === episodeId ? 'border-info bg-infow' : 'border-transparent hover:bg-soft'}`}>
-                <div className="font-semibold">{e.label ?? e.airDate}</div>
-                <div className="text-xs text-muted mt-0.5">{e.airDate} · {fmtTime(e.airStartAt).slice(0, 5)} 시작{e.episodeId ? ' · 넷플릭스 연결됨' : ''}</div>
+              <button onClick={() => setEpisodeId(e.id)} className="sd-list-item" aria-current={e.id === episodeId ? 'true' : undefined}>
+                <strong>{e.label ?? e.airDate}</strong>
+                <span>{e.airDate} · {fmtTime(e.airStartAt).slice(0, 5)} 시작{e.episodeId ? ' · 넷플릭스 연결됨' : ''}</span>
               </button>
             </li>
           ))}
         </ul>
-        {work && writable && <AddEpisode work={work} onAdded={(id) => { loadEpisodes(work.id); setEpisodeId(id) }} onError={setError} />}
+        {work && writable && <AddEpisode work={work} onAdded={(id) => { loadEpisodes(work.id); setEpisodeId(id) }} />}
       </aside>
 
-      <section className="p-6 flex flex-col gap-5 max-w-[1400px]">
+      <section className="sd-main">
         {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
-        {!episode && <div className="card card-body text-sm text-muted">왼쪽에서 회차를 고르면 그 회차의 작업 단계가 여기에 나타납니다.</div>}
-        {episode && work && <EpisodeWorkspace key={episode.id} work={work} episode={episode} writable={writable} onEpisodeChanged={() => loadEpisodes(work.id)} onError={setError} />}
+        {!episode && <div className="sd-panel sd-guide">왼쪽에서 회차를 고르면 그 회차의 작업 단계가 여기에 나타납니다.</div>}
+        {episode && work && <EpisodeWorkspace key={episode.id} work={work} episode={episode} writable={writable} onEpisodeChanged={() => loadEpisodes(work.id)} />}
       </section>
     </div>
   )
 }
 
-function AddEpisode({ work, onAdded, onError }: { work: Work; onAdded: (id: number) => void; onError: (m: string) => void }) {
+function AddEpisode({ work, onAdded }: { work: Work; onAdded: (id: number) => void }) {
   const [open, setOpen] = useState(false)
   const [airDate, setAirDate] = useState(() => lastAirDate(work.airWeekday))
   const [label, setLabel] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const add = async () => {
     setBusy(true)
-    try { const e = await api.createEpisode(work.id, { airDate, label: label || undefined }); setOpen(false); setLabel(''); onAdded(e.id) }
-    catch (e) { onError(errText(e)) } finally { setBusy(false) }
+    try { const e = await api.createEpisode(work.id, { airDate, label: label || undefined }); setOpen(false); setLabel(''); setError(null); onAdded(e.id) }
+    catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   return (
-    <div className="mt-auto border-t border-line px-5 py-4">
-      {!open ? <button className="btn w-full justify-center" onClick={() => { setAirDate(lastAirDate(work.airWeekday)); setOpen(true) }}>회차 추가</button> : (
-        <div className="flex flex-col gap-2 text-sm">
-          <label className="flex flex-col gap-1"><span className="text-xs text-muted">방영일</span><input type="date" value={airDate} onChange={(e) => setAirDate(e.target.value)} className="input" /></label>
-          <label className="flex flex-col gap-1"><span className="text-xs text-muted">이름 (예: 33기 9회)</span><input value={label} onChange={(e) => setLabel(e.target.value)} className="input" /></label>
-          <p className="note">방영 시작 시각은 작품의 편성 시각으로 채워집니다. 종료 시각은 수집이 끝난 뒤 글 밀도를 보고 정합니다.</p>
-          <div className="flex gap-2"><button className="btn-primary" disabled={busy} onClick={add}>추가</button><button className="btn" onClick={() => setOpen(false)}>취소</button></div>
+    <div className="sd-side-foot">
+      {!open ? <button className="btn sd-block" onClick={() => { setAirDate(lastAirDate(work.airWeekday)); setOpen(true) }}>회차 추가</button> : (
+        <div className="sd-form">
+          <label className="sd-field"><span>방영일</span><input type="date" value={airDate} onChange={(e) => setAirDate(e.target.value)} className="sd-input" /></label>
+          <label className="sd-field"><span>이름 (예: 33기 9회)</span><input value={label} onChange={(e) => setLabel(e.target.value)} className="sd-input" /></label>
+          <p className="sd-note">방영 시작 시각은 작품의 편성 시각으로 채워집니다. 종료 시각은 수집이 끝난 뒤 글 밀도를 보고 정합니다.</p>
+          {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
+          <div className="sd-actions"><button className="btn sd-primary" disabled={busy} onClick={add}>추가</button><button className="btn" onClick={() => { setOpen(false); setError(null) }}>취소</button></div>
         </div>
       )}
     </div>
@@ -176,47 +276,88 @@ function AddEpisode({ work, onAdded, onError }: { work: Work; onAdded: (id: numb
 }
 
 /* ─── 한 회차의 작업 흐름 ──────────────────────────────────────────── */
-function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged, onError }: { work: Work; episode: Episode; writable: boolean; onEpisodeChanged: () => void; onError: (m: string) => void }) {
+/* 회차를 열어 둔 동안 다시 읽는 간격(HP-526) — 파이프라인(관리자 PC의 AI 작업)이 만든 계획이 회차를 다시 고르지 않아도 뜨게. */
+const EPISODE_REFRESH_MS = 30_000
+/* 단계 카드 — 오류는 이 칸 이름으로 그 카드에 뜬다(HP-526). */
+type Step = 'info' | 'collect' | 'sync' | 'plan' | 'inject'
+
+function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged }: { work: Work; episode: Episode; writable: boolean; onEpisodeChanged: () => void }) {
   const [collections, setCollections] = useState<Collection[]>([])
   const [anchors, setAnchors] = useState<SyncAnchor[]>([])
   const [notes, setNotes] = useState<SceneNote[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
   const [injections, setInjections] = useState<Injection[]>([])
-  const reloadCollections = useCallback(() => api.collections(episode.id).then(setCollections).catch((e) => onError(errText(e))), [episode.id, onError])
-  const reloadSync = useCallback(() => Promise.all([api.anchors(episode.id), api.sceneNotes(episode.id)]).then(([a, n]) => { setAnchors(a); setNotes(n) }).catch((e) => onError(errText(e))), [episode.id, onError])
-  const reloadPlans = useCallback(() => Promise.all([api.plans(episode.id), api.injections(episode.id)]).then(([p, i]) => { setPlans(p); setInjections(i) }).catch((e) => onError(errText(e))), [episode.id, onError])
+  const [errors, setErrors] = useState<Partial<Record<Step, { text: string; tone: AlertTone }>>>({})
+  const report = useMemo(() => {
+    const to = (step: Step) => (text: string, tone: AlertTone = 'bad') => setErrors((cur) => ({ ...cur, [step]: { text, tone } }))
+    return { info: to('info'), collect: to('collect'), sync: to('sync'), plan: to('plan'), inject: to('inject') }
+  }, [])
+  const dismiss = (step: Step) => () => setErrors((cur) => { const next = { ...cur }; delete next[step]; return next })
+  // quiet = 뒤에서 다시 읽기(아래 30초 주기) — 실패를 띄우지 않고 다음 차례에 다시 읽는다. 사람이 누른 일의 실패는 띄운다.
+  // 목록마다 마지막으로 시작한 읽기만 그린다: 뒤에서 읽는 사이 수집을 지우고 다시 읽으면, 먼저 출발한 뒤쪽 읽기의 늦은
+  // 응답이 지운 수집을 되살려 다음 주기까지 남았다(2026-10-12 리뷰). 계획 상태·넣은 수·장면 메모도 같다.
+  const beginCollections = useLatestRequest()
+  const beginSync = useLatestRequest()
+  const beginPlans = useLatestRequest()
+  const reloadCollections = useCallback((quiet?: boolean) => {
+    const current = beginCollections()
+    return api.collections(episode.id)
+      .then((rows) => { if (current()) setCollections(rows) })
+      .catch((e) => { if (quiet !== true && current()) report.collect(errText(e)) })
+  }, [episode.id, report, beginCollections])
+  const reloadSync = useCallback((quiet?: boolean) => {
+    const current = beginSync()
+    return Promise.all([api.anchors(episode.id), api.sceneNotes(episode.id)])
+      .then(([a, n]) => { if (current()) { setAnchors(a); setNotes(n) } })
+      .catch((e) => { if (quiet !== true && current()) report.sync(errText(e)) })
+  }, [episode.id, report, beginSync])
+  const reloadPlans = useCallback((quiet?: boolean) => {
+    const current = beginPlans()
+    return Promise.all([api.plans(episode.id), api.injections(episode.id)])
+      .then(([p, i]) => { if (current()) { setPlans(p); setInjections(i) } })
+      .catch((e) => { if (quiet !== true && current()) report.plan(errText(e)) })
+  }, [episode.id, report, beginPlans])
   useEffect(() => { reloadCollections(); reloadSync(); reloadPlans() }, [reloadCollections, reloadSync, reloadPlans])
+  /* 파이프라인이 만든 계획·기준점·장면 메모와 다른 곳에서 시작한 수집이 도착하면 회차를 다시 고르지 않아도 보이게, 탭이
+     보이는 동안 30초마다 다시 읽는다(HP-526). 목록만 바꾸므로 고른 계획·펼친 목록·스크롤은 그대로다. 탭이 가려지면
+     멈추고, 다시 보이면 곧바로 한 번 읽은 뒤 이어 간다. */
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null
+    const refresh = () => { reloadCollections(true); reloadSync(true); reloadPlans(true) }
+    const start = () => { if (timer == null) timer = setInterval(refresh, EPISODE_REFRESH_MS) }
+    const stop = () => { if (timer != null) { clearInterval(timer); timer = null } }
+    const onVisibility = () => { if (document.visibilityState === 'hidden') stop(); else { refresh(); start() } }
+    if (document.visibilityState !== 'hidden') start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [reloadCollections, reloadSync, reloadPlans])
 
-  const done = collections.filter((c) => c.status === 'DONE')
-  const latestDone = done[0] ?? null
-  const steps = [
-    { label: '수집', state: latestDone ? `완료 · ${latestDone.postCount.toLocaleString()}건` : collections.some((c) => c.status === 'RUNNING' || c.status === 'QUEUED') ? '진행 중' : '아직 없음', ok: !!latestDone },
-    { label: '시각 맞추기', state: anchors.length ? `기준점 ${anchors.length}개 · 장면 메모 ${notes.length}분` : '아직 없음', ok: anchors.length > 0 },
-    { label: 'AI 계획', state: plans.length ? `${plans.length}개 (검수 대기 ${plans.filter((p) => p.status === 'DRAFT').length})` : '아직 없음', ok: plans.length > 0 },
-    { label: '채팅 넣기', state: injections.length ? `${injections.length.toLocaleString()}건 넣음` : '아직 없음', ok: injections.length > 0 },
-  ]
+  // 네 단계 판정은 공용 틀 홈의 '최근 회차'와 같은 것을 쓴다(progress.ts, HP-525) — 끝남·사람 차례·아직.
+  const progress = episodeProgress(collections, anchors, plans, injections, notes)
 
   return (
     <>
-      <div className="flex items-end justify-between gap-6">
+      <header className="sd-episode-head">
         <div>
-          <div className="text-xs text-muted">{work.title}</div>
-          <h1 className="text-2xl font-bold mt-0.5">{episode.label ?? episode.airDate} <span className="text-base font-normal text-muted ml-1">{episode.airDate}</span></h1>
+          <div className="sd-eyebrow">{work.title}</div>
+          <h1>{episode.label ?? episode.airDate} <span>{episode.airDate}</span></h1>
         </div>
-        <ol className="flex gap-2">
-          {steps.map((s, i) => (
-            <li key={s.label} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${s.ok ? 'border-ok/30 bg-okw' : 'border-line bg-raise'}`}>
-              <span className={`w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center ${s.ok ? 'bg-ok text-white' : 'bg-soft text-muted'}`}>{i + 1}</span>
-              <div className="leading-tight"><div className="text-xs font-semibold">{s.label}</div><div className="text-[11px] text-muted">{s.state}</div></div>
+        <ol className="sd-progress" aria-label="작업 단계">
+          {progress.steps.map((s, i) => (
+            <li key={s.label} className={`is-${s.state}`}>
+              <span className="sd-progress-no">{i + 1}</span>
+              <span className="sd-progress-text"><b>{s.label}</b><span>{s.detail}</span></span>
             </li>
           ))}
         </ol>
-      </div>
+      </header>
 
-      <EpisodeInfo episode={episode} work={work} writable={writable} onChanged={onEpisodeChanged} onError={onError} />
-      <CollectStep episode={episode} collections={collections} writable={writable} reload={reloadCollections} onEpisodeChanged={onEpisodeChanged} onError={onError} />
-      <SyncStep episode={episode} anchors={anchors} notes={notes} writable={writable} reload={reloadSync} onError={onError} />
-      <PlanStep episode={episode} plans={plans} injections={injections} writable={writable} reload={reloadPlans} onError={onError} />
+      <EpisodeInfo episode={episode} work={work} writable={writable} onChanged={onEpisodeChanged} onError={report.info} error={errors.info?.text} onCloseError={dismiss('info')} />
+      <CollectStep episode={episode} collections={collections} writable={writable} reload={reloadCollections} onEpisodeChanged={onEpisodeChanged} onError={report.collect} error={errors.collect?.text} onCloseError={dismiss('collect')} />
+      <SyncStep episode={episode} anchors={anchors} notes={notes} writable={writable} reload={reloadSync} onError={report.sync} error={errors.sync?.text} onCloseError={dismiss('sync')} />
+      <PlanStep episode={episode} plans={plans} injections={injections} writable={writable} reload={reloadPlans}
+          onPlanError={report.plan} planError={errors.plan?.text} onClosePlanError={dismiss('plan')}
+          onInjectError={report.inject} injectError={errors.inject} onCloseInjectError={dismiss('inject')} />
     </>
   )
 }
@@ -227,7 +368,19 @@ function episodeFields(e: Episode) {
   return { label: e.label ?? '', start: isoToKstInput(e.airStartAt), end: isoToKstInput(e.airEndAt), runtime: e.runtimeSec ? String(Math.round(e.runtimeSec / 60)) : '' }
 }
 
-function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode: Episode; work: Work; writable: boolean; onChanged: () => void; onError: (m: string) => void }) {
+/* 회차 정보 저장 확인 창의 '변경' 칸 — 바뀌는 칸만 적는다. */
+function episodeChange(e: Episode, next: { label: string | null; airStartAt: string; airEndAt: string | null; runtimeSec: number | null }) {
+  const same = (a: string | null, b: string | null) => (a == null || b == null ? a === b : new Date(a).getTime() === new Date(b).getTime())
+  const minutes = (sec: number | null) => (sec ? `${Math.round(sec / 60)}분` : '없음')
+  const parts: string[] = []
+  if ((next.label ?? null) !== (e.label ?? null)) parts.push(`이름 ${e.label ?? '없음'} → ${next.label ?? '없음'}`)
+  if (!same(next.airStartAt, e.airStartAt)) parts.push(`방영 시작 ${fmtKst(e.airStartAt)} → ${fmtKst(next.airStartAt)}`)
+  if (!same(next.airEndAt, e.airEndAt)) parts.push(`방영 종료 ${fmtKst(e.airEndAt)} → ${fmtKst(next.airEndAt)}`)
+  if ((next.runtimeSec ?? null) !== (e.runtimeSec ?? null)) parts.push(`본편 길이 ${minutes(e.runtimeSec)} → ${minutes(next.runtimeSec)}`)
+  return parts.join(', ')
+}
+
+function EpisodeInfo({ episode, work, writable, onChanged, onError, error, onCloseError }: { episode: Episode; work: Work; writable: boolean; onChanged: () => void; onError: (m: string) => void; error?: string; onCloseError: () => void }) {
   const [edit, setEdit] = useState(false)
   const [label, setLabel] = useState('')
   const [start, setStart] = useState('')
@@ -270,112 +423,113 @@ function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode:
       runtimeSec: runtime === o.runtime ? episode.runtimeSec : (runtime ? Number(runtime) * 60 : null),
       episodeId: episode.episodeId,
     }
+    const change = episodeChange(episode, body) || '바뀐 칸 없음(지금 값을 다시 저장)'
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${work.title} ${episodeName(episode)} 회차 정보`), change, reason: AIR_TIME_REASON },
+      `회차 정보를 저장합니다. ${AIR_TIME_REASON}.\n\n바뀌는 것: ${change}`)) return
     setBusy(true)
     try { await api.updateEpisode(episode.id, body); setEdit(false); onChanged() }
     catch (e) { onError(errText(e)) } finally { setBusy(false) }
   }
   const unlink = async () => {
-    if (!confirm('넷플릭스 회차와의 연결을 끊습니다. 익스텐션 패널에서 다시 연결할 수 있습니다.')) return
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${work.title} ${episodeName(episode)} 넷플릭스 회차 연결`), change: `넷플릭스 회차 id ${episode.episodeId} 연결 끊기`, reason: '채팅은 연결된 뒤에만 넣을 수 있습니다. 익스텐션 패널에서 다시 연결할 수 있습니다' },
+      '넷플릭스 회차와의 연결을 끊습니다. 익스텐션 패널에서 다시 연결할 수 있습니다.')) return
     try { await api.linkEpisode(episode.id, null); onChanged() } catch (e) { onError(errText(e)) }
   }
   return (
-    <div className="card">
-      <div className="card-head flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-bold">회차 정보</h2>
-          <p className="lead mt-1">방영 시각은 글을 모을 범위와 채팅 시각 계산의 기준입니다. 편성표 시각이 아니라 실제로 본편이 시작하고 끝난 시각을 적으세요. 정확한 값은 수집 뒤 분당 글 수 그래프와 AI 장면 복원이 알려 줍니다.</p>
-        </div>
-        {writable && !edit && <button className="btn" onClick={startEdit}>고치기</button>}
-      </div>
-      <div className="card-body grid grid-cols-2 gap-x-10 gap-y-4">
+    <Card
+        title="회차 정보"
+        lead={<p className="sd-lead">방영 시각은 글을 모을 범위와 채팅 시각 계산의 기준입니다. 편성표 시각이 아니라 실제로 본편이 시작하고 끝난 시각을 적으세요. 정확한 값은 수집 뒤 분당 글 수 그래프와 AI 장면 복원이 알려 줍니다.</p>}
+        actions={writable && !edit && <button className="btn" onClick={startEdit}>고치기</button>}
+        error={error} onCloseError={onCloseError}>
+      <div className="sd-info-grid">
         {!edit ? (
           <>
-            <div className="kv">
-              <span className="text-muted">이름</span><span>{episode.label ?? '없음'}</span>
-              <span className="text-muted">방영 시작</span><span className="mono">{fmtKst(episode.airStartAt)}</span>
-              <span className="text-muted">방영 종료</span><span className="mono">{episode.airEndAt ? fmtKst(episode.airEndAt) : <span className="text-muted">아직 모름 (시작 후 3시간까지 수집)</span>}</span>
-              <span className="text-muted">넷플릭스 본편 길이</span><span>{episode.runtimeSec ? `${Math.round(episode.runtimeSec / 60)}분` : work.defaultRuntimeSec ? `작품 기본값 ${Math.round(work.defaultRuntimeSec / 60)}분` : '모름'}</span>
+            <div className="sd-kv">
+              <span className="sd-kv-key">이름</span><span>{episode.label ?? '없음'}</span>
+              <span className="sd-kv-key">방영 시작</span><span className="sd-mono">{fmtKst(episode.airStartAt)}</span>
+              <span className="sd-kv-key">방영 종료</span><span className="sd-mono">{episode.airEndAt ? fmtKst(episode.airEndAt) : <span className="sd-muted">아직 모름 (시작 후 3시간까지 수집)</span>}</span>
+              <span className="sd-kv-key">넷플릭스 본편 길이</span><span>{episode.runtimeSec ? `${Math.round(episode.runtimeSec / 60)}분` : work.defaultRuntimeSec ? `작품 기본값 ${Math.round(work.defaultRuntimeSec / 60)}분` : '모름'}</span>
             </div>
-            <div className="kv">
-              <span className="text-muted">넷플릭스 회차 연결</span>
+            <div className="sd-kv">
+              <span className="sd-kv-key">넷플릭스 회차 연결</span>
               <span>{episode.episodeId
-                ? <span className="flex items-center gap-2"><span className="pill bg-okw text-ok">연결됨</span><span className="text-xs text-muted">회차 id {episode.episodeId}</span>{writable && <button className="btn btn-sm" onClick={unlink}>연결 끊기</button>}</span>
-                : <span className="text-muted">아직 연결되지 않았습니다. 넷플릭스에서 이 회차를 재생하고 익스텐션의 시딩 도구에서 "이 회차에 연결"을 누르면 연결됩니다. 채팅은 연결된 뒤에만 넣을 수 있습니다.</span>}</span>
+                ? <span className="sd-inline"><State tone="on">연결됨</State><span className="sd-muted sd-small">회차 id {episode.episodeId}</span>{writable && <button className="btn sd-sm" onClick={unlink}>연결 끊기</button>}</span>
+                : <span className="sd-muted">아직 연결되지 않았습니다. 넷플릭스에서 이 회차를 재생하고 익스텐션의 시딩 도구에서 "이 회차에 연결"을 누르면 연결됩니다. 채팅은 연결된 뒤에만 넣을 수 있습니다.</span>}</span>
             </div>
           </>
         ) : (
           <>
-            <div className="kv">
-              <span className="text-muted">이름</span><input value={label} onChange={(e) => setLabel(e.target.value)} className="input" placeholder="예: 33기 9회" />
-              <span className="text-muted">방영 시작 (KST)</span><input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="input mono" />
-              <span className="text-muted">방영 종료 (KST)</span><input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className="input mono" />
-              <span className="text-muted">본편 길이 (분)</span><input type="number" value={runtime} onChange={(e) => setRuntime(e.target.value)} className="input mono w-28" placeholder="예: 97" />
+            <div className="sd-kv">
+              <span className="sd-kv-key">이름</span><input value={label} onChange={(e) => setLabel(e.target.value)} className="sd-input" placeholder="예: 33기 9회" />
+              <span className="sd-kv-key">방영 시작 (KST)</span><input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="sd-input sd-mono" />
+              <span className="sd-kv-key">방영 종료 (KST)</span><input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className="sd-input sd-mono" />
+              <span className="sd-kv-key">본편 길이 (분)</span><input type="number" value={runtime} onChange={(e) => setRuntime(e.target.value)} className="sd-input sd-mono sd-w-num" placeholder="예: 97" />
             </div>
-            <div className="flex flex-col gap-2">
-              <p className="note">종료 시각을 비워 두면 시작 후 3시간까지 넉넉히 수집하고, 밀도 그래프의 제안으로 나중에 채울 수 있습니다. 본편 길이는 넷플릭스 재생 화면의 길이입니다. 광고를 뺀 값이라 방송 길이보다 짧습니다.</p>
-              <div className="flex gap-2"><button className="btn-primary" disabled={busy} onClick={save}>저장</button><button className="btn" onClick={() => setEdit(false)}>취소</button></div>
+            <div className="sd-stack">
+              <p className="sd-note">종료 시각을 비워 두면 시작 후 3시간까지 넉넉히 수집하고, 밀도 그래프의 제안으로 나중에 채울 수 있습니다. 본편 길이는 넷플릭스 재생 화면의 길이입니다. 광고를 뺀 값이라 방송 길이보다 짧습니다.</p>
+              <div className="sd-actions"><button className="btn sd-primary" disabled={busy} onClick={save}>저장</button><button className="btn" onClick={() => setEdit(false)}>취소</button></div>
             </div>
           </>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
 
 /* ─── 1단계: 수집 ──────────────────────────────────────────────────── */
-function CollectStep({ episode, collections, writable, reload, onEpisodeChanged, onError }: { episode: Episode; collections: Collection[]; writable: boolean; reload: () => void; onEpisodeChanged: () => void; onError: (m: string) => void }) {
+function CollectStep({ episode, collections, writable, reload, onEpisodeChanged, onError, error, onCloseError }: { episode: Episode; collections: Collection[]; writable: boolean; reload: () => void; onEpisodeChanged: () => void; onError: (m: string) => void; error?: string; onCloseError: () => void }) {
   const [busy, setBusy] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const active = collections.some((c) => c.status === 'QUEUED' || c.status === 'RUNNING')
   const selected = collections.find((c) => c.id === selectedId) ?? collections.find((c) => c.status === 'DONE') ?? collections[0] ?? null
   useEffect(() => { if (!active) return; const t = setInterval(reload, 2000); return () => clearInterval(t) }, [active, reload])
   const start = async () => { setBusy(true); try { await api.startCollection(episode.id); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
-  const cancel = async (id: number) => { try { await api.cancel(id); reload() } catch (e) { onError(errText(e)) } }
+  const cancel = async (c: Collection) => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 수집 #${c.id}`), change: `진행 중인 수집 #${c.id} 멈추기`, reason: '이미 모은 글은 그대로 남습니다. 더 모으려면 수집을 다시 시작해야 합니다' },
+      `수집 #${c.id}을 멈출까요? 이미 모은 글은 남습니다.`)) return
+    try { await api.cancel(c.id); reload() } catch (e) { onError(errText(e)) }
+  }
   const remove = async (c: Collection) => {
-    if (!confirm(`수집 #${c.id}의 글 ${c.postCount.toLocaleString()}건을 서버에서 지웁니다. 이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다.`)) return
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 수집 #${c.id}`), change: `수집한 글 ${c.postCount.toLocaleString()}건 지우기`, reason: '이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다. 지운 글은 되돌릴 수 없습니다' },
+      `수집 #${c.id}의 글 ${c.postCount.toLocaleString()}건을 서버에서 지웁니다. 이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다.`)) return
     try { await api.remove(c.id); reload() } catch (e) { onError(errText(e)) }
   }
   return (
-    <div className="card">
-      <div className="card-head flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-bold flex items-center"><span className="step-no">1</span>수집</h2>
-          <p className="lead mt-2">방송 시간대에 디시인사이드와 더쿠에 올라온 글을 모아 서버에 저장합니다. 이 글이 뒤의 모든 단계의 재료입니다. 모으는 범위는 방영 시작 20분 전부터 종료 30분 뒤까지이고, 종료 시각을 모르면 시작 후 3시간까지 모은 뒤 분당 글 수를 보고 종료를 찾습니다. 한 회차에 보통 5분쯤 걸립니다.</p>
+    <Card
+        no={1} title="수집"
+        lead={<p className="sd-lead">방송 시간대에 디시인사이드와 더쿠에 올라온 글을 모아 서버에 저장합니다. 이 글이 뒤의 모든 단계의 재료입니다. 모으는 범위는 방영 시작 20분 전부터 종료 30분 뒤까지이고, 종료 시각을 모르면 시작 후 3시간까지 모은 뒤 분당 글 수를 보고 종료를 찾습니다. 한 회차에 보통 5분쯤 걸립니다.</p>}
+        actions={writable && <button className="btn sd-primary" disabled={busy || active} onClick={start}>{active ? '수집 중' : collections.length ? '다시 수집' : '수집 시작'}</button>}
+        error={error} onCloseError={onCloseError}>
+      {collections.length === 0 && <p className="sd-empty">아직 수집한 적이 없습니다.</p>}
+      {collections.length > 0 && (
+        <div className="sd-table-wrap">
+          <table className="sd-table">
+            <thead><tr><th>번호</th><th>상태</th><th>모은 글</th><th>모은 범위 (방송 시각)</th><th>걸린 시간</th><th>진행 상황 또는 오류</th><th></th></tr></thead>
+            <tbody>
+              {collections.map((c) => (
+                <tr key={c.id} className={`sd-clickable${selected?.id === c.id ? ' is-selected' : ''}`} onClick={() => setSelectedId(c.id)}>
+                  <td className="sd-mono">#{c.id}</td>
+                  <td><State tone={COLL_STATUS[c.status].tone}>{COLL_STATUS[c.status].label}</State></td>
+                  <td className="sd-mono">{c.postCount.toLocaleString()}</td>
+                  <td className="sd-mono sd-nowrap">{fmtKst(c.windowStartAt, { second: undefined })} ~ {fmtTime(c.windowEndAt).slice(0, 5)}</td>
+                  <td className="sd-nowrap">{c.status === 'DONE' ? fmtDuration(c.startedAt, c.finishedAt) : c.status === 'RUNNING' ? fmtDuration(c.startedAt, new Date().toISOString()) : ''}</td>
+                  <td className="sd-muted sd-small sd-col-progress">{c.status === 'RUNNING' ? c.progress : c.error ? <span className="sd-warn">{c.error}</span> : ''}</td>
+                  <td className="sd-row-actions" onClick={(e) => e.stopPropagation()}>
+                    {writable && (c.status === 'RUNNING' || c.status === 'QUEUED') && <button className="btn sd-sm" onClick={() => void cancel(c)}>멈추기</button>}
+                    {c.status === 'DONE' && <button className="btn sd-sm" onClick={() => api.download(c.id).catch((e) => onError(errText(e)))}>JSON 내려받기</button>}
+                    {writable && (c.status === 'DONE' || c.status === 'FAILED' || c.status === 'CANCELLED') && <button className="btn sd-sm sd-danger" onClick={() => remove(c)}>지우기</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        {writable && <button className="btn-primary" disabled={busy || active} onClick={start}>{active ? '수집 중' : collections.length ? '다시 수집' : '수집 시작'}</button>}
-      </div>
-      <div className="card-body flex flex-col gap-5">
-        {collections.length === 0 && <p className="text-sm text-muted">아직 수집한 적이 없습니다.</p>}
-        {collections.length > 0 && (
-          <div className="overflow-auto rounded-lg border border-line">
-            <table className="table">
-              <thead><tr><th>번호</th><th>상태</th><th>모은 글</th><th>모은 범위 (방송 시각)</th><th>걸린 시간</th><th>진행 상황 또는 오류</th><th></th></tr></thead>
-              <tbody>
-                {collections.map((c) => (
-                  <tr key={c.id} className={`cursor-pointer ${selected?.id === c.id ? 'bg-infow' : 'hover:bg-soft'}`} onClick={() => setSelectedId(c.id)}>
-                    <td className="mono">#{c.id}</td>
-                    <td><span className={`pill ${COLL_STATUS[c.status].cls}`}>{COLL_STATUS[c.status].label}</span></td>
-                    <td className="mono">{c.postCount.toLocaleString()}</td>
-                    <td className="mono whitespace-nowrap">{fmtKst(c.windowStartAt, { second: undefined })} ~ {fmtTime(c.windowEndAt).slice(0, 5)}</td>
-                    <td>{c.status === 'DONE' ? fmtDuration(c.startedAt, c.finishedAt) : c.status === 'RUNNING' ? fmtDuration(c.startedAt, new Date().toISOString()) : ''}</td>
-                    <td className="text-xs text-muted max-w-[360px]">{c.status === 'RUNNING' ? c.progress : c.error ? <span className="text-bad">{c.error}</span> : ''}</td>
-                    <td className="whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-                      {writable && (c.status === 'RUNNING' || c.status === 'QUEUED') && <button className="btn btn-sm" onClick={() => cancel(c.id)}>취소</button>}
-                      {c.status === 'DONE' && <button className="btn btn-sm" onClick={() => api.download(c.id).catch((e) => onError(errText(e)))}>JSON 내려받기</button>}
-                      {writable && (c.status === 'DONE' || c.status === 'FAILED' || c.status === 'CANCELLED') && <button className="btn btn-sm ml-1 text-bad" onClick={() => remove(c)}>지우기</button>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {selected && selected.status === 'DONE' && selected.postCount > 0 && <>
-          <DensityChart collection={selected} episode={episode} writable={writable} onEpisodeChanged={onEpisodeChanged} onError={onError} />
-          <PostBrowser key={selected.id} collection={selected} episode={episode} onError={onError} />
-        </>}
-      </div>
-    </div>
+      )}
+      {selected && selected.status === 'DONE' && selected.postCount > 0 && <>
+        <DensityChart collection={selected} episode={episode} writable={writable} onEpisodeChanged={onEpisodeChanged} onError={onError} />
+        <PostBrowser key={selected.id} collection={selected} episode={episode} onError={onError} />
+      </>}
+    </Card>
   )
 }
 
@@ -385,42 +539,46 @@ function DensityChart({ collection: c, episode, writable, onEpisodeChanged, onEr
   const [busy, setBusy] = useState(false)
   const [jump, setJump] = useState<string | null>(null)
   useEffect(() => { let alive = true; api.density(c.id).then((x) => { if (alive) setD(x) }).catch((e) => onError(errText(e))); return () => { alive = false } }, [c.id, onError])
-  if (!d) return <p className="text-sm text-muted">분당 글 수를 계산하고 있습니다.</p>
+  if (!d) return <p className="sd-empty">분당 글 수를 계산하고 있습니다.</p>
   const W = 1000, H = 140, n = d.buckets.length
   const max = Math.max(1, ...d.buckets.map((b) => b.count))
   const x = (iso: string) => ((new Date(iso).getTime() - new Date(d.from).getTime()) / 60000) / Math.max(1, n - 1) * W
   const apply = async (field: 'airStartAt' | 'airEndAt', value: string) => {
+    const what = field === 'airStartAt' ? '방영 시작' : '방영 종료'
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 회차 정보`), change: `${what} ${fmtKst(episode[field])} → ${fmtKst(value)} (분당 글 수 그래프의 추정)`, reason: AIR_TIME_REASON },
+      `${what} 시각을 그래프가 추정한 ${fmtTime(value).slice(0, 5)}로 바꿉니다. ${AIR_TIME_REASON}.`)) return
     setBusy(true)
     try { await api.updateEpisode(episode.id, { label: episode.label, airStartAt: field === 'airStartAt' ? value : episode.airStartAt, airEndAt: field === 'airEndAt' ? value : episode.airEndAt, runtimeSec: episode.runtimeSec, episodeId: episode.episodeId }); onEpisodeChanged() }
     catch (e) { onError(errText(e)) } finally { setBusy(false) }
   }
-  const Marker = ({ iso, color, label, dy }: { iso: string | null; color: string; label: string; dy: number }) => iso ? (
-    <g><line x1={x(iso)} x2={x(iso)} y1={0} y2={H} stroke={color} strokeWidth={1.5} strokeDasharray="4 3" /><text x={x(iso) + 4} y={dy} fontSize={11} fill={color}>{label} {fmtTime(iso).slice(0, 5)}</text></g>
+  // 점선 색 — 파랑 = 회차 정보에 저장된 시각, 주황 = 이 그래프로 추정한 시각(seeding.css .sd-chart-mark).
+  const Marker = ({ iso, tone, label, dy }: { iso: string | null; tone: 'saved' | 'estimate'; label: string; dy: number }) => iso ? (
+    <g className={`sd-chart-mark is-${tone}`}><line x1={x(iso)} x2={x(iso)} y1={0} y2={H} strokeWidth={1.5} strokeDasharray="4 3" /><text x={x(iso) + 4} y={dy} fontSize={11}>{label} {fmtTime(iso).slice(0, 5)}</text></g>
   ) : null
   const ticks = d.buckets.filter((_, i) => i % 10 === 0)
   return (
-    <div className="flex flex-col gap-3">
+    <div className="sd-section">
       <div>
-        <h3 className="font-semibold text-sm">분당 글 수</h3>
-        <p className="note mt-1">글이 갑자기 늘어나는 곳이 방송 시작, 확 줄어드는 곳이 방송 종료입니다. 파란 점선은 회차 정보에 저장된 시각, 빨간 점선은 이 그래프로 추정한 시각입니다. 막대를 누르면 아래 글 목록이 그 분으로 이동합니다.</p>
+        <h3>분당 글 수</h3>
+        <p className="sd-note">글이 갑자기 늘어나는 곳이 방송 시작, 확 줄어드는 곳이 방송 종료입니다. 파란 점선은 회차 정보에 저장된 시각, 주황 점선은 이 그래프로 추정한 시각입니다. 막대를 누르면 아래 글 목록이 그 분으로 이동합니다.</p>
       </div>
-      <div className="rounded-lg border border-line bg-soft/60 p-3">
-        <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full h-44">
-          {d.buckets.map((b, i) => <rect key={i} x={i / Math.max(1, n - 1) * W} y={H - (b.count / max) * H} width={Math.max(1.5, W / n)} height={(b.count / max) * H} fill="#9db4ff" />)}
-          {d.buckets.map((b, i) => <rect key={`h${i}`} x={i / Math.max(1, n - 1) * W} y={0} width={Math.max(1.5, W / n)} height={H} fill="transparent" className="cursor-pointer hover:fill-[#2f6da833]" onClick={() => setJump(b.at)}><title>{fmtTime(b.at).slice(0, 5)} · {b.count}건</title></rect>)}
-          {ticks.map((b, i) => <text key={`t${i}`} x={x(b.at)} y={H + 14} fontSize={10} fill="#666672">{fmtTime(b.at).slice(0, 5)}</text>)}
-          <Marker iso={episode.airStartAt} color="#2b66a3" label="저장된 시작" dy={14} />
-          <Marker iso={episode.airEndAt} color="#2b66a3" label="저장된 종료" dy={14} />
-          <Marker iso={d.suggestedStartAt} color="#a82a2a" label="추정 시작" dy={30} />
-          <Marker iso={d.suggestedEndAt} color="#a82a2a" label="추정 종료" dy={30} />
+      <div className="sd-chart">
+        <svg viewBox={`0 0 ${W} ${H + 18}`}>
+          {d.buckets.map((b, i) => <rect key={i} className="sd-chart-bar" x={i / Math.max(1, n - 1) * W} y={H - (b.count / max) * H} width={Math.max(1.5, W / n)} height={(b.count / max) * H} />)}
+          {d.buckets.map((b, i) => <rect key={`h${i}`} className="sd-chart-hit" x={i / Math.max(1, n - 1) * W} y={0} width={Math.max(1.5, W / n)} height={H} onClick={() => setJump(b.at)}><title>{fmtTime(b.at).slice(0, 5)} · {b.count}건</title></rect>)}
+          {ticks.map((b, i) => <text key={`t${i}`} className="sd-chart-tick" x={x(b.at)} y={H + 14} fontSize={10}>{fmtTime(b.at).slice(0, 5)}</text>)}
+          <Marker iso={episode.airStartAt} tone="saved" label="저장된 시작" dy={14} />
+          <Marker iso={episode.airEndAt} tone="saved" label="저장된 종료" dy={14} />
+          <Marker iso={d.suggestedStartAt} tone="estimate" label="추정 시작" dy={30} />
+          <Marker iso={d.suggestedEndAt} tone="estimate" label="추정 종료" dy={30} />
         </svg>
       </div>
-      <div className="flex flex-wrap items-center gap-4 text-sm">
-        <span className="text-muted">최대 {max}건/분</span>
-        {d.suggestedStartAt && <span className="flex items-center gap-2">추정 시작 <b className="mono">{fmtTime(d.suggestedStartAt).slice(0, 5)}</b>{writable && d.suggestedStartAt !== episode.airStartAt && <button className="btn btn-sm" disabled={busy} onClick={() => apply('airStartAt', d.suggestedStartAt!)}>회차 정보에 적용</button>}</span>}
+      <div className="sd-chart-legend">
+        <span className="sd-muted">최대 {max}건/분</span>
+        {d.suggestedStartAt && <span className="sd-inline">추정 시작 <b className="sd-mono">{fmtTime(d.suggestedStartAt).slice(0, 5)}</b>{writable && d.suggestedStartAt !== episode.airStartAt && <button className="btn sd-sm" disabled={busy} onClick={() => apply('airStartAt', d.suggestedStartAt!)}>회차 정보에 적용</button>}</span>}
         {d.suggestedEndAt
-          ? <span className="flex items-center gap-2">추정 종료 <b className="mono">{fmtTime(d.suggestedEndAt).slice(0, 5)}</b>{writable && d.suggestedEndAt !== episode.airEndAt && <button className="btn btn-sm" disabled={busy} onClick={() => apply('airEndAt', d.suggestedEndAt!)}>회차 정보에 적용</button>}</span>
-          : <span className="text-muted">종료를 추정하지 못했습니다. 글 수가 끝까지 줄지 않았기 때문입니다. AI 장면 복원이 예고와 총평 글을 근거로 더 정확한 종료를 찾아 줍니다.</span>}
+          ? <span className="sd-inline">추정 종료 <b className="sd-mono">{fmtTime(d.suggestedEndAt).slice(0, 5)}</b>{writable && d.suggestedEndAt !== episode.airEndAt && <button className="btn sd-sm" disabled={busy} onClick={() => apply('airEndAt', d.suggestedEndAt!)}>회차 정보에 적용</button>}</span>
+          : <span className="sd-muted">종료를 추정하지 못했습니다. 글 수가 끝까지 줄지 않았기 때문입니다. AI 장면 복원이 예고와 총평 글을 근거로 더 정확한 종료를 찾아 줍니다.</span>}
       </div>
       {jump && <PostJumpContext at={jump} onClear={() => setJump(null)} />}
     </div>
@@ -472,44 +630,44 @@ function PostBrowser({ collection: c, episode, onError }: { collection: Collecti
     setAnchor({ from: t.toISOString(), order: 'asc' })
   }
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+    <div className="sd-section">
+      <div className="sd-section-head">
         <div>
-          <h3 className="font-semibold text-sm">수집한 글 보기</h3>
-          <p className="note mt-1">글은 방송 시각 순으로 흐릅니다. 시각을 넣어 이동하거나 위 그래프의 막대를 누르면 그 분부터 보입니다. 목록 끝까지 내리면 다음 500건이 자동으로 이어집니다.</p>
+          <h3>수집한 글 보기</h3>
+          <p className="sd-note">글은 방송 시각 순으로 흐릅니다. 시각을 넣어 이동하거나 위 그래프의 막대를 누르면 그 분부터 보입니다. 목록 끝까지 내리면 다음 500건이 자동으로 이어집니다.</p>
         </div>
         <button className="btn" onClick={() => setOpen((v) => !v)}>{open ? '접기' : '펼치기'}</button>
       </div>
       {open && (
         <>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <button className="btn btn-sm" disabled={anchor.from === null && anchor.order === 'asc'} onClick={() => setAnchor({ from: null, order: 'asc' })}>처음부터</button>
-            <button className="btn btn-sm" disabled={anchor.order === 'desc'} onClick={() => setAnchor({ from: null, order: 'desc' })}>마지막 글부터 (역순)</button>
-            <span className="text-muted ml-2">시각으로 이동</span>
-            <input type="time" value={timeText} onChange={(e) => setTimeText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') jumpToTime() }} className="input h-8 text-xs w-28" />
-            <button className="btn btn-sm" disabled={!timeText} onClick={jumpToTime}>이동</button>
-            <span className="flex-1" />
-            <select value={source} onChange={(e) => setSource(e.target.value as SourceKind | '')} className="input h-8 text-xs">
+          <div className="sd-toolbar">
+            <button className="btn sd-sm" disabled={anchor.from === null && anchor.order === 'asc'} onClick={() => setAnchor({ from: null, order: 'asc' })}>처음부터</button>
+            <button className="btn sd-sm" disabled={anchor.order === 'desc'} onClick={() => setAnchor({ from: null, order: 'desc' })}>마지막 글부터 (역순)</button>
+            <span className="sd-muted">시각으로 이동</span>
+            <input type="time" value={timeText} onChange={(e) => setTimeText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') jumpToTime() }} className="sd-input sd-sm sd-w-time" />
+            <button className="btn sd-sm" disabled={!timeText} onClick={jumpToTime}>이동</button>
+            <span className="sd-spacer" />
+            <select value={source} onChange={(e) => setSource(e.target.value as SourceKind | '')} className="sd-input sd-sm">
               <option value="">디시인사이드와 더쿠 모두</option><option value="DCINSIDE">디시인사이드만</option><option value="THEQOO">더쿠만</option>
             </select>
-            {page && <span className="text-xs text-muted">{(Object.keys(SOURCE_LABEL) as SourceKind[]).map((k) => `${SOURCE_SHORT[k]} ${(page.countBySource[k] ?? 0).toLocaleString()}건`).join(' · ')}</span>}
+            {page && <span className="sd-muted sd-small">{(Object.keys(SOURCE_LABEL) as SourceKind[]).map((k) => `${SOURCE_SHORT[k]} ${(page.countBySource[k] ?? 0).toLocaleString()}건`).join(' · ')}</span>}
           </div>
-          <div ref={listRef} className="max-h-[640px] overflow-auto rounded-lg border border-line">
-            <table className="table">
-              <thead><tr><th className="w-24">방송 시각</th><th className="w-16">출처</th><th>글</th><th className="w-20">작성자</th></tr></thead>
+          <div ref={listRef} className="sd-table-wrap sd-h-lg">
+            <table className="sd-table">
+              <thead><tr><th className="sd-col-time">방송 시각</th><th className="sd-col-source">출처</th><th>글</th><th className="sd-col-author">작성자</th></tr></thead>
               <tbody>
                 {items.map((p) => (
                   <tr key={p.id}>
-                    <td className="mono text-xs whitespace-nowrap">{fmtTime(p.postedAt)}{p.precision === 'MINUTE' && <span className="text-faint" title="더쿠는 분 단위까지만 남습니다"> (분)</span>}</td>
-                    <td className="text-xs text-muted">{SOURCE_SHORT[p.source]}</td>
-                    <td>{p.sourceUrl ? <a href={p.sourceUrl} target="_blank" rel="noreferrer" className="hover:underline">{p.title}</a> : p.title}{p.body && <div className="text-xs text-muted mt-0.5 line-clamp-2">{p.body}</div>}</td>
-                    <td className="mono text-xs text-faint">{p.authorToken.slice(0, 6)}</td>
+                    <td className="sd-mono sd-small sd-nowrap">{fmtTime(p.postedAt)}{p.precision === 'MINUTE' && <span className="sd-faint" title="더쿠는 분 단위까지만 남습니다"> (분)</span>}</td>
+                    <td className="sd-muted sd-small">{SOURCE_SHORT[p.source]}</td>
+                    <td>{p.sourceUrl ? <a href={p.sourceUrl} target="_blank" rel="noreferrer" className="sd-link">{p.title}</a> : p.title}{p.body && <div className="sd-post-body">{p.body}</div>}</td>
+                    <td className="sd-mono sd-small sd-faint">{p.authorToken.slice(0, 6)}</td>
                   </tr>
                 ))}
-                {items.length === 0 && <tr><td colSpan={4} className="text-sm text-muted py-4">{anchor.from ? '이 시각 이후에는 글이 없습니다.' : '글이 없습니다.'}</td></tr>}
+                {items.length === 0 && <tr><td colSpan={4} className="sd-muted">{anchor.from ? '이 시각 이후에는 글이 없습니다.' : '글이 없습니다.'}</td></tr>}
               </tbody>
             </table>
-            <div ref={sentinelRef} className="p-2 text-center text-[11px] text-faint">{page?.nextCursor ? '이어서 불러오는 중' : items.length ? '목록의 끝입니다' : ''}</div>
+            <div ref={sentinelRef} className="sd-sentinel">{page?.nextCursor ? '이어서 불러오는 중' : items.length ? '목록의 끝입니다' : ''}</div>
           </div>
         </>
       )}
@@ -518,41 +676,42 @@ function PostBrowser({ collection: c, episode, onError }: { collection: Collecti
 }
 
 /* ─── 2단계: 싱크와 장면 ────────────────────────────────────────────── */
-function SyncStep({ episode, anchors, notes, writable, reload, onError }: { episode: Episode; anchors: SyncAnchor[]; notes: SceneNote[]; writable: boolean; reload: () => void; onError: (m: string) => void }) {
-  const removeAnchor = async (a: SyncAnchor) => { if (!confirm(`재생 ${fmtSec(a.playbackSec)} 기준점을 지웁니다.`)) return; try { await api.deleteAnchor(a.id); reload() } catch (e) { onError(errText(e)) } }
+function SyncStep({ episode, anchors, notes, writable, reload, onError, error, onCloseError }: { episode: Episode; anchors: SyncAnchor[]; notes: SceneNote[]; writable: boolean; reload: () => void; onError: (m: string) => void; error?: string; onCloseError: () => void }) {
+  const removeAnchor = async (a: SyncAnchor) => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 기준점`), change: `재생 ${fmtSec(a.playbackSec)} = 방송 ${fmtTime(a.wallclockAt)} 기준점 지우기`, reason: '채팅을 넣을 때 글의 방송 시각을 재생 시각으로 바꾸는 기준입니다' },
+      `재생 ${fmtSec(a.playbackSec)} 기준점을 지웁니다.`)) return
+    try { await api.deleteAnchor(a.id); reload() } catch (e) { onError(errText(e)) }
+  }
   return (
-    <div className="card">
-      <div className="card-head">
-        <h2 className="font-bold flex items-center"><span className="step-no">2</span>시각 맞추기와 장면 메모</h2>
-        <p className="lead mt-2">수집한 글에는 방송 시각이 적혀 있고, 넷플릭스는 재생 시각으로 돕니다. 이 단계는 그 둘을 잇는 <b>기준점</b>과, 방송 1분마다 화면에서 무슨 일이 있었는지 적은 <b>장면 메모</b>를 다룹니다. 둘 다 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 자막과 글을 읽어 자동으로 만들어집니다.</p>
-      </div>
-      <div className="card-body flex flex-col gap-8">
-        <section className="flex flex-col gap-3">
-          <div>
-            <h3 className="font-semibold">기준점 {anchors.length}개</h3>
-            <p className="note mt-1">기준점 하나는 "재생 몇 초가 방송 몇 시 몇 분이었다"는 쌍입니다. 방송에는 광고가 있어서 한 쌍으로는 뒤로 갈수록 어긋나므로 광고 뒤마다 기준점을 둡니다. 채팅을 넣을 때 글의 방송 시각을 이 표로 재생 시각으로 바꿉니다. 재생하며 어긋남이 보이면 익스텐션의 시딩 도구에서 초 단위로 다듬을 수 있습니다.</p>
+    <Card
+        no={2} title="시각 맞추기와 장면 메모"
+        lead={<p className="sd-lead">수집한 글에는 방송 시각이 적혀 있고, 넷플릭스는 재생 시각으로 돕니다. 이 단계는 그 둘을 잇는 <b>기준점</b>과, 방송 1분마다 화면에서 무슨 일이 있었는지 적은 <b>장면 메모</b>를 다룹니다. 둘 다 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 자막과 글을 읽어 자동으로 만들어집니다.</p>}
+        error={error} onCloseError={onCloseError}>
+      <section className="sd-section">
+        <div>
+          <h3>기준점 {anchors.length}개</h3>
+          <p className="sd-note">기준점 하나는 "재생 몇 초가 방송 몇 시 몇 분이었다"는 쌍입니다. 방송에는 광고가 있어서 한 쌍으로는 뒤로 갈수록 어긋나므로 광고 뒤마다 기준점을 둡니다. 채팅을 넣을 때 글의 방송 시각을 이 표로 재생 시각으로 바꿉니다. 재생하며 어긋남이 보이면 익스텐션의 시딩 도구에서 초 단위로 다듬을 수 있습니다.</p>
+        </div>
+        {anchors.length === 0 ? <p className="sd-empty">아직 기준점이 없습니다. 없으면 방영 시작 시각을 재생 0초로 보고 환산하는데, 광고가 있는 방송에서는 뒤로 갈수록 어긋납니다. AI 작업을 먼저 돌리세요.</p> : (
+          <div className="sd-table-wrap sd-h-sm sd-narrow">
+            <table className="sd-table">
+              <thead><tr><th className="sd-col-clock">재생 시각</th><th className="sd-col-clock">방송 시각</th><th>무엇으로 맞췄나</th><th className="sd-col-actions"></th></tr></thead>
+              <tbody>
+                {anchors.map((a) => (
+                  <tr key={a.id}>
+                    <td className="sd-mono">{fmtSec(a.playbackSec)}</td>
+                    <td className="sd-mono">{fmtTime(a.wallclockAt)}</td>
+                    <td className="sd-muted sd-small">{a.note}</td>
+                    <td className="sd-row-actions">{writable && <button className="btn sd-sm sd-danger" onClick={() => removeAnchor(a)}>지우기</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          {anchors.length === 0 ? <p className="text-sm text-muted">아직 기준점이 없습니다. 없으면 방영 시작 시각을 재생 0초로 보고 환산하는데, 광고가 있는 방송에서는 뒤로 갈수록 어긋납니다. AI 작업을 먼저 돌리세요.</p> : (
-            <div className="overflow-auto rounded-lg border border-line max-h-80 max-w-3xl">
-              <table className="table">
-                <thead><tr><th className="w-28">재생 시각</th><th className="w-28">방송 시각</th><th>무엇으로 맞췄나</th><th className="w-20"></th></tr></thead>
-                <tbody>
-                  {anchors.map((a) => (
-                    <tr key={a.id}>
-                      <td className="mono">{fmtSec(a.playbackSec)}</td>
-                      <td className="mono">{fmtTime(a.wallclockAt)}</td>
-                      <td className="text-xs text-muted">{a.note}</td>
-                      <td className="text-right">{writable && <button className="btn btn-sm text-bad" onClick={() => removeAnchor(a)}>지우기</button>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-        <SceneNotesBlock episode={episode} notes={notes} writable={writable} reload={reload} onError={onError} />
-      </div>
-    </div>
+        )}
+      </section>
+      <SceneNotesBlock episode={episode} notes={notes} writable={writable} reload={reload} onError={onError} />
+    </Card>
   )
 }
 
@@ -569,7 +728,9 @@ function groupTagged(notes: SceneNote[]) {
   return out
 }
 const TAG_LABEL: Record<string, string> = { '시작': '본편 시작', '광고': '중간광고', '종료': '종료·예고' }
-const CONF_DOT: Record<string, string> = { '높음': 'bg-ok', '중간': 'bg-warn', '낮음': 'bg-faint' }
+/* 방송 구조 표식 — 시작 초록, 광고 호박, 종료 회색(빨강은 지우기 전용이라 종료에 쓰지 않는다). */
+const TAG_TONE: Record<string, string> = { '시작': 'is-on', '광고': 'is-warn' }
+const CONF_DOT: Record<string, string> = { '높음': 'is-high', '중간': 'is-mid', '낮음': 'is-low' }
 
 function SceneNotesBlock({ episode, notes, writable, reload, onError }: { episode: Episode; notes: SceneNote[]; writable: boolean; reload: () => void; onError: (m: string) => void }) {
   const [open, setOpen] = useState(false)
@@ -586,62 +747,70 @@ function SceneNotesBlock({ episode, notes, writable, reload, onError }: { episod
   const main = notes.filter((n) => new Date(n.minuteAt) >= new Date(startAt) && (!endAt || new Date(n.minuteAt) <= new Date(endAt)))
   const post = notes.filter((n) => endAt && new Date(n.minuteAt) > new Date(endAt))
   const visible = (q ? notes.filter((n) => n.note.includes(q)) : [...(showPre ? pre : []), ...main])
-  const saveNotes = async () => { setBusy(true); try { await api.putSceneNotes(episode.id, parsed); setText(''); setPaste(false); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
-  const clearNotes = async () => { if (!confirm('장면 메모를 모두 지웁니다. AI 작업을 다시 돌리면 새로 만들어집니다.')) return; setBusy(true); try { await api.putSceneNotes(episode.id, []); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+  const saveNotes = async () => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 장면 메모`), change: `장면 메모 ${notes.length}분을 붙여 넣은 ${parsed.length}분으로 모두 바꾸기`, reason: 'AI 채팅 계획과 익스텐션의 시딩 도구가 이 메모를 씁니다. 지금 메모는 남지 않습니다' },
+      `장면 메모 ${notes.length}분을 붙여 넣은 ${parsed.length}분으로 모두 바꿉니다. 지금 메모는 남지 않습니다.`)) return
+    setBusy(true); try { await api.putSceneNotes(episode.id, parsed); setText(''); setPaste(false); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) }
+  }
+  const clearNotes = async () => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 장면 메모`), change: `장면 메모 ${notes.length}분 모두 지우기`, reason: 'AI 채팅 계획과 익스텐션의 시딩 도구가 이 메모를 씁니다. AI 작업을 다시 돌리면 새로 만들어집니다' },
+      '장면 메모를 모두 지웁니다. AI 작업을 다시 돌리면 새로 만들어집니다.')) return
+    setBusy(true); try { await api.putSceneNotes(episode.id, []); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) }
+  }
   const row = (n: SceneNote) => {
     const unknown = n.note.startsWith('추정 불가')
     return (
-      <div key={n.id} className={`grid grid-cols-[56px_14px_1fr_auto] items-start gap-3 px-3 py-2 border-t border-line first:border-t-0 ${unknown ? 'text-faint' : ''}`}>
-        <span className="mono text-xs text-muted pt-0.5">{fmtTime(n.minuteAt).slice(0, 5)}</span>
-        <span className={`mt-1.5 w-2 h-2 rounded-full ${CONF_DOT[n.confidence ?? ''] ?? 'bg-soft'}`} title={n.confidence ? `확신 ${n.confidence}` : ''} />
-        <span className="text-sm leading-relaxed">{n.note}</span>
-        <span className="text-[11px] whitespace-nowrap">{n.tag && <span className="pill bg-warnw text-warn">{TAG_LABEL[n.tag] ?? n.tag}</span>}</span>
+      <div key={n.id} className={`sd-scene${unknown ? ' is-unknown' : ''}`}>
+        <span className="sd-scene-time">{fmtTime(n.minuteAt).slice(0, 5)}</span>
+        <span className={`sd-dot ${CONF_DOT[n.confidence ?? ''] ?? ''}`} title={n.confidence ? `확신 ${n.confidence}` : ''} />
+        <span className="sd-scene-note">{n.note}</span>
+        <span>{n.tag && <span className={`sd-tag ${TAG_TONE[n.tag] ?? ''}`}>{TAG_LABEL[n.tag] ?? n.tag}</span>}</span>
       </div>
     )
   }
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-4">
+    <section className="sd-section">
+      <div className="sd-section-head">
         <div>
-          <h3 className="font-semibold">장면 메모 {notes.length > 0 && <span className="font-normal text-muted">{main.length}분 (방송 전 {pre.length}분, 종료 후 {post.length}분 별도)</span>}</h3>
-          <p className="note mt-1">AI가 자막과 글을 읽고 방송 1분마다 "이때 화면에서 무슨 일이 있었나"를 복원한 기록입니다. 세 곳에 쓰입니다. AI 채팅 계획을 만들 때 채팅을 고르고 다듬는 근거가 되고, 익스텐션의 시딩 도구에서 재생 중인 분의 장면을 보여 주며, 방송 시작·광고·종료 시각을 알려 줍니다. 각 줄 앞의 점은 AI의 확신 정도입니다(초록 높음, 노랑 중간, 회색 낮음).</p>
+          <h3>장면 메모 {notes.length > 0 && <span className="sd-sub">{main.length}분 (방송 전 {pre.length}분, 종료 후 {post.length}분 별도)</span>}</h3>
+          <p className="sd-note">AI가 자막과 글을 읽고 방송 1분마다 "이때 화면에서 무슨 일이 있었나"를 복원한 기록입니다. 세 곳에 쓰입니다. AI 채팅 계획을 만들 때 채팅을 고르고 다듬는 근거가 되고, 익스텐션의 시딩 도구에서 재생 중인 분의 장면을 보여 주며, 방송 시작·광고·종료 시각을 알려 줍니다. 각 줄 앞의 점은 AI의 확신 정도입니다(초록 높음, 노랑 중간, 회색 낮음).</p>
         </div>
-        <div className="flex gap-1 shrink-0">
+        <div className="sd-actions">
           {notes.length > 0 && <button className="btn" onClick={() => setOpen((v) => !v)}>{open ? '목록 접기' : '목록 보기'}</button>}
           {writable && <button className="btn" onClick={() => setPaste((v) => !v)}>{paste ? '닫기' : '표로 바꿔 넣기'}</button>}
-          {writable && notes.length > 0 && <button className="btn text-bad" disabled={busy} onClick={clearNotes}>모두 지우기</button>}
+          {writable && notes.length > 0 && <button className="btn sd-danger" disabled={busy} onClick={clearNotes}>모두 지우기</button>}
         </div>
       </div>
-      {notes.length === 0 && !paste && <p className="text-sm text-muted">아직 장면 메모가 없습니다. 익스텐션 패널에서 "AI 채팅 작업 시작"을 누르면 만들어집니다.</p>}
+      {notes.length === 0 && !paste && <p className="sd-empty">아직 장면 메모가 없습니다. 익스텐션 패널에서 "AI 채팅 작업 시작"을 누르면 만들어집니다.</p>}
       {groups.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-sm rounded-lg bg-soft/60 px-4 py-3">
-          <span className="text-muted mr-1">방송 구조</span>
+        <div className="sd-strip">
+          <span className="sd-muted">방송 구조</span>
           {groups.map((g, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5">
-              <span className={`pill ${g.tag === '광고' ? 'bg-warnw text-warn' : g.tag === '종료' ? 'bg-badw text-bad' : 'bg-okw text-ok'}`}>{TAG_LABEL[g.tag] ?? g.tag}</span>
-              <span className="mono">{fmtTime(g.from).slice(0, 5)}{g.to !== g.from ? `~${fmtTime(g.to).slice(0, 5)}` : ''}</span>
+            <span key={i} className="sd-strip-item">
+              <span className={`sd-tag ${TAG_TONE[g.tag] ?? ''}`}>{TAG_LABEL[g.tag] ?? g.tag}</span>
+              <span className="sd-mono">{fmtTime(g.from).slice(0, 5)}{g.to !== g.from ? `~${fmtTime(g.to).slice(0, 5)}` : ''}</span>
             </span>
           ))}
         </div>
       )}
       {paste && (
-        <div className="flex flex-col gap-2 max-w-3xl">
-          <p className="note">AI가 만든 마크다운 표를 그대로 붙여 넣습니다. 한 줄이 방송 1분이고 형식은 <span className="mono">| 22:35 | 장면 | 근거 | 확신 | 특이 |</span> 입니다. 근거 열은 저장하지 않으며, 저장하면 기존 메모를 전부 바꿉니다. 보통은 AI 작업이 자동으로 올리므로 손으로 할 일은 없습니다.</p>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} spellCheck={false} className="input mono text-xs py-2 h-auto" />
-          <div className="flex items-center gap-2 text-xs text-muted"><span>인식된 줄 {parsed.length}개</span><span className="flex-1" /><button className="btn-primary" disabled={busy || parsed.length === 0} onClick={saveNotes}>저장 (전체 교체)</button></div>
+        <div className="sd-stack sd-narrow">
+          <p className="sd-note">AI가 만든 마크다운 표를 그대로 붙여 넣습니다. 한 줄이 방송 1분이고 형식은 <span className="sd-mono">| 22:35 | 장면 | 근거 | 확신 | 특이 |</span> 입니다. 근거 열은 저장하지 않으며, 저장하면 기존 메모를 전부 바꿉니다. 보통은 AI 작업이 자동으로 올리므로 손으로 할 일은 없습니다.</p>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} spellCheck={false} className="sd-input sd-code" />
+          <div className="sd-toolbar"><span className="sd-muted sd-small">인식된 줄 {parsed.length}개</span><span className="sd-spacer" /><button className="btn sd-primary" disabled={busy || parsed.length === 0} onClick={saveNotes}>저장 (전체 교체)</button></div>
         </div>
       )}
       {open && notes.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="장면 검색 (예: 컵라면, 고백)" className="input w-72" />
-            {!q && pre.length > 0 && <button className="btn btn-sm" onClick={() => setShowPre((v) => !v)}>{showPre ? '방송 전 접기' : `방송 전 ${pre.length}분 보기`}</button>}
-            <span className="text-xs text-muted">{q ? `${visible.length}분 일치` : `${visible.length}분 표시`}</span>
+        <div className="sd-stack">
+          <div className="sd-toolbar">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="장면 검색 (예: 컵라면, 고백)" className="sd-input sd-w-search" />
+            {!q && pre.length > 0 && <button className="btn sd-sm" onClick={() => setShowPre((v) => !v)}>{showPre ? '방송 전 접기' : `방송 전 ${pre.length}분 보기`}</button>}
+            <span className="sd-muted sd-small">{q ? `${visible.length}분 일치` : `${visible.length}분 표시`}</span>
           </div>
-          <div className="max-h-[560px] overflow-auto rounded-lg border border-line">
+          <div className="sd-scene-list">
             {visible.map(row)}
-            {visible.length === 0 && <p className="px-3 py-4 text-sm text-muted">일치하는 장면이 없습니다.</p>}
-            {!q && post.length > 0 && <div className="px-3 py-2 text-xs text-muted border-t border-line">종료 후 {post.length}분은 예고와 총평이라 표시하지 않습니다.</div>}
+            {visible.length === 0 && <p className="sd-list-empty">일치하는 장면이 없습니다.</p>}
+            {!q && post.length > 0 && <div className="sd-list-foot">종료 후 {post.length}분은 예고와 총평이라 표시하지 않습니다.</div>}
           </div>
         </div>
       )}
@@ -666,81 +835,88 @@ function PromptsView({ writable }: { writable: boolean }) {
   useEffect(() => { reload() }, [reload])
   useEffect(() => { if (current) { setDraft(current.content); setNote(''); setShowVersions(false); setVersions(null) } }, [current?.key, current?.version]) // eslint-disable-line react-hooks/exhaustive-deps
   const dirty = !!current && draft !== current.content
+  const promptTarget = (p: Prompt) => workspaceTarget(`AI 프롬프트 '${p.title}'`)
   const save = async () => {
     if (!current) return
+    if (!await confirmWrite(WORKSPACE.env, { target: promptTarget(current), change: `지금 편집한 내용을 버전 ${current.version + 1}로 저장${note ? ` (메모: ${note})` : ''}`, reason: PROMPT_REASON },
+      `'${current.title}' 프롬프트를 저장합니다. ${PROMPT_REASON}.`)) return
     setBusy(true)
     try { await api.savePrompt(current.key, draft, note || null); await reload(); setSaved(`${current.title} 저장됨. 다음 실행부터 적용됩니다.`); setTimeout(() => setSaved(null), 4000) }
     catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   const openVersions = async () => { if (!current) return; try { setVersions(await api.promptVersions(current.key)); setShowVersions(true) } catch (e) { setError(errText(e)) } }
   const revert = async (v: PromptVersion) => {
-    if (!current || !confirm(`버전 ${v.version}의 내용으로 되돌립니다. 지금 내용은 이력에 남습니다.`)) return
+    if (!current) return
+    if (!await confirmWrite(WORKSPACE.env, { target: promptTarget(current), change: `버전 ${v.version}의 내용으로 되돌리기(버전 ${current.version + 1}로 저장)`, reason: PROMPT_REASON },
+      `버전 ${v.version}의 내용으로 되돌립니다. 지금 내용은 이력에 남습니다.`)) return
     setBusy(true); try { await api.revertPrompt(current.key, v.version); await reload() } catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   const reset = async () => {
-    if (!current || !confirm('저장소에 들어 있는 기본 프롬프트로 되돌립니다. 지금 내용은 이력에 남습니다.')) return
+    if (!current) return
+    if (!await confirmWrite(WORKSPACE.env, { target: promptTarget(current), change: `저장소에 들어 있는 기본 프롬프트로 되돌리기(버전 ${current.version + 1}로 저장)`, reason: PROMPT_REASON },
+      '저장소에 들어 있는 기본 프롬프트로 되돌립니다. 지금 내용은 이력에 남습니다.')) return
     setBusy(true); try { await api.resetPrompt(current.key); await reload() } catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   return (
-    <div className="grid grid-cols-[300px_minmax(0,1fr)] min-h-[calc(100vh-100px)]">
-      <aside className="border-r border-line bg-raise flex flex-col">
-        <div className="px-5 pt-5 pb-3 text-[11px] font-semibold text-muted">프롬프트</div>
-        <ul className="px-3 flex flex-col gap-1">
-          {list == null && <li className="px-2 py-2 text-sm text-muted">불러오는 중</li>}
+    <div className="sd-layout">
+      <aside className="sd-panel sd-side">
+        <div className="sd-side-caption">프롬프트</div>
+        <ul className="sd-list">
+          {list == null && <li className="sd-list-empty">불러오는 중</li>}
           {list?.map((p) => (
             <li key={p.key}>
-              <button onClick={() => setKey(p.key)} className={`w-full text-left rounded-lg px-3 py-2.5 border ${p.key === key ? 'border-info bg-infow' : 'border-transparent hover:bg-soft'}`}>
-                <div className="font-semibold">{p.title}</div>
-                <div className="text-xs text-muted mt-0.5">버전 {p.version} · {fmtKst(p.updatedAt, { second: undefined })}{p.updatedBy && p.updatedBy !== 'default' ? '' : ' · 기본값'}</div>
+              <button onClick={() => setKey(p.key)} className="sd-list-item" aria-current={p.key === key ? 'true' : undefined}>
+                <strong>{p.title}</strong>
+                <span>버전 {p.version} · {fmtKst(p.updatedAt, { second: undefined })}{p.updatedBy && p.updatedBy !== 'default' ? '' : ' · 기본값'}</span>
               </button>
             </li>
           ))}
         </ul>
-        <p className="note px-5 py-4 mt-auto border-t border-line">여기 저장한 내용이 정본입니다. 관리자 PC의 AI 작업은 시작할 때마다 최신 내용을 받아 쓰고, 서버의 "다시 써서 넣기"도 같은 내용을 씁니다. 파일 경로와 담당 구간 같은 실행 정보는 실행할 때 뒤에 자동으로 붙으므로 여기에 적지 않습니다.</p>
+        <p className="sd-note sd-side-foot">여기 저장한 내용이 정본입니다. 관리자 PC의 AI 작업은 시작할 때마다 최신 내용을 받아 쓰고, 서버의 "다시 써서 넣기"도 같은 내용을 씁니다. 파일 경로와 담당 구간 같은 실행 정보는 실행할 때 뒤에 자동으로 붙으므로 여기에 적지 않습니다.</p>
       </aside>
-      <section className="p-6 flex flex-col gap-4 max-w-[1400px]">
-        {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
-        {saved && <Banner kind="info">{saved}</Banner>}
-        {!current && <div className="card card-body text-sm text-muted">왼쪽에서 프롬프트를 고르세요.</div>}
+      <section className="sd-main">
+        {/* 오류는 프롬프트 카드 안에 뜬다(HP-526). 목록을 못 읽어 고를 프롬프트가 없으면 안내 칸에 뜬다. */}
+        {!current && (
+          <div className="sd-panel sd-guide-box">
+            {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
+            <p className="sd-guide">왼쪽에서 프롬프트를 고르세요.</p>
+          </div>
+        )}
         {current && (
-          <div className="card">
-            <div className="card-head flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-bold">{current.title}</h2>
-                <p className="lead mt-1">{current.description}</p>
-                <p className="note mt-2">버전 {current.version} · 마지막 저장 {fmtKst(current.updatedAt)}{current.updatedBy && current.updatedBy !== 'default' ? ` · ${current.updatedBy}` : ' · 기본값'}</p>
-              </div>
-              <div className="flex gap-2 shrink-0">
+          <Card
+              title={current.title}
+              error={error} onCloseError={() => setError(null)} notice={saved}
+              lead={<>
+                <p className="sd-lead">{current.description}</p>
+                <p className="sd-note sd-meta">버전 {current.version} · 마지막 저장 {fmtKst(current.updatedAt)}{current.updatedBy && current.updatedBy !== 'default' ? ` · ${current.updatedBy}` : ' · 기본값'}</p>
+              </>}
+              actions={<>
                 <button className="btn" onClick={openVersions}>이력 보기</button>
                 {writable && <button className="btn" disabled={busy} onClick={reset}>기본값으로 되돌리기</button>}
-              </div>
+              </>}>
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} disabled={!writable} rows={28} className="sd-input sd-code" />
+            <div className="sd-toolbar">
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="무엇을 바꿨는지 한 줄 (이력에 남습니다)" className="sd-input sd-grow" disabled={!writable} />
+              <span className="sd-muted sd-small">{draft.length.toLocaleString()}자{dirty ? ' · 저장하지 않은 변경' : ''}</span>
+              {writable && <button className="btn" disabled={!dirty} onClick={() => setDraft(current.content)}>변경 취소</button>}
+              {writable && <button className="btn sd-primary" disabled={busy || !dirty} onClick={save}>저장</button>}
             </div>
-            <div className="card-body flex flex-col gap-3">
-              <textarea value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} disabled={!writable} rows={28}
-                className="input mono text-[13px] leading-relaxed py-3 h-auto w-full" />
-              <div className="flex items-center gap-3">
-                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="무엇을 바꿨는지 한 줄 (이력에 남습니다)" className="input flex-1" disabled={!writable} />
-                <span className="text-xs text-muted">{draft.length.toLocaleString()}자{dirty ? ' · 저장하지 않은 변경' : ''}</span>
-                {writable && <button className="btn" disabled={!dirty} onClick={() => setDraft(current.content)}>변경 취소</button>}
-                {writable && <button className="btn-primary" disabled={busy || !dirty} onClick={save}>저장</button>}
+            {showVersions && versions && (
+              <div className="sd-table-wrap">
+                <table className="sd-table">
+                  <thead><tr><th className="sd-col-version">버전</th><th className="sd-col-when">저장 시각</th><th className="sd-col-who">저장한 사람</th><th>메모</th><th className="sd-col-when"></th></tr></thead>
+                  <tbody>
+                    {versions.map((v) => (
+                      <tr key={v.id}>
+                        <td className="sd-mono">{v.version}</td><td className="sd-mono">{fmtKst(v.createdAt)}</td><td className="sd-small">{v.createdBy ?? ''}</td><td className="sd-small">{v.note ?? ''}</td>
+                        <td className="sd-row-actions"><button className="btn sd-sm" onClick={() => setDraft(v.content)}>편집칸에 불러오기</button>{writable && v.version !== current.version && <button className="btn sd-sm" disabled={busy} onClick={() => revert(v)}>이 버전으로 되돌리기</button>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {showVersions && versions && (
-                <div className="rounded-lg border border-line overflow-hidden">
-                  <table className="table">
-                    <thead><tr><th className="w-16">버전</th><th className="w-40">저장 시각</th><th className="w-32">저장한 사람</th><th>메모</th><th className="w-40"></th></tr></thead>
-                    <tbody>
-                      {versions.map((v) => (
-                        <tr key={v.id}>
-                          <td className="mono">{v.version}</td><td className="mono">{fmtKst(v.createdAt)}</td><td className="text-xs">{v.createdBy ?? ''}</td><td className="text-xs">{v.note ?? ''}</td>
-                          <td className="text-right"><button className="btn btn-sm" onClick={() => setDraft(v.content)}>편집칸에 불러오기</button>{writable && v.version !== current.version && <button className="btn btn-sm ml-1" disabled={busy} onClick={() => revert(v)}>이 버전으로 되돌리기</button>}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+            )}
+          </Card>
         )}
       </section>
     </div>
@@ -767,7 +943,7 @@ function parseSceneTable(text: string, airDate: string, airStartAt: string): New
 function engagementLine(e: EngagementSummary | null | undefined) {
   if (!e || (e.emojis === 0 && e.watchSeconds === 0)) return null
   const h = Math.floor(e.watchSeconds / 3600), m = Math.round((e.watchSeconds % 3600) / 60)
-  return <p className="text-xs text-muted mt-1">채팅과 함께 넣은 것 — 장면 반응 {e.emojis.toLocaleString()}개 · 누적 감상 시간 {h > 0 ? `${h}시간 ` : ''}{m}분. 지울 때 함께 빠집니다.</p>
+  return <p className="sd-note">채팅과 함께 넣은 것 — 장면 반응 {e.emojis.toLocaleString()}개 · 누적 감상 시간 {h > 0 ? `${h}시간 ` : ''}{m}분. 지울 때 함께 빠집니다.</p>
 }
 
 /* ─── 다른 환경 넣기 장부(HP-518) ──────────────────────────────────── */
@@ -830,7 +1006,13 @@ async function settleOtherLedger(planId: number): Promise<{ view: PlanView | nul
 }
 
 /* ─── 3단계: AI 계획과 4단계: 주입 ───────────────────────────────────── */
-function PlanStep({ episode, plans, injections, writable, reload, onError }: { episode: Episode; plans: Plan[]; injections: Injection[]; writable: boolean; reload: () => void; onError: (m: string) => void }) {
+/* 3·4단계 카드의 오류 — 계획을 읽고 고르고 올리는 일은 3단계 카드에, 채팅을 넣고 지우는 일(계획 지우기 포함, 4단계 카드의
+   버튼이다)은 4단계 카드에 뜬다(HP-526). */
+function PlanStep({ episode, plans, injections, writable, reload, onPlanError, planError, onClosePlanError, onInjectError, injectError, onCloseInjectError }: {
+  episode: Episode; plans: Plan[]; injections: Injection[]; writable: boolean; reload: () => void
+  onPlanError: (m: string) => void; planError?: string; onClosePlanError: () => void
+  onInjectError: (m: string, tone?: AlertTone) => void; injectError?: { text: string; tone: AlertTone }; onCloseInjectError: () => void
+}) {
   const [planId, setPlanId] = useState<number | null>(null)
   const [view, setView] = useState<PlanView | null>(null)
   const [upload, setUpload] = useState(false)
@@ -840,7 +1022,10 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
   const [kindFilter, setKindFilter] = useState<InjectionKind | ''>('')
   const current = plans.find((p) => p.id === planId) ?? plans.find((p) => p.status === 'RUNNING') ?? plans.find((p) => p.status === 'DRAFT') ?? plans[0] ?? null
   const currentId = current?.id ?? null, currentStatus = current?.status ?? null
-  useEffect(() => { if (!currentId) { setView(null); return } let alive = true; api.plan(currentId).then((v) => { if (alive) setView(v) }).catch((e) => onError(errText(e))); return () => { alive = false } }, [currentId, currentStatus, onError])
+  /* 처음 고른 계획(넣는 중 → 검수 대기 → 최신)을 붙잡아 둔다. 목록은 최신순이라, 30초마다 다시 읽은 목록에 새 검수 대기
+     계획이 끼면 보던 계획이 그쪽으로 바뀌었다(HP-526). */
+  useEffect(() => { if (planId == null && current) setPlanId(current.id) }, [planId, current])
+  useEffect(() => { if (!currentId) { setView(null); return } let alive = true; api.plan(currentId).then((v) => { if (alive) setView(v) }).catch((e) => onPlanError(errText(e))); return () => { alive = false } }, [currentId, currentStatus, onPlanError])
   useEffect(() => {
     if (!view || view.plan.status !== 'RUNNING') return
     const t = setInterval(async () => { try { const v = await api.plan(view.plan.id); setView(v); if (v.plan.status !== 'RUNNING') { setBusy(false); reload() } } catch { /* 다음 틱 */ } }, 2000)
@@ -851,8 +1036,8 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
     if (!text.trim()) return null
     try { const j = JSON.parse(text); const items: NewPlanItem[] = Array.isArray(j) ? j : j.items; return Array.isArray(items) ? { label: (Array.isArray(j) ? null : j.label) ?? null, source: (Array.isArray(j) ? null : j.source) ?? null, items } : null } catch { return null }
   }, [text])
-  const doUpload = async () => { if (!parsed) return; setBusy(true); try { const v = await api.createPlan(episode.id, parsed); setText(''); setUpload(false); reload(); setPlanId(v.plan.id) } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
-  const toggle = async (itemId: number, accepted: boolean) => { try { const it = await api.patchPlanItem(itemId, { accepted }); setView((v) => v && { ...v, items: v.items.map((x) => x.item.id === it.id ? { ...x, item: it } : x) }) } catch (e) { onError(errText(e)) } }
+  const doUpload = async () => { if (!parsed) return; setBusy(true); try { const v = await api.createPlan(episode.id, parsed); setText(''); setUpload(false); reload(); setPlanId(v.plan.id) } catch (e) { onPlanError(errText(e)) } finally { setBusy(false) } }
+  const toggle = async (itemId: number, accepted: boolean) => { try { const it = await api.patchPlanItem(itemId, { accepted }); setView((v) => v && { ...v, items: v.items.map((x) => x.item.id === it.id ? { ...x, item: it } : x) }) } catch (e) { onPlanError(errText(e)) } }
   const execute = async () => {
     if (!view) return
     const n = view.items.filter((x) => x.item.accepted && !x.item.injectionId).length
@@ -865,15 +1050,20 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
       /* 넣기는 서버 뒤에서 돌고 응답은 곧바로 온다. 넣을 행이 적으면 응답을 만들기 전에 끝나 RUNNING이 아니라 EXECUTED가
          오는데, 진행 지켜보기(위 효과)는 RUNNING일 때만 돌아 잠금이 영영 안 풀렸다(HP-519). 지켜볼 일이 없으면 곧바로 푼다. */
       if (v.plan.status !== 'RUNNING') { setBusy(false); reload() }
-    } catch (e) { onError(errText(e)); setBusy(false) }
+    } catch (e) { onInjectError(errText(e)); setBusy(false) }
   }
   const rollback = async () => {
     if (!view || !await confirmWrite(WORKSPACE.env, { target: `${WORKSPACE.label} 서버 · ${episode.label ?? episode.airDate} 채팅`, change: `계획 #${view.plan.id}이 넣은 채팅 모두 지우기`, reason: '계획을 검수 대기 상태로 되돌립니다' },
       '이 계획이 넣은 채팅을 모두 지우고 검수 대기 상태로 되돌립니다.')) return
-    setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+    setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onInjectError(errText(e)) } finally { setBusy(false) } }
   /* 다른 서버에만 넣으면 계획은 초안으로 남아 지울 수 있었다 — 지우면 그 서버의 채팅을 지울 화면이 사라진다(HP-518 리뷰). */
   const otherInjected = !!view && (view.items.some((x) => !!extOf(x.item)[OTHER.env]) || readOtherLedger(view.plan.id).attempted.length > 0)
-  const remove = async () => { if (!view || otherInjected || !confirm('이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return; setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+  const remove = async () => {
+    if (!view || otherInjected) return
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} AI 계획 #${view.plan.id}`), change: `계획 #${view.plan.id}(${view.items.length.toLocaleString()}행) 지우기`, reason: '아직 채팅에 넣지 않은 계획만 지울 수 있습니다. 지운 계획은 되돌릴 수 없습니다' },
+      '이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return
+    setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onInjectError(errText(e)) } finally { setBusy(false) }
+  }
 
   /* 다른 환경에 넣기(HP-436): 수락했고 그 환경에 아직 안 넣은 행을, 정본 서버가 환산한 재생 초와 함께 그 서버의 외부 넣기 API 로
      보낸다(500건씩). 결과를 정본 서버에 행별로 기록해 표에 "개발 넣음"이 보이게 한다.
@@ -883,7 +1073,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
   const [otherEngagement, setOtherEngagement] = useState<EngagementSummary | null>(null)
   const injectOther = async () => {
     if (!view) return
-    if (!view.platformEpisodeId || !view.platformCode) { onError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
+    if (!view.platformEpisodeId || !view.platformCode) { onInjectError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
     setBusy(true)
     try {
       // 지난번에 기록하지 못한 결과부터 기록한다 — 그래야 아래 '넣을 행'에서 이미 들어간 행이 빠진다.
@@ -901,7 +1091,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
       const rows = current.items.filter((x) => x.item.accepted && !x.item.error && !extOf(x.item)[OTHER.env] && x.previewSec != null)
       if (rows.length === 0) {
         // 정산만으로 끝났으면 오류가 아니다 — 표에 방금 기록한 행이 '넣음'으로 보인다.
-        if (settled.length) { if (errors.length) onError(errors[0]); reload() } else onError(`${OTHER.label} 서버에 넣을 행이 없습니다.`)
+        if (settled.length) { if (errors.length) onInjectError(errors[0], 'notice'); reload() } else onInjectError(`${OTHER.label} 서버에 넣을 행이 없습니다.`, 'notice')
         return
       }
       if (!await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${current.plan.id}의 수락 ${rows.length.toLocaleString()}건을 채팅으로 넣기`, reason: `${OTHER.label} 서버에 그 회차가 없으면 실패합니다` },
@@ -932,9 +1122,10 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
         setExtProgress(`${OTHER.label} 서버에 반응·감상 시간 넣는 중`)
         setOtherEngagement(await engageOther(token, [batchKey], errors))
       }
-      if (errors.length) onError(`${OTHER.label} 서버에 ${injected}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`)
+      // 일부 실패는 주의로 띄운다 — 들어간 채팅은 들어갔고, 실패한 행만 다시 손보면 된다.
+      if (errors.length) onInjectError(`${OTHER.label} 서버에 ${injected}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`, 'notice')
       reload()
-    } catch (e) { onError(errText(e)) } finally { setExtProgress(null); setBusy(false) }
+    } catch (e) { onInjectError(errText(e)) } finally { setExtProgress(null); setBusy(false) }
   }
   const rollbackOther = async () => {
     if (!view) return
@@ -953,7 +1144,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
       const token = await secondaryToken(OTHER)
       for (const b of batches) await callOther(OTHER.api, token, 'DELETE', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(b)}`)
       setView(await api.clearExternal(current.plan.id, OTHER.env)); clearOtherLedger(current.plan.id); setOtherEngagement(null); reload()
-    } catch (e) { onError(errText(e)) } finally { setBusy(false) }
+    } catch (e) { onInjectError(errText(e)) } finally { setBusy(false) }
   }
 
   const stats = view ? { total: view.items.length, accepted: view.items.filter((x) => x.item.accepted).length, done: view.items.filter((x) => x.item.injectionId).length, failed: view.items.filter((x) => x.item.error).length, otherDone: view.items.filter((x) => !!extOf(x.item)[OTHER.env]).length,
@@ -963,130 +1154,122 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
 
   return (
     <>
-      <div className="card">
-        <div className="card-head flex items-start justify-between gap-4">
-          <div>
-            <h2 className="font-bold flex items-center"><span className="step-no">3</span>AI 채팅 계획</h2>
-            <p className="lead mt-2">AI가 수집한 글 가운데 화면 반응이 아닌 글(광고 불평, 다른 기수 이야기, 비하와 욕설)을 빼고, 남은 글을 아래 네 종류로 정리한 목록입니다. 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 만들어져 여기로 옵니다. 여기서는 훑어보며 뺄 행만 거부하면 됩니다. 표의 재생 시각은 지금 저장된 기준점으로 계산한 값이고, 실제로 넣을 때 다시 계산합니다.</p>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 mt-3 text-xs max-w-3xl">
-              {(Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => <div key={k} className="contents"><dt className="font-semibold text-ink2 whitespace-nowrap">{KIND_LABEL[k]}</dt><dd className="text-muted">{KIND_DESC[k]}</dd></div>)}
+      <Card
+          no={3} title="AI 채팅 계획"
+          lead={<>
+            <p className="sd-lead">AI가 수집한 글 가운데 화면 반응이 아닌 글(광고 불평, 다른 기수 이야기, 비하와 욕설)을 빼고, 남은 글을 아래 네 종류로 정리한 목록입니다. 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 만들어져 여기로 옵니다. 여기서는 훑어보며 뺄 행만 거부하면 됩니다. 표의 재생 시각은 지금 저장된 기준점으로 계산한 값이고, 실제로 넣을 때 다시 계산합니다.</p>
+            <dl className="sd-kinds">
+              {(Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => <div key={k} className="sd-kind"><dt>{KIND_LABEL[k]}</dt><dd>{KIND_DESC[k]}</dd></div>)}
             </dl>
+          </>}
+          actions={writable && <button className="btn" onClick={() => setUpload((v) => !v)}>{upload ? '닫기' : '계획 파일을 손으로 올리기'}</button>}
+          error={planError} onCloseError={onClosePlanError}>
+        {upload && (
+          <div className="sd-stack">
+            <p className="sd-note">관리자 PC의 파이프라인이 만든 plan.json 내용을 붙여 넣습니다. 보통은 AI 작업이 끝나면 자동으로 올라오므로 쓸 일이 없습니다.</p>
+            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} spellCheck={false} className="sd-input sd-code" />
+            <div className="sd-toolbar"><span className="sd-muted sd-small">{parsed ? `인식된 행 ${parsed.items.length}개` : text.trim() ? 'JSON 형식이 아닙니다' : ''}</span><span className="sd-spacer" /><button className="btn sd-primary" disabled={busy || !parsed || parsed.items.length === 0} onClick={doUpload}>올리기</button></div>
           </div>
-          {writable && <button className="btn" onClick={() => setUpload((v) => !v)}>{upload ? '닫기' : '계획 파일을 손으로 올리기'}</button>}
-        </div>
-        <div className="card-body flex flex-col gap-4">
-          {upload && (
-            <div className="flex flex-col gap-2">
-              <p className="note">관리자 PC의 파이프라인이 만든 plan.json 내용을 붙여 넣습니다. 보통은 AI 작업이 끝나면 자동으로 올라오므로 쓸 일이 없습니다.</p>
-              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} spellCheck={false} className="input mono text-xs py-2 h-auto" />
-              <div className="flex items-center gap-2 text-xs text-muted"><span>{parsed ? `인식된 행 ${parsed.items.length}개` : text.trim() ? 'JSON 형식이 아닙니다' : ''}</span><span className="flex-1" /><button className="btn-primary" disabled={busy || !parsed || parsed.items.length === 0} onClick={doUpload}>올리기</button></div>
+        )}
+        {plans.length === 0 && <p className="sd-empty">아직 계획이 없습니다. 수집이 끝났다면 넷플릭스에서 이 회차를 재생하고 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르세요. 한 시간쯤 뒤 계획이 여기에 나타납니다.</p>}
+        {plans.length > 0 && (
+          <div className="sd-plan-picks">
+            {plans.map((p) => (
+              <button key={p.id} className="sd-plan-pick" aria-pressed={current?.id === p.id} onClick={() => setPlanId(p.id)}>
+                <strong>#{p.id} {p.label ?? p.source ?? ''}</strong>
+                <span><State tone={PLAN_STATUS[p.status].tone}>{PLAN_STATUS[p.status].label}</State>{fmtKst(p.createdAt, { second: undefined })}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {view && stats && (
+          <>
+            <div className="sd-stats">
+              <div className="sd-stat"><b>{stats.total.toLocaleString()}</b><span>전체 행</span></div>
+              <div className="sd-stat"><b>{stats.accepted.toLocaleString()}</b><span>수락</span></div>
+              <div className="sd-stat"><b>{(stats.total - stats.accepted).toLocaleString()}</b><span>거부</span></div>
+              <div className="sd-stat"><b className={stats.done ? 'is-on' : undefined}>{stats.done.toLocaleString()}</b><span>{WORKSPACE.label}에 넣음</span></div>
+              <div className="sd-stat"><b className={stats.otherDone ? 'is-on' : undefined}>{stats.otherDone.toLocaleString()}</b><span>{OTHER.label}에 넣음</span></div>
+              {stats.failed > 0 && <div className="sd-stat"><b className="is-warn">{stats.failed}</b><span>실패</span></div>}
+              <div className="sd-stats-rule" />
+              {stats.kinds.map(([k, n]) => <div key={k} className="sd-stat"><b>{n.toLocaleString()}</b><span>{KIND_LABEL[k]}</span></div>)}
+              <span className="sd-spacer" />
+              <span className="sd-muted sd-small">재생 시각은 기준점 {view.anchorCount}개로 계산{view.anchorCount === 0 && ' (기준점이 없어 방영 시작 시각만으로 계산)'}</span>
             </div>
-          )}
-          {plans.length === 0 && <p className="text-sm text-muted">아직 계획이 없습니다. 수집이 끝났다면 넷플릭스에서 이 회차를 재생하고 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르세요. 한 시간쯤 뒤 계획이 여기에 나타납니다.</p>}
-          {plans.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {plans.map((p) => (
-                <button key={p.id} className={`rounded-lg border px-3 py-2 text-left ${current?.id === p.id ? 'border-info bg-infow' : 'border-line bg-raise hover:bg-soft'}`} onClick={() => setPlanId(p.id)}>
-                  <div className="text-sm font-semibold">#{p.id} {p.label ?? p.source ?? ''}</div>
-                  <div className="text-xs mt-0.5 flex items-center gap-2"><span className={`pill ${PLAN_STATUS[p.status].cls}`}>{PLAN_STATUS[p.status].label}</span><span className="text-muted">{fmtKst(p.createdAt, { second: undefined })}</span></div>
-                </button>
-              ))}
+            <div className="sd-toolbar">
+              <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="sd-input sd-sm">
+                <option value="all">모든 행</option><option value="accepted">수락했고 아직 넣지 않음</option><option value="rejected">거부함</option><option value="done">어느 서버든 넣음</option><option value="failed">넣기 실패</option>
+              </select>
+              <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value as InjectionKind | '')} className="sd-input sd-sm">
+                <option value="">모든 종류</option>{(Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+              </select>
+              <span className="sd-muted sd-small">{rows.length.toLocaleString()}행 표시</span>
             </div>
-          )}
-          {view && stats && (
-            <>
-              <div className="flex flex-wrap items-end gap-6 rounded-lg bg-soft/60 px-4 py-3">
-                <div className="stat"><b>{stats.total.toLocaleString()}</b><span>전체 행</span></div>
-                <div className="stat"><b>{stats.accepted.toLocaleString()}</b><span>수락</span></div>
-                <div className="stat"><b>{(stats.total - stats.accepted).toLocaleString()}</b><span>거부</span></div>
-                <div className="stat"><b className={stats.done ? 'text-ok' : ''}>{stats.done.toLocaleString()}</b><span>{WORKSPACE.label}에 넣음</span></div>
-                <div className="stat"><b className={stats.otherDone ? 'text-ok' : ''}>{stats.otherDone.toLocaleString()}</b><span>{OTHER.label}에 넣음</span></div>
-                {stats.failed > 0 && <div className="stat"><b className="text-bad">{stats.failed}</b><span>실패</span></div>}
-                <div className="w-px h-8 bg-line" />
-                {stats.kinds.map(([k, n]) => <div key={k} className="stat min-w-[72px]"><b>{n.toLocaleString()}</b><span>{KIND_LABEL[k]}</span></div>)}
-                <span className="flex-1" />
-                <span className="text-xs text-muted">재생 시각은 기준점 {view.anchorCount}개로 계산{view.anchorCount === 0 && ' (기준점이 없어 방영 시작 시각만으로 계산)'}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="input h-8 text-xs">
-                  <option value="all">모든 행</option><option value="accepted">수락했고 아직 넣지 않음</option><option value="rejected">거부함</option><option value="done">어느 서버든 넣음</option><option value="failed">넣기 실패</option>
-                </select>
-                <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value as InjectionKind | '')} className="input h-8 text-xs">
-                  <option value="">모든 종류</option>{(Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-                </select>
-                <span className="text-xs text-muted">{rows.length.toLocaleString()}행 표시</span>
-              </div>
-              <div className="max-h-[720px] overflow-auto rounded-lg border border-line">
-                <table className="table">
-                  <thead><tr><th className="w-20">재생 시각</th><th className="w-24">종류</th><th>채팅</th><th className="w-64">근거 장면과 고른 이유</th><th className="w-28 text-right">검수</th></tr></thead>
-                  <tbody>
-                    {rows.map(({ item, previewSec, gap }) => (
-                      <tr key={item.id} className={`${!item.accepted ? 'opacity-40' : ''} ${item.error ? 'bg-badw/40' : item.injectionId ? 'bg-okw/40' : ''}`}>
-                        <td className="mono whitespace-nowrap">{fmtSec(previewSec)}{gap && <span className="text-warn" title="광고 중에 올라온 글이라 다음 기준점 시각에 붙습니다"> 광고</span>}</td>
-                        <td className="whitespace-nowrap"><span className="pill bg-soft text-ink2">{KIND_LABEL[item.kind]}</span>{item.spoiler && <span className="pill bg-warnw text-warn ml-1">스포일러</span>}</td>
-                        <td>{item.message}</td>
-                        <td className="text-xs text-muted">{item.scene}{item.reason && <div className="text-faint">{item.reason}</div>}{item.error && <div className="text-bad">{item.error}</div>}</td>
-                        <td className="text-right whitespace-nowrap">
-                          {item.injectionId && <span className="text-xs text-ok mr-1">{WORKSPACE.label} 넣음</span>}
-                          {extOf(item)[OTHER.env] && <span className="text-xs text-ok mr-1">{OTHER.label} 넣음</span>}
-                          {item.error ? <span className="text-xs text-bad">실패</span>
-                            : item.injectionId ? null
-                            : writable && !running ? <button className="btn btn-sm" onClick={() => toggle(item.id, !item.accepted)}>{item.accepted ? '거부' : '다시 수락'}</button> : <span className="text-xs text-muted">{item.accepted ? '수락' : '거부'}</span>}
-                        </td>
-                      </tr>
-                    ))}
-                    {rows.length === 0 && <tr><td colSpan={5} className="py-4 text-sm text-muted">조건에 맞는 행이 없습니다.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+            <div className="sd-table-wrap sd-h-xl">
+              <table className="sd-table">
+                <thead><tr><th className="sd-col-clock-sm">재생 시각</th><th className="sd-col-kind">종류</th><th>채팅</th><th className="sd-col-reason">근거 장면과 고른 이유</th><th className="sd-col-review">검수</th></tr></thead>
+                <tbody>
+                  {rows.map(({ item, previewSec, gap }) => (
+                    <tr key={item.id} className={[!item.accepted ? 'is-rejected' : '', item.error ? 'is-failed' : item.injectionId ? 'is-done' : ''].filter(Boolean).join(' ') || undefined}>
+                      <td className="sd-mono sd-nowrap">{fmtSec(previewSec)}{gap && <span className="sd-warn" title="광고 중에 올라온 글이라 다음 기준점 시각에 붙습니다"> 광고</span>}</td>
+                      <td className="sd-nowrap"><span className="sd-tag">{KIND_LABEL[item.kind]}</span>{item.spoiler && <span className="sd-tag is-warn">스포일러</span>}</td>
+                      <td>{item.message}</td>
+                      <td className="sd-muted sd-small">{item.scene}{item.reason && <div className="sd-faint">{item.reason}</div>}{item.error && <div className="sd-warn">{item.error}</div>}</td>
+                      <td className="sd-row-actions">
+                        {item.injectionId && <span className="sd-ok sd-small">{WORKSPACE.label} 넣음</span>}
+                        {extOf(item)[OTHER.env] && <span className="sd-ok sd-small">{OTHER.label} 넣음</span>}
+                        {item.error ? <span className="sd-warn sd-small">실패</span>
+                          : item.injectionId ? null
+                          : writable && !running ? <button className="btn sd-sm" onClick={() => toggle(item.id, !item.accepted)}>{item.accepted ? '거부' : '다시 수락'}</button> : <span className="sd-muted sd-small">{item.accepted ? '수락' : '거부'}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && <tr><td colSpan={5} className="sd-muted">조건에 맞는 행이 없습니다.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Card>
 
-      <div className="card">
-        <div className="card-head flex items-start justify-between gap-4">
-          <div>
-            <h2 className="font-bold flex items-center"><span className="step-no">4</span>채팅 넣기</h2>
-            <p className="lead mt-2">검수를 마친 계획의 수락 행을 회차의 채팅으로 넣습니다. 넣을 서버를 고를 수 있습니다. <b>{WORKSPACE.label}</b>은 이 콘솔이 붙은 서버라 바로 넣고, <b>{OTHER.label}</b>은 완성된 행을 그 서버로 보내 넣습니다(처음 한 번 {OTHER.label} 로그인 창이 뜹니다). 각 행은 시딩 전용 계정(유령 계정) 이름으로 저장되어 다른 사용자 채팅과 똑같이 보이고, 접속자 수나 활동 통계에는 잡히지 않습니다. 넷플릭스 회차가 연결되어 있어야 하며, 잘못 넣었으면 서버별로 계획 단위로 모두 지울 수 있습니다.</p>
-          </div>
+      <Card
+          no={4} title="채팅 넣기"
+          error={injectError?.text} errorTone={injectError?.tone} onCloseError={onCloseInjectError}
+          lead={<p className="sd-lead">검수를 마친 계획의 수락 행을 회차의 채팅으로 넣습니다. 넣을 서버를 고를 수 있습니다. <b>{WORKSPACE.label}</b>은 이 콘솔이 붙은 서버라 바로 넣고, <b>{OTHER.label}</b>은 완성된 행을 그 서버로 보내 넣습니다(처음 한 번 {OTHER.label} 로그인 창이 뜹니다). 각 행은 시딩 전용 계정(유령 계정) 이름으로 저장되어 다른 사용자 채팅과 똑같이 보이고, 접속자 수나 활동 통계에는 잡히지 않습니다. 넷플릭스 회차가 연결되어 있어야 하며, 잘못 넣었으면 서버별로 계획 단위로 모두 지울 수 있습니다.</p>}>
+        <div className="sd-toolbar">
+          <div className="sd-stat"><b>{injections.length.toLocaleString()}</b><span>{WORKSPACE.label} 서버에 넣은 채팅</span></div>
+          {stats && <div className="sd-stat"><b>{stats.otherDone.toLocaleString()}</b><span>{OTHER.label} 서버에 넣은 채팅 (이 계획)</span></div>}
+          <span className="sd-spacer" />
+          {!episode.episodeId && <span className="notice-box">넷플릭스 회차가 연결되지 않아 채팅을 넣을 수 없습니다.</span>}
+          {view && writable && view.plan.status === 'DRAFT' && <button className="btn sd-danger" disabled={busy || otherInjected} title={otherInjected ? `${OTHER.label} 서버에 넣은 채팅을 먼저 지우세요` : undefined} onClick={remove}>계획 #{view.plan.id} 지우기</button>}
         </div>
-        <div className="card-body flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="stat"><b>{injections.length.toLocaleString()}</b><span>{WORKSPACE.label} 서버에 넣은 채팅</span></div>
-            {stats && <div className="stat"><b>{stats.otherDone.toLocaleString()}</b><span>{OTHER.label} 서버에 넣은 채팅 (이 계획)</span></div>}
-            <span className="flex-1" />
-            {!episode.episodeId && <span className="text-sm text-warn">넷플릭스 회차가 연결되지 않아 채팅을 넣을 수 없습니다.</span>}
-            {view && writable && view.plan.status === 'DRAFT' && <button className="btn-danger" disabled={busy || otherInjected} title={otherInjected ? `${OTHER.label} 서버에 넣은 채팅을 먼저 지우세요` : undefined} onClick={remove}>계획 #{view.plan.id} 지우기</button>}
-          </div>
-          {view && writable && stats && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${WORKSPACE.env === 'prod' ? 'border-prodline bg-prodw' : 'border-line bg-soft/60'}`}>
-                <div className="font-semibold">{WORKSPACE.label} 서버 <span className="text-xs font-normal text-muted mono">{WORKSPACE.api}</span></div>
-                <p className="note">{WORKSPACE.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 서버가 뒤에서 처리하며 진행률이 여기와 익스텐션의 시딩 도구에 표시됩니다. 채팅이 다 들어가면 그에 맞춰 장면 반응과 누적 감상 시간도 함께 넣습니다(카탈로그 순위에 반영).</p>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <button className="btn-primary" disabled={busy || running || !episode.episodeId || stats.accepted - stats.done <= 0} onClick={execute}>
-                    {running ? `넣는 중 ${(stats.done + stats.failed).toLocaleString()} / ${stats.accepted.toLocaleString()}` : `${WORKSPACE.label}에 ${(stats.accepted - stats.done).toLocaleString()}건 넣기`}
-                  </button>
-                  {stats.done > 0 && !running && <button className="btn-danger" disabled={busy} onClick={rollback}>{WORKSPACE.label}에 넣은 것 모두 지우기</button>}
-                </div>
-                {engagementLine(view.engagement)}
+        {view && writable && stats && (
+          <div className="sd-targets">
+            <div className={`sd-target${WORKSPACE.env === 'prod' ? ' is-prod' : ''}`}>
+              <div className="sd-target-head">{WORKSPACE.label} 서버 <span className="sd-mono">{WORKSPACE.api}</span></div>
+              <p className="sd-note">{WORKSPACE.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 서버가 뒤에서 처리하며 진행률이 여기와 익스텐션의 시딩 도구에 표시됩니다. 채팅이 다 들어가면 그에 맞춰 장면 반응과 누적 감상 시간도 함께 넣습니다(카탈로그 순위에 반영).</p>
+              <div className="sd-actions">
+                <button className="btn sd-primary" disabled={busy || running || !episode.episodeId || stats.accepted - stats.done <= 0} onClick={execute}>
+                  {running ? `넣는 중 ${(stats.done + stats.failed).toLocaleString()} / ${stats.accepted.toLocaleString()}` : `${WORKSPACE.label}에 ${(stats.accepted - stats.done).toLocaleString()}건 넣기`}
+                </button>
+                {stats.done > 0 && !running && <button className="btn sd-danger" disabled={busy} onClick={rollback}>{WORKSPACE.label}에 넣은 것 모두 지우기</button>}
               </div>
-              <div className={`rounded-lg border p-4 flex flex-col gap-2 ${OTHER.env === 'prod' ? 'border-prodline bg-prodw' : 'border-line bg-soft/60'}`}>
-                <div className="font-semibold">{OTHER.label} 서버 <span className="text-xs font-normal text-muted mono">{OTHER.api}</span>{secondarySignedIn(OTHER) && <button className="btn btn-sm ml-2" onClick={() => { secondaryLogout(OTHER); reload() }}>로그아웃</button>}</div>
-                <p className="note">{OTHER.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 이 콘솔이 환산한 재생 시각과 문장을 {OTHER.label} 서버로 보내 넣습니다. {OTHER.label} 서버에 이 회차가 있어야 합니다(그 환경에서 회차를 한 번 열면 생깁니다).</p>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <button className="btn-primary" disabled={busy || !episode.episodeId || stats.accepted - stats.otherDone <= 0} onClick={injectOther}>
-                    {extProgress ?? `${OTHER.label}에 ${Math.max(0, stats.accepted - stats.otherDone).toLocaleString()}건 넣기`}
-                  </button>
-                  {(stats.otherDone > 0 || readOtherLedger(view.plan.id).attempted.length > 0) && <button className="btn-danger" disabled={busy} onClick={rollbackOther}>{OTHER.label}에 넣은 것 모두 지우기</button>}
-                </div>
-                {engagementLine(otherEngagement)}
-              </div>
+              {engagementLine(view.engagement)}
             </div>
-          )}
-        </div>
-      </div>
+            <div className={`sd-target${OTHER.env === 'prod' ? ' is-prod' : ''}`}>
+              <div className="sd-target-head">{OTHER.label} 서버 <span className="sd-mono">{OTHER.api}</span>{secondarySignedIn(OTHER) && <button className="btn sd-sm" onClick={() => { secondaryLogout(OTHER); reload() }}>로그아웃</button>}</div>
+              <p className="sd-note">{OTHER.env === 'prod' ? '실제 사용자에게 보입니다.' : '개발 서버에만 보입니다.'} 이 콘솔이 환산한 재생 시각과 문장을 {OTHER.label} 서버로 보내 넣습니다. {OTHER.label} 서버에 이 회차가 있어야 합니다(그 환경에서 회차를 한 번 열면 생깁니다).</p>
+              <div className="sd-actions">
+                <button className="btn sd-primary" disabled={busy || !episode.episodeId || stats.accepted - stats.otherDone <= 0} onClick={injectOther}>
+                  {extProgress ?? `${OTHER.label}에 ${Math.max(0, stats.accepted - stats.otherDone).toLocaleString()}건 넣기`}
+                </button>
+                {(stats.otherDone > 0 || readOtherLedger(view.plan.id).attempted.length > 0) && <button className="btn sd-danger" disabled={busy} onClick={rollbackOther}>{OTHER.label}에 넣은 것 모두 지우기</button>}
+              </div>
+              {engagementLine(otherEngagement)}
+            </div>
+          </div>
+        )}
+      </Card>
     </>
   )
 }

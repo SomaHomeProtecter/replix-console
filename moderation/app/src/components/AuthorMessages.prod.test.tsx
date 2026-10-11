@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * "동시에 보낸 요청 중 첫 건만 확인 창에 닿고 나머지는 거절된다"는 결함을 잡지 못했다.
  * 여기서는 fetch만 가짜로 두고 나머지는 운영과 같은 길로 보낸다.
  */
-vi.mock('@core/auth', () => ({ getToken: vi.fn(async () => 'test-token') }))
+vi.mock('@core/auth', () => ({ getToken: vi.fn(async () => 'test-token'), realmRoles: () => ['admin'] }))
 const envMock = vi.hoisted(() => ({
   environment: 'PROD' as 'DEV' | 'PROD', apiBaseUrl: 'http://api.test',
   kcUrl: '', kcRealm: '', kcClientId: '',

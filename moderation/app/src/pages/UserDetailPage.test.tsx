@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import { realmRoles } from '@core/auth'
 import { makeActionRow, makeReceivedReport, makeUserDetail } from '../test/fixtures'
 import UserDetailPage from './UserDetailPage'
 
@@ -334,5 +335,17 @@ describe('다른 사용자로 옮기면 그 사용자의 기록만 보인다', (
     await userEvent.click(screen.getByRole('tab', { name: /통합 타임라인/ }))
     expect(await screen.findByText('B가 받은 신고')).toBeInTheDocument()
     expect(getUserTimeline).toHaveBeenLastCalledWith(10)
+  })
+})
+
+describe('조회 전용 계정(HP-529)', () => {
+  it('경고·계정 정지 버튼을 끄고 이유를 보인다', async () => {
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    renderPage()
+    const warn = await screen.findByRole('button', { name: '경고…' })
+    expect(warn).toBeDisabled()
+    expect(warn).toHaveAttribute('title', '조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다')
+    expect(screen.getByRole('button', { name: '계정 정지…' })).toBeDisabled()
+    expect(screen.getByText('조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다', { selector: '.readonly-note' })).toBeInTheDocument()
   })
 })

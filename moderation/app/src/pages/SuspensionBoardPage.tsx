@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { listSuspendedUsers, unsuspendUser } from '../api/admin'
+import { moderateDenied } from '../permissions'
 import type { SuspendedUserRow, SuspendedUsers } from '../api/types'
 import Avatar from '../components/Avatar'
 import { SUSPENSION_STATE_LABELS, suspensionState, type SuspensionState } from '../format'
@@ -50,6 +51,7 @@ export default function SuspensionBoardPage() {
   const [stale, setStale] = useState(false)
   /** 쓰기가 도는 중 — <b>모든</b> 행의 해제를 잠근다(아래 unsuspend 주석). */
   const [busy, setBusy] = useState(false)
+  const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   /** 해제를 누른 행(userId). 확인을 한 번 더 받는 자리 — null이면 확인 중인 행이 없다. */
   const [confirming, setConfirming] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
@@ -200,6 +202,7 @@ export default function SuspensionBoardPage() {
           새로고침
         </button>
       </div>
+      {denied && <p className="readonly-note">{denied}</p>}
 
       <ErrorBox messages={errors} />
       {truncated && (
@@ -253,7 +256,7 @@ export default function SuspensionBoardPage() {
                         {confirming === row.userId ? (
                           <>
                             <button
-                                type="button" className="btn btn-susp" disabled={busy || stale}
+                                type="button" className="btn btn-susp" disabled={busy || stale || denied !== null}
                                 onClick={() => void unsuspend(row)}>
                               해제 확인
                             </button>
@@ -269,11 +272,11 @@ export default function SuspensionBoardPage() {
                              되돌리려면 다시 정지해야 하는데 원래 기간(duration)은 이 화면에 없어
                              (해제 예정 시각만 있다) 그대로 복원할 수 없다. */
                           <button
-                              type="button" className="btn" disabled={busy || stale}
-                              title={state === 'expired'
+                              type="button" className="btn" disabled={busy || stale || denied !== null}
+                              title={denied ?? (state === 'expired'
                                 ? '이미 기간이 지나 제한은 풀려 있습니다 — 남아 있는 정지 표시를'
                                   + ' 정리합니다'
-                                : undefined}
+                                : undefined)}
                               onClick={() => setConfirming(row.userId)}>
                             정지 해제
                           </button>

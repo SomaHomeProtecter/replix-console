@@ -7,6 +7,7 @@ import type { ReportItem, SuspendDuration, WarningReason } from '../api/types'
 import { DURATION_LABELS, REASON_LABELS } from '../format'
 import { formatKstShort } from '@core/time'
 import AuthorMessages from './AuthorMessages'
+import { moderateDenied } from '../permissions'
 import Avatar from './Avatar'
 import RoomEndDialog from './RoomEndDialog'
 import SuspendDialog from './SuspendDialog'
@@ -134,6 +135,9 @@ export default function ReportDetailPanel({
    * 않는다.</b> 어떤 조합만 예외로 두면 그 예외마다 "이건 왜 되지?"를 다시 따져야 한다.
    */
   const locked = busy || bulkBusy
+  // 조회 전용 계정은 조치를 못 한다(HP-529) — 단축키·버튼 모두. 서버도 같은 역할을 다시 검사한다.
+  const denied = moderateDenied()
+  const blocked = locked || denied !== null
 
   // 부모(페이지)에게도 같은 사실을 알린다 — 모달이 쓰기 도중 닫히지 않게.
   useEffect(() => { onBusyChange(locked) }, [locked, onBusyChange])
@@ -265,7 +269,7 @@ export default function ReportDetailPanel({
   useEffect(() => {
     if (!shortcutCommand || shortcutCommand.sequence === consumedCommand.current) return
     consumedCommand.current = shortcutCommand.sequence
-    if (locked || dialogOpen || warningOpen || roomEndOpen) return
+    if (blocked || dialogOpen || warningOpen || roomEndOpen) return
     switch (shortcutCommand.key) {
       case 'b':
         if (report.source !== 'GROUP_ROOM') blind()
@@ -341,7 +345,7 @@ export default function ReportDetailPanel({
                   type="radio" name={`spoiler-score-${report.id}`} value={n}
                   checked={score === n}
                   // 사라진 메시지는 BE가 404로 되돌려 보낸다 — 눌러 보고 실패하지 않게 미리 막는다
-                  disabled={locked || report.currentStatus === null}
+                  disabled={blocked || report.currentStatus === null}
                   onChange={() => setPicked(n)} />
               <span>{n}</span>
             </label>
@@ -355,8 +359,9 @@ export default function ReportDetailPanel({
             // ⚠️ 왕복 직후 중복을 막는 것은 locked가 아니다 — locked는 쓰기가 끝나는 순간
             // 풀리고(run의 finally) 재조회까지 이어지지 않는다. 그 창을 닫는 것은 아래
             // `picked === report.spoilerScore`와 보낸 뒤의 setPicked(null)이다(fixScore 주석).
-            disabled={locked || report.currentStatus === null || picked === null
+            disabled={blocked || report.currentStatus === null || picked === null
               || picked === report.spoilerScore}
+            title={denied ?? undefined}
             onClick={fixScore}>
           점수 정정
         </button>
@@ -373,46 +378,47 @@ export default function ReportDetailPanel({
       </>}
 
       <h5 className="side-h">조치</h5>
+      {denied && <p className="readonly-note">{denied}</p>}
       {error && <div className="error-box" role="alert">{error}</div>}
       <div className="acts">
         <button
             type="button" className="btn btn-blind"
-            disabled={locked || report.source === 'GROUP_ROOM'}
-            title={report.source === 'GROUP_ROOM' ? '그룹방 메시지는 가림 대상이 아닙니다' : undefined}
+            disabled={blocked || report.source === 'GROUP_ROOM'}
+            title={denied ?? (report.source === 'GROUP_ROOM' ? '그룹방 메시지는 가림 대상이 아닙니다' : undefined)}
             onClick={blind}>가림</button>
         <button
             type="button" className="btn btn-warn"
-            disabled={locked || report.source === 'GROUP_ROOM'
+            disabled={blocked || report.source === 'GROUP_ROOM'
               || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
-            title={report.source === 'GROUP_ROOM' ? '그룹방 신고는 정지·종결·기각으로 처리합니다'
-              : report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
+            title={denied ?? (report.source === 'GROUP_ROOM' ? '그룹방 신고는 정지·종결·기각으로 처리합니다'
+              : report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined)}
             onClick={() => setWarningOpen(true)}>
           경고…
         </button>
         <button
             type="button" className="btn btn-susp"
             // WITHDRAWN은 BE가 409로 거부한다 — 다이얼로그까지 갔다 실패하지 않게 미리 막는다(리뷰 m6)
-            disabled={locked || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
-            title={report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined}
+            disabled={blocked || !report.targetUser || report.targetUser.status === 'WITHDRAWN'}
+            title={denied ?? (report.targetUser?.status === 'WITHDRAWN' ? '탈퇴한 계정에는 조치할 수 없습니다' : undefined)}
             onClick={() => setDialogOpen(true)}>
           계정 정지…
         </button>
         {report.source === 'GROUP_ROOM' && (
           <button
               type="button" className="btn btn-room-end"
-              disabled={locked || !report.roomActive}
-              title={report.roomActive
+              disabled={blocked || !report.roomActive}
+              title={denied ?? (report.roomActive
                 ? '이 신고가 가리킨 그룹방만 종료합니다'
-                : '그룹방이 이미 종료되었거나 만료되었습니다'}
+                : '그룹방이 이미 종료되었거나 만료되었습니다')}
               onClick={() => setRoomEndOpen(true)}>
             방 종료 · 신고 종결
           </button>
         )}
         {/* "조치 없음"은 별개 상태 이름이라 기각 버튼에 괄호로 붙어 있으면 둘이 뒤섞여 읽힌다 */}
-        <button type="button" className="btn" disabled={locked} onClick={resolveWithoutAction}>
+        <button type="button" className="btn" disabled={blocked} title={denied ?? undefined} onClick={resolveWithoutAction}>
           조치 없이 종결
         </button>
-        <button type="button" className="btn" disabled={locked} onClick={reject}>기각</button>
+        <button type="button" className="btn" disabled={blocked} title={denied ?? undefined} onClick={reject}>기각</button>
       </div>
 
       <label className="note-in">
@@ -431,12 +437,12 @@ export default function ReportDetailPanel({
             && report.openReportCount !== report.sameMessageReportCount
             && ` (열림 ${report.openReportCount}건)`}</span>
         {report.currentStatus === 'blinded' && (
-          <> · <button type="button" className="btn-link" disabled={locked} onClick={unblind}>가림 해제</button></>
+          <> · <button type="button" className="btn-link" disabled={blocked} title={denied ?? undefined} onClick={unblind}>가림 해제</button></>
         )}
         {/* 재오픈은 종결된 신고에만, 그리고 명시적으로만(HP-268) — 가림 해제가 자동으로 하던 일을
             운영자 판단으로 옮겼다. 되돌리는 행위와 다시 심사하는 판단은 별개다. */}
         {report.status !== 'OPEN' && (
-          <> · <button type="button" className="btn-link" disabled={locked} onClick={reopen}>신고 재오픈</button></>
+          <> · <button type="button" className="btn-link" disabled={blocked} title={denied ?? undefined} onClick={reopen}>신고 재오픈</button></>
         )}
         {/* 아래 처리 정보는 조치 이력 라벨과 같은 어휘를 쓴다(HP-268) —
             같은 사실을 두 화면이 다르게 부르지 않는다 */}

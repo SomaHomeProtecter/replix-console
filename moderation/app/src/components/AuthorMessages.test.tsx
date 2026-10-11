@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import { realmRoles } from '@core/auth'
 import { makeAuthorMessage, makeReportItem } from '../test/fixtures'
 import AuthorMessages from './AuthorMessages'
 
@@ -851,5 +852,17 @@ describe('재조회 실패·창 밖 선택·언마운트(2026-08-12 독립 리�
     expect(blindMessage).toHaveBeenLastCalledWith(42, '01FIXTUREMSG0000000000000A',
         expect.any(AbortSignal), undefined)
     expect(await screen.findByRole('button', { name: /선택 0건 가림/ })).toBeDisabled()
+  })
+})
+
+describe('조회 전용 계정(HP-529)', () => {
+  it('글을 고르지도 가리지도 못한다', async () => {
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    vi.mocked(admin.listAuthorMessages).mockResolvedValue({ rows: [makeAuthorMessage()], total: 1 })
+    renderPanel()
+    const boxes = await screen.findAllByRole('checkbox')
+    for (const box of boxes) expect(box).toBeDisabled()
+    expect(blindButton()).toBeDisabled() // 신고된 글이 미리 골라져 있어도 보낼 수 없다
+    expect(blindButton()).toHaveAttribute('title', '조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다')
   })
 })

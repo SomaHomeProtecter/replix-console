@@ -2,7 +2,6 @@
 import { existsSync } from 'node:fs'
 import { copyFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
@@ -61,7 +60,6 @@ export default defineConfig(({ command }) => ({
   // ⚠️ 싱글파일 플러그인은 base를 './'로 바꾼다 — 경로마다 같은 파일을 두므로 '/'로 되돌린다.
   plugins: [
     react(),
-    tailwindcss(),
     ...(command === 'build' ? [singleInstallOnly(), viteSingleFile({ overrideConfig: { base: '/' } }), copyToToolPaths()] : []),
   ],
   // 담당 폴더(HP-456 D3)는 그대로 두고 소스만 불러온다 — 시딩 = 조현빈, 조치 = 김지호.

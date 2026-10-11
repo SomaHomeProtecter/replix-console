@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { decideModerationReview, listModerationReviews } from '../api/admin'
+import { moderateDenied } from '../permissions'
 import type {
   ModerationReviewDecision, ModerationReviewPage as ReviewPage, ModerationReviewStage,
   ModerationReviewView,
@@ -21,6 +22,7 @@ export default function ModerationReviewPage() {
   const [view, setView] = useState<ModerationReviewView>('PENDING')
   const [stage, setStage] = useState<StageFilter>('ALL')
   const [busy, setBusy] = useState<string | null>(null)
+  const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -110,6 +112,7 @@ export default function ModerationReviewPage() {
           새로고침
         </button>
       </div>
+      {denied && <p className="readonly-note">{denied}</p>}
 
       {data === null ? (
         loadError
@@ -185,13 +188,13 @@ export default function ModerationReviewPage() {
                         <div className="review-actions">
                           <button
                               type="button" className="btn review-false"
-                              disabled={busy !== null || loading}
+                              disabled={busy !== null || loading || denied !== null} title={denied ?? undefined}
                               onClick={() => void decide(row.sampleId, 'FALSE_POSITIVE')}>
                             오탐
                           </button>
                           <button
                               type="button" className="btn review-true"
-                              disabled={busy !== null || loading}
+                              disabled={busy !== null || loading || denied !== null} title={denied ?? undefined}
                               onClick={() => void decide(row.sampleId, 'TRUE_POSITIVE')}>
                             정탐
                           </button>

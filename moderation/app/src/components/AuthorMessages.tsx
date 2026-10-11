@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { approveBlindBatch, blindMessage, listAuthorMessages } from '../api/admin'
 import type { AuthorMessage, ReportItem } from '../api/types'
 import type { ProductionWriteApproval } from '@core/prodWriteConfirmation'
+import { moderateDenied } from '../permissions'
 
 /**
  * 상태 표식(HP-298). Redis {@code status}는 네 값이다 — {@code visible} ·
@@ -257,6 +258,7 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
 
   const working = progress !== null
   const blocked = busy || working
+  const denied = moderateDenied() // 조회 전용 계정은 고르지도 가리지도 못한다(HP-529)
   /** 고른 것 중 지금 목록 창에 없는 수 — 상한에 잘렸을 때만 0이 아니다(load의 truncated 주석). */
   const offscreenPicks = [...picked].filter(
       (id) => !rows.some((r) => r.msgId === id)).length
@@ -420,7 +422,7 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
                   <input
                       type="checkbox"
                       checked={picked.has(row.msgId)}
-                      disabled={!blindable || blocked}
+                      disabled={!blindable || blocked || denied !== null}
                       onChange={() => toggle(row.msgId)} />
                   <span className="pt">{Math.floor(row.playbackTime)}초</span>
                   <span className="txt">{row.message}</span>
@@ -442,7 +444,8 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
           <div className="msg-picks-acts">
             <button
                 type="button" className="btn"
-                disabled={picked.size === 0 || blocked}
+                disabled={picked.size === 0 || blocked || denied !== null}
+                title={denied ?? undefined}
                 onClick={blindPicked}>
               {/* 단계를 라벨로 밝힌다. 종전에는 누른 뒤 화면이 <b>누르기 전과 똑같아</b> 보여
                   (목록이 이미 차 있어 스피너도 안 떴다) 운영자가 한 번 더 누르는 일이 났다. */}

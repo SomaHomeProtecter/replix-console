@@ -1,18 +1,25 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   activateCleanbotPolicy, approveCleanbotPolicy, createCleanbotPolicy, listCleanbotPolicies,
   requestCleanbotPolicyReview, retireCleanbotPolicy, simulateCleanbotPolicy, updateCleanbotPolicy,
 } from '../api/admin'
 import type { CleanbotPolicy, CleanbotSimulation } from '../api/types'
+import Dialog from '@core/Dialog'
 import { env } from '@core/env'
 import { formatKstShort } from '@core/time'
+import { moderateDenied } from '../permissions'
+import { useLatestRequest } from '@core/useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { CLEANBOT_STATUS_LABELS } from '../recordLabels'
 
 export default function CleanbotPolicyPage() {
   const [policies, setPolicies] = useState<CleanbotPolicy[]>([])
   const [selected, setSelected] = useState<CleanbotPolicy | null>(null)
   const [simulation, setSimulation] = useState<CleanbotSimulation | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CleanbotPolicy | null>(null)
   const [name, setName] = useState('')
@@ -22,20 +29,43 @@ export default function CleanbotPolicyPage() {
   const [mapping, setMapping] = useState('')
   const [reason, setReason] = useState('')
   const [changeSetId, setChangeSetId] = useState('')
+  const begin = useLatestRequest()
   const load = useCallback(async (selectedId?: number) => {
+    const current = begin() // 늦게 온 응답이 새 목록을 덮지 않게(HP-527)
+    setLoading(true)
     try {
-      const rows = await listCleanbotPolicies(); setPolicies(rows)
-      setSelected((current) => {
-        const id = selectedId ?? current?.id
+      const rows = await listCleanbotPolicies()
+      if (!current()) return
+      setPolicies(rows)
+      setSelected((selectedNow) => {
+        const id = selectedId ?? selectedNow?.id
         return id ? rows.find((p) => p.id === id) ?? null : null
       })
     }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-  }, [])
+    catch (e) { if (current()) setError(e instanceof Error ? e.message : String(e)) }
+    finally { if (current()) setLoading(false) }
+  }, [begin])
   useEffect(() => { void load() }, [load])
+  // 운영자가 정책을 고른 횟수 — 저장·dry-run 응답이 오는 사이 다른 정책을 골랐으면 그 결과를 지금 상세에 그리지 않는다
+  // (그리면 고른 정책의 화면에 앞 정책의 결과·revision이 섞여, 다음 조치가 엉뚱한 정책에 간다 — 2026-10-12 리뷰).
+  const picks = useRef(0)
+  const pick = (policy: CleanbotPolicy) => { picks.current += 1; setSelected(policy); setSimulation(null) }
   const run = async (work: () => Promise<CleanbotPolicy>) => {
+    const seen = picks.current
     setBusy(true); setError(null)
-    try { const result = await work(); setSelected(result); setReason(''); setChangeSetId(''); await load(result.id) }
+    try {
+      const result = await work()
+      const still = picks.current === seen
+      if (still) { setSelected(result); setReason(''); setChangeSetId('') }
+      await load(still ? result.id : undefined)
+    }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
+  const dryRun = async (policyId: number) => {
+    const seen = picks.current
+    setBusy(true)
+    try { const result = await simulateCleanbotPolicy(policyId, 100); if (picks.current === seen) setSimulation(result) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -55,14 +85,16 @@ export default function CleanbotPolicyPage() {
   const validChangeSetId = Number.isInteger(parsedChangeSetId) && parsedChangeSetId > 0
   return <section className="feature-control" aria-label="클린봇 정책">
     <div className="board-head"><div><h1>클린봇 정책</h1><p>정책 버전과 과거 차단 표본 dry-run을 분리해 운영 데이터 변경 없이 비교합니다.</p></div>
-      <button className="btn" type="button" onClick={() => openForm(null)}>새 정책</button></div>
+      <button className="btn" type="button" disabled={denied !== null} title={denied ?? undefined} onClick={() => openForm(null)}>새 정책</button></div>
+    {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
     <div className="change-workspace"><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
-      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} onClick={() => { setSelected(p); setSimulation(null) }}>
-        <td><strong>{p.name}</strong><span>#{p.id} · rev {p.revision}</span></td><td>{p.status}</td></tr>)}</tbody></table>
-      {policies.length === 0 && <div className="empty-hint">정책 버전이 없습니다</div>}</div>
+      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...selectableRow(() => pick(p))}>
+        <td><strong>{p.name}</strong><span>#{p.id} · rev {p.revision}</span></td><td>{CLEANBOT_STATUS_LABELS[p.status]}</td></tr>)}</tbody></table>
+      {loading && policies.length === 0 && <div className="page-status">불러오는 중…</div>}
+      {!loading && policies.length === 0 && <div className="empty-hint">정책 버전이 없습니다</div>}</div>
       <aside className="change-detail">{!selected ? <div className="empty-hint">정책을 선택하세요</div> : <>
-        <span className="feature-state">{selected.status}</span><h2>{selected.name}</h2><p className="sub">작성 {selected.createdBy.displayName} · {formatKstShort(selected.createdAt)}</p>
+        <span className="feature-state">{CLEANBOT_STATUS_LABELS[selected.status]}</span><h2>{selected.name}</h2><p className="sub">작성 {selected.createdBy.displayName} · {formatKstShort(selected.createdAt)}</p>
         <dl className="change-summary"><div><dt>차단어</dt><dd>{selected.blockedTerms.join(', ') || '—'}</dd></div>
           <div><dt>허용어</dt><dd>{selected.allowedTerms.join(', ') || '—'}</dd></div><div><dt>임계값</dt><dd>{selected.threshold}</dd></div>
           <div><dt>카테고리 매핑</dt><dd>{Object.entries(selected.categoryMapping).map(([from, to]) => `${from} → ${to}`).join(', ') || '—'}</dd></div>
@@ -71,30 +103,30 @@ export default function CleanbotPolicyPage() {
           <label><span>조치 사유</span><input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
           {env.environment === 'PROD' && <label><span>적용 완료 변경 세트 ID</span><input value={changeSetId} onChange={(e) => setChangeSetId(e.target.value)} /></label>}
           <div className="dialog-actions">
-            {selected.status === 'DRAFT' && <button className="btn" type="button" disabled={busy} onClick={() => openForm(selected)}>초안 수정</button>}
-            {selected.status === 'DRAFT' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => requestCleanbotPolicyReview(selected.id, selected.revision, reason))}>검토 요청</button>}
-            {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
-            {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
-            {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
-            <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { setSimulation(await simulateCleanbotPolicy(selected.id, 100)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }}>표본 dry-run</button>
+            {selected.status === 'DRAFT' && <button className="btn" type="button" disabled={busy || denied !== null} title={denied ?? undefined} onClick={() => openForm(selected)}>초안 수정</button>}
+            {selected.status === 'DRAFT' && <button className="btn" disabled={busy || !reason.trim() || denied !== null} title={denied ?? undefined} onClick={() => void run(() => requestCleanbotPolicyReview(selected.id, selected.revision, reason))}>검토 요청</button>}
+            {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim() || denied !== null} title={denied ?? undefined} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
+            {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId) || denied !== null} title={denied ?? undefined} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
+            {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId) || denied !== null} title={denied ?? undefined} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
+            <button className="btn" disabled={busy || denied !== null} title={denied ?? undefined} onClick={() => void dryRun(selected.id)}>표본 dry-run</button>
           </div>
         </div>
         {simulation && <div className="incident-guide"><strong>무변경 시뮬레이션 · 표본 {simulation.sampleCount}</strong>
           <p>신규 차단 {simulation.newlyBlocked} · 신규 허용 {simulation.newlyAllowed} · 유지 {simulation.unchanged} · 실패 {simulation.failures}</p><p>{simulation.limitation}</p></div>}
       </>}</aside></div>
-    {formOpen && <div className="dialog-backdrop"><div className="dialog feature-dialog" role="dialog" aria-modal="true" aria-labelledby="cleanbot-form-title">
-      <h2 id="cleanbot-form-title">{editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'}</h2>
+    {formOpen && <Dialog label={editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'} title={editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'}
+        className="feature-dialog" busy={busy} onClose={() => setFormOpen(false)} closeOnBackdrop={false}>
       <div className="feature-form-grid"><label className="span2"><span>이름</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="span2"><span>차단어 (쉼표 구분)</span><textarea value={blocked} onChange={(e) => setBlocked(e.target.value)} /></label>
         <label className="span2"><span>허용어 (쉼표 구분)</span><textarea value={allowed} onChange={(e) => setAllowed(e.target.value)} /></label>
         <label><span>임계값 0~1</span><input type="number" min="0" max="1" step="0.05" value={threshold} onChange={(e) => setThreshold(e.target.value)} /></label>
         <label className="span2"><span>카테고리 매핑 (한 줄에 원본=표준)</span><textarea value={mapping} placeholder="지역=regional_hate" onChange={(e) => setMapping(e.target.value)} /></label></div>
-      <div className="dialog-actions"><button className="btn" type="button" onClick={() => setFormOpen(false)}>취소</button><button className="btn" type="button" disabled={busy || !name.trim() || Number(threshold) < 0 || Number(threshold) > 1} onClick={async () => {
+      <div className="dialog-actions"><button className="btn" type="button" disabled={busy} onClick={() => setFormOpen(false)}>취소</button><button className="btn" type="button" disabled={busy || !name.trim() || Number(threshold) < 0 || Number(threshold) > 1} onClick={async () => {
         setBusy(true); setError(null); try {
           const payload = { name, blockedTerms: blocked.split(',').map((v) => v.trim()).filter(Boolean), allowedTerms: allowed.split(',').map((v) => v.trim()).filter(Boolean), threshold: Number(threshold), categoryMapping: categoryMapping(), basePolicyId: editing?.basePolicyId ?? selected?.id ?? null }
           const p = editing ? await updateCleanbotPolicy(editing.id, editing.revision, payload) : await createCleanbotPolicy(payload)
           setFormOpen(false); setSelected(p); await load(p.id)
         } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
-      }}>{editing ? '초안 저장' : '초안 생성'}</button></div></div></div>}
+      }}>{editing ? '초안 저장' : '초안 생성'}</button></div></Dialog>}
   </section>
 }

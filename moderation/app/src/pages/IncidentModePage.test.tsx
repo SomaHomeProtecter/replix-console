@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
 import type { Incident } from '../api/types'
+import { WritingProvider } from '@core/writing'
 import IncidentModePage from './IncidentModePage'
 
 vi.mock('../api/admin')
@@ -22,16 +23,17 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(admin.listIncidents).mockResolv
 
 describe('Incident Mode 화면(HP-343)', () => {
   it('목록에서 primary 인시던트 상세와 불변 이벤트를 연다', async () => {
-    const user = userEvent.setup(); render(<MemoryRouter><IncidentModePage /></MemoryRouter>)
+    const user = userEvent.setup(); render(<MemoryRouter><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
+    expect(screen.getByRole('heading', { level: 1, name: '기능 제어 · 인시던트' })).toBeInTheDocument()
     await user.click(await screen.findByText('채팅 지연'))
     const detail = await screen.findByRole('complementary', { name: '인시던트 INC-9 상세' })
     expect(within(detail).getByText('다수 사용자의 채팅이 지연되고 있습니다')).toBeInTheDocument()
-    expect(within(detail).getByText('DECLARED')).toBeInTheDocument()
+    expect(within(detail).getByText('선언', { selector: '.change-events strong' })).toBeInTheDocument() // 서버 값 DECLARED(HP-527)
   })
 
   it('현재 환경과 영향·사유를 확인하고 인시던트를 선언한다', async () => {
     const user = userEvent.setup(); vi.mocked(admin.declareIncident).mockResolvedValue(incident)
-    render(<MemoryRouter><IncidentModePage /></MemoryRouter>)
+    render(<MemoryRouter><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
     await user.click(await screen.findByRole('button', { name: '인시던트 선언' }))
     const dialog = screen.getByRole('dialog'); await user.type(within(dialog).getByRole('textbox', { name: '인시던트 참조' }), 'INC-9')
     await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '채팅 지연')
@@ -46,7 +48,7 @@ describe('Incident Mode 화면(HP-343)', () => {
     const user = userEvent.setup(); const mitigating = { ...incident, status: 'MITIGATING' as const }
     vi.mocked(admin.listIncidents).mockResolvedValue([mitigating]); vi.mocked(admin.getIncident).mockResolvedValue(mitigating)
     vi.mocked(admin.transitionIncident).mockResolvedValue({ ...incident, status: 'MONITORING' })
-    render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><IncidentModePage /></MemoryRouter>)
+    render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
     await user.click(await screen.findByRole('button', { name: '상태 변경' })); const dialog = screen.getByRole('dialog')
     await user.type(within(dialog).getByRole('textbox', { name: '관찰 지표' }), '채팅 오류율과 Ready 수')
     await user.type(within(dialog).getByRole('textbox', { name: '성공 기준' }), '오류율 1퍼센트 미만 유지')
@@ -59,7 +61,7 @@ describe('Incident Mode 화면(HP-343)', () => {
 
   it('현재 상태에서 허용된 다음 단계만 보이고 완화 리소스를 연결한다', async () => {
     const user = userEvent.setup(); vi.mocked(admin.addIncidentEvent).mockResolvedValue({ ...incident, version: 3 })
-    render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><IncidentModePage /></MemoryRouter>)
+    render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
     await user.click(await screen.findByRole('button', { name: '상태 변경' })); let dialog = screen.getByRole('dialog')
     const options = within(dialog).getByRole('combobox', { name: '다음 상태' }).querySelectorAll('option')
     expect([...options].map((option) => option.textContent)).toEqual(['완화', '취소'])
@@ -77,5 +79,47 @@ describe('Incident Mode 화면(HP-343)', () => {
     await user.click(within(dialog).getByRole('button', { name: '리소스 연결' }))
     await waitFor(() => expect(admin.addIncidentEvent).toHaveBeenCalledWith(9, expect.objectContaining({
       expectedVersion: 2, sourceType: 'PRESET', sourceId: 'DISNEY_PLUS_ISOLATION' })))
+  })
+})
+
+describe('인시던트 다이얼로그 — 처리 중 잠금(HP-528)', () => {
+  async function openDeclareFilled(user: ReturnType<typeof userEvent.setup>) {
+    render(<MemoryRouter><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: '인시던트 선언' }))
+    const dialog = screen.getByRole('dialog', { name: '인시던트 선언' })
+    await user.type(within(dialog).getByRole('textbox', { name: '인시던트 참조' }), 'INC-9')
+    await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '채팅 지연')
+    await user.type(within(dialog).getByRole('textbox', { name: '현재 영향' }), '다수 사용자의 채팅이 지연되고 있습니다')
+    await user.type(within(dialog).getByRole('textbox', { name: '선언 사유' }), '지표를 확인해 장애를 선언합니다')
+    return dialog
+  }
+
+  it('보내는 동안 다시 눌러도 한 번만 보내고, Esc·취소로 닫히지 않는다', async () => {
+    const user = userEvent.setup()
+    let finish: (row: Incident) => void = () => {}
+    vi.mocked(admin.declareIncident).mockImplementation(() => new Promise((resolve) => { finish = resolve }))
+    const dialog = await openDeclareFilled(user)
+    const submit = within(dialog).getByRole('button', { name: '인시던트 선언' })
+    await user.click(submit)
+    await user.click(within(dialog).getByRole('button', { name: '선언 중…' }))
+    await user.keyboard('{Escape}')
+    expect(admin.declareIncident).toHaveBeenCalledTimes(1)
+    expect(within(dialog).getByRole('button', { name: '취소' })).toBeDisabled()
+    expect(screen.getByRole('dialog', { name: '인시던트 선언' })).toBeInTheDocument()
+    finish(incident)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('실패 뒤 다시 보내도 같은 창의 요청은 같은 requestId로 남는다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.declareIncident).mockRejectedValueOnce(new Error('잠시 뒤 다시 시도하세요')).mockResolvedValueOnce(incident)
+    const dialog = await openDeclareFilled(user)
+    await user.click(within(dialog).getByRole('button', { name: '인시던트 선언' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('잠시 뒤 다시 시도하세요')
+    await user.click(within(dialog).getByRole('button', { name: '인시던트 선언' }))
+    await waitFor(() => expect(admin.declareIncident).toHaveBeenCalledTimes(2))
+    const [first, second] = vi.mocked(admin.declareIncident).mock.calls.map(([request]) => request.requestId)
+    expect(first).toBeTruthy()
+    expect(second).toBe(first)
   })
 })

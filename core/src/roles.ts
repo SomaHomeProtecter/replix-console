@@ -31,3 +31,17 @@ export function hasConsoleRole(roles: readonly string[]): boolean {
 export function can(roles: readonly string[], capability: Capability): boolean {
   return (CAPABILITIES[capability].roles as readonly string[]).some((role) => roles.includes(role))
 }
+
+/** 'a 또는 b', 'a, b 또는 c' — 역할 이름을 안내 문장에 넣는다. */
+function joinOr(items: readonly string[]): string {
+  return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} 또는 ${items[items.length - 1]}`
+}
+
+/**
+ * 그 일을 할 수 없는 이유 — 할 수 있으면 null(HP-529). 권한이 없는 계정에 버튼을 켜 두면 눌러 본 뒤에야 서버가 거절해,
+ * 무엇이 막혔는지 알기 어렵다. 버튼을 끄고 이 문장을 보여 준다.
+ */
+export function deniedReason(roles: readonly string[], capability: Capability, action: string): string | null {
+  if (can(roles, capability)) return null
+  return `${action} 권한이 없습니다 — ${joinOr(CAPABILITIES[capability].roles)} 역할이 필요합니다`
+}

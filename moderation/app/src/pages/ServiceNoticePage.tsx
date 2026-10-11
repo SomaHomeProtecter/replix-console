@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import {
   cancelServiceNotice, createServiceNotice, endServiceNotice, getServiceNotice,
@@ -7,15 +7,17 @@ import {
 import type {
   FeatureControlPreset, ServiceNotice, ServiceNoticeCreate, ServiceNoticeKind,
 } from '../api/types'
+import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '@core/useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { NOTICE_STATUS_LABELS, noticeEventLabel } from '../recordLabels'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
-const STATUS_LABEL: Record<ServiceNotice['status'], string> = {
-  DRAFT: '초안', SCHEDULED: '예약됨', PUBLISHED: '게시 중', ENDED: '종료', CANCELLED: '취소',
-}
+const STATUS_LABEL = NOTICE_STATUS_LABELS
 const KIND_LABEL: Record<ServiceNoticeKind, string> = {
   NOTICE: '일반 안내', MAINTENANCE: '점검 안내', INCIDENT: '장애 안내',
 }
@@ -90,44 +92,41 @@ function NoticeCreateDialog({ onClose, onCreated }: {
     finally { setBusy(false); setWriting(false) }
   }
 
-  return <div className="dialog-backdrop" role="presentation">
-    <div className="dialog notice-dialog" role="dialog" aria-modal="true" aria-labelledby="notice-create-title">
-      <button type="button" className="modal-close" aria-label="닫기" disabled={busy} onClick={onClose}>✕</button>
-      <h2 id="notice-create-title">새 사용자 공지</h2>
-      <p className="sub">공개될 내용과 내부 운영 근거를 분리해 작성합니다.</p>
-      <NoticePreview kind={kind} title={title} message={message} linkUrl={linkUrl.trim()} />
-      {error && <div className="error-box" role="alert">{error}</div>}
-      <div className="feature-form-grid">
-        <label><span>유형</span><select value={kind} disabled={busy}
-            onChange={(event) => setKind(event.target.value as ServiceNoticeKind)}>
-          {Object.entries(KIND_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select></label>
-        <label><span>연결 프리셋</span><select value={presetId} disabled={busy}
-            onChange={(event) => setPresetId(event.target.value as typeof presetId)}>
-          <option value="">선택 안 함</option>{PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
-        </select></label>
-        <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
-            onChange={(event) => setTitle(event.target.value)} /></label>
-        <label className="span2"><span>공개 메시지</span><textarea value={message} rows={3} maxLength={1000}
-            disabled={busy} onChange={(event) => setMessage(event.target.value)} /></label>
-        <label className="span2"><span>내부 메모 <b>외부 비공개·필수</b></span><textarea value={internalNote}
-            rows={2} maxLength={1000} disabled={busy} onChange={(event) => setInternalNote(event.target.value)} /></label>
-        <label><span>변경 세트 ID</span><input inputMode="numeric" value={changeSetId} placeholder="선택"
-            disabled={busy} onChange={(event) => setChangeSetId(event.target.value)} /></label>
-        <label className="span2"><span>링크 URL <b>선택</b></span><input type="url" value={linkUrl}
-            maxLength={500} disabled={busy} placeholder="https://replix.tv/terms"
-            onChange={(event) => setLinkUrl(event.target.value)} /></label>
-        <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
-            onChange={(event) => setJira(event.target.value)} /></label>
-        <label className="span2"><span>인시던트</span><input value={incident} maxLength={100} placeholder="선택"
-            disabled={busy} onChange={(event) => setIncident(event.target.value)} /></label>
-      </div>
-      <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
-        <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
-          {busy ? '생성 중…' : '공지 초안 생성'}
-        </button></div>
+  return <Dialog label="새 사용자 공지" title="새 사용자 공지" className="notice-dialog" busy={busy} onClose={onClose}
+      closeOnBackdrop={false}>
+    <p className="sub">공개될 내용과 내부 운영 근거를 분리해 작성합니다.</p>
+    <NoticePreview kind={kind} title={title} message={message} linkUrl={linkUrl.trim()} />
+    {error && <div className="error-box" role="alert">{error}</div>}
+    <div className="feature-form-grid">
+      <label><span>유형</span><select value={kind} disabled={busy}
+          onChange={(event) => setKind(event.target.value as ServiceNoticeKind)}>
+        {Object.entries(KIND_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select></label>
+      <label><span>연결 프리셋</span><select value={presetId} disabled={busy}
+          onChange={(event) => setPresetId(event.target.value as typeof presetId)}>
+        <option value="">선택 안 함</option>{PRESETS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
+      </select></label>
+      <label className="span2"><span>제목</span><input value={title} maxLength={120} disabled={busy}
+          onChange={(event) => setTitle(event.target.value)} /></label>
+      <label className="span2"><span>공개 메시지</span><textarea value={message} rows={3} maxLength={1000}
+          disabled={busy} onChange={(event) => setMessage(event.target.value)} /></label>
+      <label className="span2"><span>내부 메모 <b>외부 비공개·필수</b></span><textarea value={internalNote}
+          rows={2} maxLength={1000} disabled={busy} onChange={(event) => setInternalNote(event.target.value)} /></label>
+      <label><span>변경 세트 ID</span><input inputMode="numeric" value={changeSetId} placeholder="선택"
+          disabled={busy} onChange={(event) => setChangeSetId(event.target.value)} /></label>
+      <label className="span2"><span>링크 URL <b>선택</b></span><input type="url" value={linkUrl}
+          maxLength={500} disabled={busy} placeholder="https://replix.tv/terms"
+          onChange={(event) => setLinkUrl(event.target.value)} /></label>
+      <label><span>Jira</span><input value={jira} maxLength={100} disabled={busy}
+          onChange={(event) => setJira(event.target.value)} /></label>
+      <label className="span2"><span>인시던트</span><input value={incident} maxLength={100} placeholder="선택"
+          disabled={busy} onChange={(event) => setIncident(event.target.value)} /></label>
     </div>
-  </div>
+    <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>취소</button>
+      <button type="button" className="btn btn-blind" disabled={busy} onClick={() => void submit()}>
+        {busy ? '생성 중…' : '공지 초안 생성'}
+      </button></div>
+  </Dialog>
 }
 
 function NoticeDetail({ notice, onReload }: {
@@ -190,7 +189,7 @@ function NoticeDetail({ notice, onReload }: {
       </div>
     </div>}
     <h3>불변 이벤트</h3><ol className="change-events">{notice.events.map((event) => <li key={event.id}>
-      <span>{formatKstShort(event.createdAt)}</span><strong>{event.type}</strong><p>{event.reason}</p>
+      <span>{formatKstShort(event.createdAt)}</span><strong>{noticeEventLabel(event.type)}</strong><p>{event.reason}</p>
     </li>)}</ol>
   </aside>
 }
@@ -203,15 +202,33 @@ export default function ServiceNoticePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async (detailId?: number) => {
+  // 목록과 상세는 따로 순서를 지킨다(HP-527). 새로고침이나 조치가 끝나 상세를 다시 열 때는, 그사이 운영자가 다른 행을
+  // 골랐으면 다시 열지 않는다 — 고른 행이 이전 행으로 되돌아가면 그 위의 승인·적용이 엉뚱한 것에 간다(2026-10-12 리뷰).
+  // 고른 횟수(picks)를 세어, 새로고침은 시작할 때의 수를, 상세 화면의 조치는 그 화면을 그린 때의 수(pickCount)를 넘긴다.
+  const beginList = useLatestRequest()
+  const beginDetail = useLatestRequest()
+  const picks = useRef(0)
+  const [pickCount, setPickCount] = useState(0)
+  const selectedId = useRef<number | null>(null)
+  useEffect(() => { selectedId.current = selected?.id ?? null }, [selected?.id])
+  const open = useCallback(async (id: number) => {
+    const current = beginDetail()
+    try { const detail = await getServiceNotice(id); if (current()) setSelected(detail) }
+    catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+  }, [beginDetail])
+  const pick = (id: number) => { picks.current += 1; setPickCount(picks.current); void open(id) }
+  const load = useCallback(async (detailId?: number, seenPicks = picks.current) => {
+    const current = beginList()
     setLoading(true)
     try {
-      const next = await listServiceNotices(); setNotices(next); setError(null)
-      const id = detailId ?? selected?.id
-      if (id) setSelected(await getServiceNotice(id))
-    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
-    finally { setLoading(false) }
-  }, [selected?.id])
+      const next = await listServiceNotices()
+      if (!current()) return
+      setNotices(next); setError(null)
+      const id = detailId ?? selectedId.current
+      if (id && picks.current === seenPicks) await open(id)
+    } catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { if (current()) setLoading(false) }
+  }, [beginList, open])
   useEffect(() => {
     const id = Number(searchParams.get('selected'))
     void load(Number.isSafeInteger(id) && id > 0 ? id : undefined)
@@ -222,7 +239,7 @@ export default function ServiceNoticePage() {
   }), [notices])
 
   return <section className="feature-control notice-page" aria-label="사용자 공지 관리">
-    <div className="board-head"><div><h1>기능 제어</h1><p>환경별 안내를 미리 보고 예약·게시·종료합니다.</p></div>
+    <div className="board-head"><div><h1>{featureControlTitle('/feature-control/notices')}</h1><p>환경별 안내를 미리 보고 예약·게시·종료합니다.</p></div>
       <span className="filter-note">게시 중 {counts.published} · 예약 {counts.scheduled}</span>
       <button type="button" className="btn" disabled={!canOperate() || loading} onClick={() => setCreating(true)}>새 공지</button>
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>
@@ -231,13 +248,14 @@ export default function ServiceNoticePage() {
     <div className="change-workspace"><div className="change-list report-table-wrap">
       <table><thead><tr><th>사용자 공지</th><th>상태</th><th>유형</th><th>생성</th></tr></thead>
         <tbody>{notices.map((notice) => <tr key={notice.id} className={selected?.id === notice.id ? 'selected' : ''}
-            onClick={() => void getServiceNotice(notice.id).then(setSelected)}>
+            aria-selected={selected?.id === notice.id} {...selectableRow(() => pick(notice.id))}>
           <td><strong>{notice.title}</strong><span>#{notice.id} · {notice.incidentReference ?? notice.jiraReference ?? '참조 없음'}</span></td>
           <td><span className={`feature-state status-${notice.status.toLowerCase()}`}>{STATUS_LABEL[notice.status]}</span></td>
           <td>{KIND_LABEL[notice.kind]}</td><td>{formatKstShort(notice.createdAt)}</td>
         </tr>)}</tbody></table>
+      {loading && notices.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && notices.length === 0 && <div className="empty-hint">아직 사용자 공지가 없습니다</div>}
-    </div>{selected ? <NoticeDetail notice={selected} onReload={load} />
+    </div>{selected ? <NoticeDetail notice={selected} onReload={(id) => load(id, pickCount)} />
       : <div className="change-empty">공지를 선택하면 사용자 노출 미리보기와 게시 이력을 확인할 수 있습니다.</div>}</div>
     {creating && <NoticeCreateDialog onClose={() => setCreating(false)}
         onCreated={(notice) => { setCreating(false); setSelected(notice); void load(notice.id) }} />}
