@@ -8,12 +8,16 @@ import Dialog from '@core/Dialog'
 import { env } from '@core/env'
 import { formatKstShort } from '@core/time'
 import { moderateDenied } from '../permissions'
+import { useLatestRequest } from '../useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { CLEANBOT_STATUS_LABELS } from '../recordLabels'
 
 export default function CleanbotPolicyPage() {
   const [policies, setPolicies] = useState<CleanbotPolicy[]>([])
   const [selected, setSelected] = useState<CleanbotPolicy | null>(null)
   const [simulation, setSimulation] = useState<CleanbotSimulation | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [formOpen, setFormOpen] = useState(false)
@@ -25,16 +29,22 @@ export default function CleanbotPolicyPage() {
   const [mapping, setMapping] = useState('')
   const [reason, setReason] = useState('')
   const [changeSetId, setChangeSetId] = useState('')
+  const begin = useLatestRequest()
   const load = useCallback(async (selectedId?: number) => {
+    const current = begin() // 늦게 온 응답이 새 목록을 덮지 않게(HP-527)
+    setLoading(true)
     try {
-      const rows = await listCleanbotPolicies(); setPolicies(rows)
-      setSelected((current) => {
-        const id = selectedId ?? current?.id
+      const rows = await listCleanbotPolicies()
+      if (!current()) return
+      setPolicies(rows)
+      setSelected((selectedNow) => {
+        const id = selectedId ?? selectedNow?.id
         return id ? rows.find((p) => p.id === id) ?? null : null
       })
     }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-  }, [])
+    catch (e) { if (current()) setError(e instanceof Error ? e.message : String(e)) }
+    finally { if (current()) setLoading(false) }
+  }, [begin])
   useEffect(() => { void load() }, [load])
   const run = async (work: () => Promise<CleanbotPolicy>) => {
     setBusy(true); setError(null)
@@ -62,11 +72,12 @@ export default function CleanbotPolicyPage() {
     {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
     <div className="change-workspace"><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
-      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} onClick={() => { setSelected(p); setSimulation(null) }}>
-        <td><strong>{p.name}</strong><span>#{p.id} · rev {p.revision}</span></td><td>{p.status}</td></tr>)}</tbody></table>
-      {policies.length === 0 && <div className="empty-hint">정책 버전이 없습니다</div>}</div>
+      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...selectableRow(() => { setSelected(p); setSimulation(null) })}>
+        <td><strong>{p.name}</strong><span>#{p.id} · rev {p.revision}</span></td><td>{CLEANBOT_STATUS_LABELS[p.status]}</td></tr>)}</tbody></table>
+      {loading && policies.length === 0 && <div className="page-status">불러오는 중…</div>}
+      {!loading && policies.length === 0 && <div className="empty-hint">정책 버전이 없습니다</div>}</div>
       <aside className="change-detail">{!selected ? <div className="empty-hint">정책을 선택하세요</div> : <>
-        <span className="feature-state">{selected.status}</span><h2>{selected.name}</h2><p className="sub">작성 {selected.createdBy.displayName} · {formatKstShort(selected.createdAt)}</p>
+        <span className="feature-state">{CLEANBOT_STATUS_LABELS[selected.status]}</span><h2>{selected.name}</h2><p className="sub">작성 {selected.createdBy.displayName} · {formatKstShort(selected.createdAt)}</p>
         <dl className="change-summary"><div><dt>차단어</dt><dd>{selected.blockedTerms.join(', ') || '—'}</dd></div>
           <div><dt>허용어</dt><dd>{selected.allowedTerms.join(', ') || '—'}</dd></div><div><dt>임계값</dt><dd>{selected.threshold}</dd></div>
           <div><dt>카테고리 매핑</dt><dd>{Object.entries(selected.categoryMapping).map(([from, to]) => `${from} → ${to}`).join(', ') || '—'}</dd></div>

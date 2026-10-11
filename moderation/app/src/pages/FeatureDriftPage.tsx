@@ -6,6 +6,7 @@ import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '../useLatestRequest'
 import { env } from '@core/env'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
@@ -86,11 +87,13 @@ export default function FeatureDriftPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const begin = useLatestRequest()
   const load = async () => {
+    const current = begin() // 늦게 온 응답이 새 목록을 덮지 않게(HP-527)
     setLoading(true)
-    try { setRows(await listFeatureDrift()); setError(null) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
-    finally { setLoading(false) }
+    try { const next = await listFeatureDrift(); if (current()) { setRows(next); setError(null) } }
+    catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { if (current()) setLoading(false) }
   }
   useEffect(() => { void load() }, [])
   const counts = useMemo(() => ({
@@ -120,7 +123,8 @@ export default function FeatureDriftPage() {
           {row.status === 'DRIFT' && <button type="button" className="btn" disabled={!canOperate()}
               onClick={() => setSelected(row)}>재적용 초안</button>}
         </div></td>
-    </tr>)}</tbody></table>{!loading && rows.length === 0 && <div className="empty-hint">drift 상태가 없습니다</div>}</div>
+    </tr>)}</tbody></table>{loading && rows.length === 0 && <div className="page-status">불러오는 중…</div>}
+      {!loading && rows.length === 0 && <div className="empty-hint">drift 상태가 없습니다</div>}</div>
     {selected && <ReapplyDialog drift={selected} onClose={() => setSelected(null)}
         onCreated={(changeSet) => { setCreated(changeSet); setSelected(null); void load() }} />}
   </section>

@@ -7,6 +7,9 @@ import type {
 } from '../api/types'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { moderateDenied } from '../permissions'
+import { useLatestRequest } from '../useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { CASE_NOTE_LABELS, caseEventLabel } from '../recordLabels'
 
 const VIEWS: Array<[OperationCaseView, string]> = [
   ['ALL', '전체'], ['MINE', '내 담당'], ['UNASSIGNED', '미배정'], ['OVERDUE', '기한 초과'],
@@ -19,6 +22,7 @@ export default function OperationCasesPage() {
   const [workloads, setWorkloads] = useState<Array<{ operator: { id: number; displayName: string | null }; assigned: number; overdue: number }>>([])
   const [truncated, setTruncated] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [assignee, setAssignee] = useState('')
@@ -27,15 +31,22 @@ export default function OperationCasesPage() {
   const [noteType, setNoteType] = useState<CaseNoteType>('INTERNAL')
   const [note, setNote] = useState('')
 
+  // 목록과 상세는 따로 순서를 지킨다(HP-527) — 필터를 빠르게 바꾸면 먼저 고른 필터의 늦은 응답이 지금 필터의 목록을
+  // 덮어, 고른 필터와 다른 케이스가 보였다. 상세도 행을 빠르게 옮겨 고를 때 같은 일이 난다.
+  const beginList = useLatestRequest()
+  const beginDetail = useLatestRequest()
   const load = useCallback(async () => {
-    setError(null)
+    const current = beginList()
+    setLoading(true); setError(null)
     try {
       const page = await listOperationCases(view)
+      if (!current()) return
       setRows(page.items); setWorkloads(page.workloads); setTruncated(page.truncated)
-      setSelected((current) => current && page.items.some(
-        (row) => row.reportId === current.item.reportId) ? current : null)
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-  }, [view])
+      setSelected((selectedNow) => selectedNow && page.items.some(
+        (row) => row.reportId === selectedNow.item.reportId) ? selectedNow : null)
+    } catch (e) { if (current()) setError(e instanceof Error ? e.message : String(e)) }
+    finally { if (current()) setLoading(false) }
+  }, [view, beginList])
   useEffect(() => { void load() }, [load])
 
   const applyDetail = (detail: OperationCaseDetail) => {
@@ -45,15 +56,18 @@ export default function OperationCasesPage() {
   }
 
   const open = async (id: number, reflectInUrl = true) => {
+    const current = beginDetail()
     setError(null)
     try {
-      applyDetail(await getOperationCase(id))
+      const detail = await getOperationCase(id)
+      if (!current()) return
+      applyDetail(detail)
       if (reflectInUrl) {
         const url = new URL(window.location.href); url.searchParams.set('selected', String(id))
         window.history.replaceState(null, '', url)
       }
     }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    catch (e) { if (current()) setError(e instanceof Error ? e.message : String(e)) }
   }
   useEffect(() => {
     // 앱은 /moderation/<env>/ 아래에서 돈다(HP-456) — 루트 기준 경로와 같은지가 아니라 끝을 본다.
@@ -72,7 +86,7 @@ export default function OperationCasesPage() {
 
   return <section className="feature-control" aria-label="운영 협업">
     <div className="board-head"><div><h1>운영 협업</h1><p>신고 케이스의 담당·인계·재검토와 동시 처리 상태를 감사합니다.</p></div>
-      <button className="btn" type="button" onClick={() => void load()}>새로고침</button></div>
+      <button className="btn" type="button" disabled={loading} onClick={() => void load()}>새로고침</button></div>
     {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
     {truncated && <div className="incident-guide"><strong>최근 열린 케이스 200건 기준</strong>
@@ -84,9 +98,10 @@ export default function OperationCasesPage() {
     </div>
     <div className="change-workspace"><div className="change-list"><table><thead><tr><th>케이스</th><th>담당</th><th>상태</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.reportId} aria-current={selected?.item.reportId === row.reportId}
-          onClick={() => void open(row.reportId)}><td><strong>신고 #{row.reportId}</strong><span>{row.messagePreview}</span></td>
+          {...selectableRow(() => void open(row.reportId))}><td><strong>신고 #{row.reportId}</strong><span>{row.messagePreview}</span></td>
         <td>{row.assignee?.displayName ?? '미배정'}</td><td>{row.overdue ? '기한 초과' : row.stale ? '오래된 상태' : row.reviewRequested ? '재검토 요청' : '진행 가능'}</td></tr>)}
-    </tbody></table>{rows.length === 0 && <div className="empty-hint">조건에 맞는 열린 케이스가 없습니다</div>}</div>
+    </tbody></table>{loading && rows.length === 0 && <div className="page-status">불러오는 중…</div>}
+      {!loading && rows.length === 0 && <div className="empty-hint">조건에 맞는 열린 케이스가 없습니다</div>}</div>
     <aside className="change-detail" aria-label="케이스 상세">
       {!selected ? <div className="empty-hint">케이스를 선택하세요</div> : <>
         <span className="feature-state">version {selected.item.version}</span><h2>신고 #{selected.item.reportId}</h2>
@@ -105,11 +120,11 @@ export default function OperationCasesPage() {
           const next = await addOperationCaseNote(selected.item.reportId, selected.item.version, noteType, note); setNote(''); return next
         })}>기록 추가</button>
         <h3>협업 메모</h3><ol className="case-log">{selected.notes.map((entry) => <li key={entry.id}>
-          <span>{formatKstShort(entry.createdAt)}</span><strong>{entry.type}</strong>
+          <span>{formatKstShort(entry.createdAt)}</span><strong>{CASE_NOTE_LABELS[entry.type]}</strong>
           <p>{entry.body} · {entry.author.displayName ?? `#${entry.author.id}`}</p></li>)}</ol>
         {selected.notes.length === 0 && <div className="empty-hint">아직 등록된 메모가 없습니다</div>}
         <h3>감사 타임라인</h3><ol className="case-log">{selected.events.map((event) => <li key={event.id}>
-          <span>{formatKstShort(event.createdAt)}</span><strong>{event.type}</strong><p>{event.detail} · {event.actor.displayName ?? `#${event.actor.id}`}</p></li>)}</ol>
+          <span>{formatKstShort(event.createdAt)}</span><strong>{caseEventLabel(event.type)}</strong><p>{event.detail} · {event.actor.displayName ?? `#${event.actor.id}`}</p></li>)}</ol>
         {selected.events.length === 0 && <div className="empty-hint">아직 기록된 변경이 없습니다</div>}
       </>}
     </aside></div>

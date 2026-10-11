@@ -14,15 +14,14 @@ import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '../useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { CHANGE_SET_STATUS_LABELS, changeSetEventLabel, RISK_LABELS } from '../recordLabels'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
 const ROLLOUT_PRESETS = [0, 10, 25, 50, 100]
-const STATUS_LABEL: Record<FeatureChangeSet['status'], string> = {
-  DRAFT: '초안', REVIEW_REQUESTED: '검토 요청', APPROVED: '승인됨', REJECTED: '반려',
-  SCHEDULED: '예약됨', RUNNING: '적용 중', SUCCEEDED: '적용 완료',
-  PARTIALLY_FAILED: '일부 실패', FAILED: '실패', ROLLED_BACK: '롤백 완료', CANCELLED: '취소',
-}
+const STATUS_LABEL = CHANGE_SET_STATUS_LABELS
 
 function permissions() {
   const roles = realmRoles()
@@ -116,7 +115,7 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
               <input type="checkbox" checked={Boolean(item)} disabled={busy || !flag.connected}
                   onChange={() => toggle(flag)} />
               <span><strong>{flag.displayName}</strong><code>{flag.key}</code></span>
-              <small>{flag.risk}{flag.globalOnly ? ' · 전역' : ''}</small>
+              <small>{RISK_LABELS[flag.risk]}{flag.globalOnly ? ' · 전역' : ''}</small>
             </label>
             {item && <div className="change-target">
               <button type="button" className="chip-f" aria-pressed={item.enabled}
@@ -204,7 +203,7 @@ function ChangeSetDetail({ changeSet, onReload }: {
   return <aside className="change-detail" aria-label={`변경 세트 #${changeSet.id} 상세`}>
     <div className="change-detail-head">
       <div><span className={`feature-state status-${changeSet.status.toLowerCase()}`}>{STATUS_LABEL[changeSet.status]}</span>
-        <h2>{changeSet.title}</h2><p>#{changeSet.id} · {changeSet.environment} · {changeSet.risk}</p></div>
+        <h2>{changeSet.title}</h2><p>#{changeSet.id} · {changeSet.environment} · {RISK_LABELS[changeSet.risk]}</p></div>
       <button type="button" className="btn" disabled={busy} onClick={() => void onReload(changeSet.id)}>새로고침</button>
     </div>
     <dl className="change-summary">
@@ -258,7 +257,7 @@ function ChangeSetDetail({ changeSet, onReload }: {
     </div>}
     <h3>불변 이벤트</h3>
     <ol className="change-events">{changeSet.events.map((event) => <li key={event.id}>
-      <span>{formatKstShort(event.createdAt)}</span><strong>{event.type}</strong><p>{event.reason}</p>
+      <span>{formatKstShort(event.createdAt)}</span><strong>{changeSetEventLabel(event.type)}</strong><p>{event.reason}</p>
     </li>)}</ol>
   </aside>
 }
@@ -273,16 +272,26 @@ export default function FeatureChangeSetPage() {
   const [error, setError] = useState<string | null>(null)
   const writable = permissions().operate
 
+  // 목록과 상세는 따로 순서를 지킨다(HP-527) — 새로고침 중에 다른 행을 골라도, 먼저 보낸 상세가 고른 행을 덮지 않는다.
+  const beginList = useLatestRequest()
+  const beginDetail = useLatestRequest()
+  const open = useCallback(async (id: number) => {
+    const current = beginDetail()
+    try { const detail = await getFeatureChangeSet(id); if (current()) setSelected(detail) }
+    catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+  }, [beginDetail])
   const load = useCallback(async (detailId?: number) => {
+    const current = beginList()
     setLoading(true)
     try {
       const [nextSets, nextFlags] = await Promise.all([listFeatureChangeSets(), listFeatureFlags()])
+      if (!current()) return
       setSets(nextSets); setFlags(nextFlags); setError(null)
       const id = detailId ?? selected?.id
-      if (id) setSelected(await getFeatureChangeSet(id))
-    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
-    finally { setLoading(false) }
-  }, [selected?.id])
+      if (id) await open(id)
+    } catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { if (current()) setLoading(false) }
+  }, [selected?.id, beginList, open])
   useEffect(() => {
     const id = Number(searchParams.get('selected'))
     void load(Number.isSafeInteger(id) && id > 0 ? id : undefined)
@@ -304,11 +313,12 @@ export default function FeatureChangeSetPage() {
       <div className="change-list report-table-wrap">
         <table><thead><tr><th>변경 세트</th><th>상태</th><th>범위</th><th>생성</th></tr></thead>
           <tbody>{sets.map((set) => <tr key={set.id} className={selected?.id === set.id ? 'selected' : ''}
-              onClick={() => void getFeatureChangeSet(set.id).then(setSelected)}>
+              aria-selected={selected?.id === set.id} {...selectableRow(() => void open(set.id))}>
             <td><strong>{set.title}</strong><span>#{set.id} · {set.jiraReference ?? '참조 없음'}</span></td>
             <td><span className={`feature-state status-${set.status.toLowerCase()}`}>{STATUS_LABEL[set.status]}</span></td>
-            <td>{set.items.length}개 · {set.risk}</td><td>{formatKstShort(set.createdAt)}</td>
+            <td>{set.items.length}개 · {RISK_LABELS[set.risk]}</td><td>{formatKstShort(set.createdAt)}</td>
           </tr>)}</tbody></table>
+        {loading && sets.length === 0 && <div className="page-status">불러오는 중…</div>}
         {!loading && sets.length === 0 && <div className="empty-hint">아직 변경 세트가 없습니다</div>}
       </div>
       {selected ? <ChangeSetDetail changeSet={selected} onReload={load} />

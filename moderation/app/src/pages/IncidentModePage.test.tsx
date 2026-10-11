@@ -28,7 +28,7 @@ describe('Incident Mode 화면(HP-343)', () => {
     await user.click(await screen.findByText('채팅 지연'))
     const detail = await screen.findByRole('complementary', { name: '인시던트 INC-9 상세' })
     expect(within(detail).getByText('다수 사용자의 채팅이 지연되고 있습니다')).toBeInTheDocument()
-    expect(within(detail).getByText('DECLARED')).toBeInTheDocument()
+    expect(within(detail).getByText('선언', { selector: '.change-events strong' })).toBeInTheDocument() // 서버 값 DECLARED(HP-527)
   })
 
   it('현재 환경과 영향·사유를 확인하고 인시던트를 선언한다', async () => {

@@ -7,6 +7,8 @@ import { can } from '@core/roles'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '../useLatestRequest'
+import { RISK_LABELS } from '../recordLabels'
 import { useNavigate } from 'react-router'
 
 type View = 'ALL' | 'ON' | 'OFF' | 'PARTIAL' | 'ATTENTION'
@@ -128,20 +130,24 @@ export default function FeatureControlPage() {
   const [selected, setSelected] = useState<FeatureFlagRow | null>(null)
   const writable = canChange()
 
+  const begin = useLatestRequest()
   const load = useCallback(async () => {
+    const current = begin() // 늦게 온 응답이 새 목록을 덮지 않게(HP-527)
     setLoading(true)
     try {
       const result = await listFeatureFlags()
+      if (!current()) return
       setRows(result)
       setStale(false)
       setError(null)
     } catch (failure) {
+      if (!current()) return
       setStale(true)
       setError(failure instanceof Error ? failure.message : String(failure))
     } finally {
-      setLoading(false)
+      if (current()) setLoading(false)
     }
-  }, [])
+  }, [begin])
 
   useEffect(() => { void load() }, [load])
 
@@ -187,7 +193,7 @@ export default function FeatureControlPage() {
                   <td><span className={`feature-state ${status.className}`}>{status.label}</span></td>
                   <td className="mono">{row.rolloutPercentage}%</td>
                   <td><strong>{row.owner}</strong><span className="feature-meta">
-                    {row.risk} · {POLICY_LABELS[row.policyClass]}{row.globalOnly ? ' · 전역' : ''}
+                    {RISK_LABELS[row.risk]} · {POLICY_LABELS[row.policyClass]}{row.globalOnly ? ' · 전역' : ''}
                   </span></td>
                   <td className="feature-runtime">
                     <strong>{row.activeInstances}개 활성 · 불일치 {row.mismatchedInstances}</strong>

@@ -8,6 +8,8 @@ import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { RISK_LABELS } from '../recordLabels'
+import { useLatestRequest } from '../useLatestRequest'
 import { env } from '@core/env'
 import { useWriting } from '@core/writing'
 import { kstInputToIso } from '@core/time'
@@ -92,11 +94,13 @@ export default function FeatureControlPresetPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const begin = useLatestRequest()
   const load = async () => {
+    const current = begin() // 늦게 온 응답이 새 목록을 덮지 않게(HP-527)
     setLoading(true)
-    try { setPresets(await listFeatureControlPresets()); setError(null) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
-    finally { setLoading(false) }
+    try { const next = await listFeatureControlPresets(); if (current()) { setPresets(next); setError(null) } }
+    catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { if (current()) setLoading(false) }
   }
   useEffect(() => { void load() }, [])
 
@@ -110,9 +114,10 @@ export default function FeatureControlPresetPage() {
       <span><strong>변경 세트 #{created.id} 초안을 생성했습니다.</strong> 검토 후 승인·예약·적용하세요.</span>
       <Link className="btn" to={`/feature-control/change-sets?selected=${created.id}`}>변경 세트 열기</Link>
     </div>}
+    {loading && presets.length === 0 && <div className="page-status">불러오는 중…</div>}
     <div className="preset-grid">
       {presets.map((preset) => <article className="preset-card" key={preset.id}>
-        <div className="preset-card-head"><span className={`feature-state ${preset.risk === 'HIGH' ? 'off' : 'pending'}`}>{preset.risk}</span>
+        <div className="preset-card-head"><span className={`feature-state ${preset.risk === 'HIGH' ? 'off' : 'pending'}`}>{RISK_LABELS[preset.risk]}</span>
           {preset.requiresExpiry && <small>PROD 만료 필수</small>}</div>
         <h2>{preset.displayName}</h2><p>{preset.description}</p>
         <div className="preset-targets">{preset.targets.map((target) => <div key={target.flagKey}>

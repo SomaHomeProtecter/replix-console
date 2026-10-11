@@ -6,21 +6,20 @@ import { realmRoles } from '@core/auth'
 import Dialog from '@core/Dialog'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '../useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { INCIDENT_RESOURCE_LABELS, INCIDENT_STATUS_LABELS, incidentEventLabel } from '../recordLabels'
 import { env } from '@core/env'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
-const STATUS: Record<IncidentStatus, string> = { DECLARED: '선언', INVESTIGATING: '조사', MITIGATING: '완화',
-  MONITORING: '관찰', RESOLVED: '해결', CANCELLED: '취소' }
+const STATUS = INCIDENT_STATUS_LABELS
 const TRANSITIONS: Record<IncidentStatus, IncidentStatus[]> = {
   DECLARED: ['INVESTIGATING', 'CANCELLED'], INVESTIGATING: ['MITIGATING', 'CANCELLED'],
   MITIGATING: ['MONITORING', 'CANCELLED'], MONITORING: ['MITIGATING', 'RESOLVED', 'CANCELLED'],
   RESOLVED: ['INVESTIGATING'], CANCELLED: ['INVESTIGATING'],
 }
-const RESOURCE_LABEL: Record<IncidentResourceType, string> = {
-  CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', PRESET: '장애 대응 프리셋',
-  RUNBOOK: '런북', DASHBOARD: '대시보드', JIRA: 'Jira',
-}
+const RESOURCE_LABEL = INCIDENT_RESOURCE_LABELS
 const active = (status: IncidentStatus) => !['RESOLVED', 'CANCELLED'].includes(status)
 // 인시던트 선언·전이는 기능 제어 역할이 하고, PROD에서는 승인 역할까지 함께 있어야 한다(admin은 늘 된다).
 const writable = () => { const r = realmRoles(); return r.includes('admin') || (can(r, 'operateFeatures')
@@ -179,7 +178,7 @@ function Detail({ incident, reload }: { incident: Incident; reload: (id: number)
     <div className="change-actions"><label><span>운영 메모</span><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
       {error && <div className="error-box" role="alert">{error}</div>}<div className="dialog-actions"><button className="btn" disabled={!canNote()} onClick={() => void addNote()}>메모 추가</button>
         <Link className="btn" to={`/feature-control/incidents?reference=${encodeURIComponent(incident.reference)}`}>참조 타임라인</Link></div></div>
-    <h3>인시던트 이벤트</h3><ol className="change-events">{incident.events.map((event) => <li key={event.id}><span>{formatKstShort(event.occurredAt)}</span><strong>{event.type}</strong>
+    <h3>인시던트 이벤트</h3><ol className="change-events">{incident.events.map((event) => <li key={event.id}><span>{formatKstShort(event.occurredAt)}</span><strong>{incidentEventLabel(event.type)}</strong>
       <p>{event.summary}{event.sourceType && event.sourceId ? ` · ${event.sourceType} ${event.sourceId}` : ''}</p></li>)}</ol>
     {transitioning && <TransitionDialog incident={incident} close={() => setTransitioning(false)} done={(row) => { setTransitioning(false); void reload(row.id) }} />}
     {editing && <EditDialog incident={incident} close={() => setEditing(false)} done={(row) => { setEditing(false); void reload(row.id) }} />}
@@ -190,15 +189,33 @@ function Detail({ incident, reload }: { incident: Incident; reload: (id: number)
 export default function IncidentModePage() {
   const [params] = useSearchParams(); const [rows, setRows] = useState<Incident[]>([]); const [selected, setSelected] = useState<Incident | null>(null)
   const [creating, setCreating] = useState(false); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null)
-  const load = useCallback(async (id?: number) => { setLoading(true); try { const next = await listIncidents(); setRows(next)
-    if (id) setSelected(await getIncident(id)); setError(null) } catch (f) { setError(f instanceof Error ? f.message : String(f)) } finally { setLoading(false) } }, [])
+  // 목록과 상세는 따로 순서를 지킨다(HP-527) — 새로고침 중에 다른 행을 골라도, 먼저 보낸 상세가 고른 행을 덮지 않는다.
+  const beginList = useLatestRequest()
+  const beginDetail = useLatestRequest()
+  const open = useCallback(async (id: number) => {
+    const current = beginDetail()
+    try { const detail = await getIncident(id); if (current()) setSelected(detail) }
+    catch (f) { if (current()) setError(f instanceof Error ? f.message : String(f)) }
+  }, [beginDetail])
+  const load = useCallback(async (id?: number) => {
+    const current = beginList()
+    setLoading(true)
+    try {
+      const next = await listIncidents()
+      if (!current()) return
+      setRows(next); setError(null)
+      if (id) await open(id)
+    } catch (f) { if (current()) setError(f instanceof Error ? f.message : String(f)) }
+    finally { if (current()) setLoading(false) }
+  }, [beginList, open])
   useEffect(() => { const id = Number(params.get('selected')); void load(Number.isSafeInteger(id) && id > 0 ? id : undefined) }, []) // eslint-disable-line
   const counts = useMemo(() => ({ active: rows.filter((r) => active(r.status)).length, primary: rows.filter((r) => r.primary && active(r.status)).length }), [rows])
   return <section className="feature-control incident-mode-page" aria-label="인시던트"><div className="board-head"><div><h1>{featureControlTitle('/feature-control/incident-mode')}</h1><p>장애 선언부터 완화·관찰·종료까지 책임과 근거를 관리합니다.</p></div>
     <span className="filter-note">활성 {counts.active} · primary {counts.primary}</span><button className="btn" disabled={!writable()} onClick={() => setCreating(true)}>인시던트 선언</button></div>
     <FeatureControlTabs />{error && <div className="error-box" role="alert">{error}</div>}<div className="change-workspace"><div className="change-list"><table><thead><tr><th>인시던트</th><th>SEV</th><th>상태</th><th>담당</th></tr></thead><tbody>
-      {rows.map((row) => <tr key={row.id} className={selected?.id === row.id ? 'selected' : ''} onClick={() => void getIncident(row.id).then(setSelected)}><td><strong>{row.title}</strong><span>{row.reference}{row.primary ? ' · PRIMARY' : ''}</span></td>
+      {rows.map((row) => <tr key={row.id} className={selected?.id === row.id ? 'selected' : ''} aria-selected={selected?.id === row.id} {...selectableRow(() => void open(row.id))}><td><strong>{row.title}</strong><span>{row.reference}{row.primary ? ' · primary' : ''}</span></td>
         <td><span className={`incident-sev ${row.severity.toLowerCase()}`}>{row.severity}</span></td><td>{STATUS[row.status]}</td><td>{row.ownerUserId ? `#${row.ownerUserId}` : '—'}</td></tr>)}</tbody></table>
+      {loading && rows.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && rows.length === 0 && <div className="empty-hint">현재 환경의 인시던트가 없습니다</div>}</div>{selected ? <Detail incident={selected} reload={load} /> : <div className="change-empty">인시던트를 선택하면 영향·상태·타임라인을 확인할 수 있습니다.</div>}</div>
     {creating && <DeclareDialog close={() => setCreating(false)} created={(row) => { setCreating(false); void load(row.id) }} />}</section>
 }

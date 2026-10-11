@@ -62,10 +62,11 @@ describe('기능 변경 세트 화면(HP-343)', () => {
     renderPage()
     await user.click(await screen.findByText('채팅 점진 적용'))
 
-    expect(await screen.findByRole('complementary', { name: '변경 세트 #7 상세' })).toBeInTheDocument()
+    const detail = await screen.findByRole('complementary', { name: '변경 세트 #7 상세' })
     expect(screen.getByText('ON · 100%')).toBeInTheDocument()
     expect(screen.getByText('ON · 25%')).toBeInTheDocument()
-    expect(screen.getByText('CREATED')).toBeInTheDocument()
+    // 기록 이름은 한글로(HP-527) — 서버 값 CREATED
+    expect(within(detail).getByText('생성', { selector: '.change-events strong' })).toBeInTheDocument()
   })
 
   it('프리셋 완료 링크의 selected 쿼리로 상세를 바로 연다', async () => {

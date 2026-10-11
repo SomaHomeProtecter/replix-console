@@ -58,7 +58,7 @@ describe('사용자 공지 화면(HP-343)', () => {
     expect(within(detail).getByLabelText('사용자 노출 미리보기')).toHaveTextContent(
       '일부 기능이 잠시 느릴 수 있습니다.')
     expect(within(detail).getByText('내부 메모 · 외부 비공개')).toBeInTheDocument()
-    expect(within(detail).getByText('CREATED')).toBeInTheDocument()
+    expect(within(detail).getByText('생성', { selector: '.change-events strong' })).toBeInTheDocument() // 서버 값 CREATED(HP-527)
   })
 
   it('작성 중에도 공개 배너를 미리 보고 내부 메모를 별도 계약으로 보낸다', async () => {

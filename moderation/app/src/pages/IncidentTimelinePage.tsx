@@ -4,8 +4,18 @@ import { getIncidentTimeline } from '../api/admin'
 import type { IncidentTimeline } from '../api/types'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { formatKstShort } from '@core/time'
+import {
+  CHANGE_SET_STATUS_LABELS, changeSetEventLabel, INCIDENT_RESOURCE_LABELS, INCIDENT_STATUS_LABELS, incidentEventLabel,
+  NOTICE_STATUS_LABELS, noticeEventLabel,
+} from '../recordLabels'
+import { useLatestRequest } from '../useLatestRequest'
 
 const SOURCE_LABEL = { CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', INCIDENT: '인시던트' } as const
+/* 한 타임라인에 세 종류의 기록이 섞인다 — 기록 이름과 상태는 그 기록의 종류로 한글 표를 고른다(HP-527). */
+const EVENT_LABEL = { CHANGE_SET: changeSetEventLabel, NOTICE: noticeEventLabel, INCIDENT: incidentEventLabel } as const
+const STATUS_LABEL: Record<keyof typeof SOURCE_LABEL, Readonly<Record<string, string>>> = {
+  CHANGE_SET: CHANGE_SET_STATUS_LABELS, NOTICE: NOTICE_STATUS_LABELS, INCIDENT: INCIDENT_STATUS_LABELS,
+}
 
 export default function IncidentTimelinePage() {
   const [params] = useSearchParams()
@@ -14,11 +24,13 @@ export default function IncidentTimelinePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const begin = useLatestRequest()
   const load = async (incident: string) => {
+    const current = begin() // 늦게 온 응답이 새 조회 결과를 덮지 않게(HP-527)
     setLoading(true); setError(null)
-    try { setTimeline(await getIncidentTimeline(incident)) }
-    catch (failure) { setTimeline(null); setError(failure instanceof Error ? failure.message : String(failure)) }
-    finally { setLoading(false) }
+    try { const next = await getIncidentTimeline(incident); if (current()) setTimeline(next) }
+    catch (failure) { if (current()) { setTimeline(null); setError(failure instanceof Error ? failure.message : String(failure)) } }
+    finally { if (current()) setLoading(false) }
   }
   const search = (event: FormEvent) => {
     event.preventDefault(); const incident = reference.trim()
@@ -56,8 +68,8 @@ export default function IncidentTimelinePage() {
             <span className={`incident-dot source-${entry.sourceType.toLowerCase()}`} aria-hidden="true" />
             <time dateTime={entry.occurredAt}>{formatKstShort(entry.occurredAt)}</time>
             <article><header><span className={`incident-source source-${entry.sourceType.toLowerCase()}`}>
-              {SOURCE_LABEL[entry.sourceType]}</span><strong>{entry.eventType}</strong>
-              <span className="feature-state">{entry.sourceStatus}</span></header>
+              {SOURCE_LABEL[entry.sourceType]}</span><strong>{EVENT_LABEL[entry.sourceType](entry.eventType)}</strong>
+              <span className="feature-state">{STATUS_LABEL[entry.sourceType][entry.sourceStatus] ?? entry.sourceStatus}</span></header>
               <h2>{entry.sourceTitle}</h2><p>{entry.reason}</p>
               <div className="incident-links">
                 {entry.sourceType === 'CHANGE_SET' && <Link to={`/feature-control/change-sets?selected=${entry.sourceId}`}>
@@ -74,7 +86,7 @@ export default function IncidentTimelinePage() {
                 {entry.linkedResourceType === 'NOTICE' && entry.linkedResourceId && <Link to={`/feature-control/notices?selected=${entry.linkedResourceId}`}>
                   연결 공지 #{entry.linkedResourceId}</Link>}
                 {entry.linkedResourceType && entry.linkedResourceId && !['CHANGE_SET', 'NOTICE'].includes(entry.linkedResourceType)
-                  && <span>연결 {entry.linkedResourceType} {entry.linkedResourceId}</span>}
+                  && <span>연결 {INCIDENT_RESOURCE_LABELS[entry.linkedResourceType]} {entry.linkedResourceId}</span>}
                 {entry.jiraReference && <span>Jira {entry.jiraReference}</span>}
                 <span>운영자 #{entry.actorUserId}</span>
               </div>

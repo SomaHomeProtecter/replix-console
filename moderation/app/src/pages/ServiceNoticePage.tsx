@@ -11,12 +11,13 @@ import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
+import { useLatestRequest } from '../useLatestRequest'
+import { selectableRow } from '../selectableRow'
+import { NOTICE_STATUS_LABELS, noticeEventLabel } from '../recordLabels'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
-const STATUS_LABEL: Record<ServiceNotice['status'], string> = {
-  DRAFT: '초안', SCHEDULED: '예약됨', PUBLISHED: '게시 중', ENDED: '종료', CANCELLED: '취소',
-}
+const STATUS_LABEL = NOTICE_STATUS_LABELS
 const KIND_LABEL: Record<ServiceNoticeKind, string> = {
   NOTICE: '일반 안내', MAINTENANCE: '점검 안내', INCIDENT: '장애 안내',
 }
@@ -188,7 +189,7 @@ function NoticeDetail({ notice, onReload }: {
       </div>
     </div>}
     <h3>불변 이벤트</h3><ol className="change-events">{notice.events.map((event) => <li key={event.id}>
-      <span>{formatKstShort(event.createdAt)}</span><strong>{event.type}</strong><p>{event.reason}</p>
+      <span>{formatKstShort(event.createdAt)}</span><strong>{noticeEventLabel(event.type)}</strong><p>{event.reason}</p>
     </li>)}</ol>
   </aside>
 }
@@ -201,15 +202,26 @@ export default function ServiceNoticePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // 목록과 상세는 따로 순서를 지킨다(HP-527) — 새로고침 중에 다른 행을 골라도, 먼저 보낸 상세가 고른 행을 덮지 않는다.
+  const beginList = useLatestRequest()
+  const beginDetail = useLatestRequest()
+  const open = useCallback(async (id: number) => {
+    const current = beginDetail()
+    try { const detail = await getServiceNotice(id); if (current()) setSelected(detail) }
+    catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+  }, [beginDetail])
   const load = useCallback(async (detailId?: number) => {
+    const current = beginList()
     setLoading(true)
     try {
-      const next = await listServiceNotices(); setNotices(next); setError(null)
+      const next = await listServiceNotices()
+      if (!current()) return
+      setNotices(next); setError(null)
       const id = detailId ?? selected?.id
-      if (id) setSelected(await getServiceNotice(id))
-    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
-    finally { setLoading(false) }
-  }, [selected?.id])
+      if (id) await open(id)
+    } catch (failure) { if (current()) setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { if (current()) setLoading(false) }
+  }, [selected?.id, beginList, open])
   useEffect(() => {
     const id = Number(searchParams.get('selected'))
     void load(Number.isSafeInteger(id) && id > 0 ? id : undefined)
@@ -229,11 +241,12 @@ export default function ServiceNoticePage() {
     <div className="change-workspace"><div className="change-list report-table-wrap">
       <table><thead><tr><th>사용자 공지</th><th>상태</th><th>유형</th><th>생성</th></tr></thead>
         <tbody>{notices.map((notice) => <tr key={notice.id} className={selected?.id === notice.id ? 'selected' : ''}
-            onClick={() => void getServiceNotice(notice.id).then(setSelected)}>
+            aria-selected={selected?.id === notice.id} {...selectableRow(() => void open(notice.id))}>
           <td><strong>{notice.title}</strong><span>#{notice.id} · {notice.incidentReference ?? notice.jiraReference ?? '참조 없음'}</span></td>
           <td><span className={`feature-state status-${notice.status.toLowerCase()}`}>{STATUS_LABEL[notice.status]}</span></td>
           <td>{KIND_LABEL[notice.kind]}</td><td>{formatKstShort(notice.createdAt)}</td>
         </tr>)}</tbody></table>
+      {loading && notices.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && notices.length === 0 && <div className="empty-hint">아직 사용자 공지가 없습니다</div>}
     </div>{selected ? <NoticeDetail notice={selected} onReload={load} />
       : <div className="change-empty">공지를 선택하면 사용자 노출 미리보기와 게시 이력을 확인할 수 있습니다.</div>}</div>

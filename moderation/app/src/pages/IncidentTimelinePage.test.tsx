@@ -42,7 +42,12 @@ describe('인시던트 통합 타임라인(HP-343)', () => {
     expect(within(list).getByText('변경 세트')).toBeInTheDocument()
     expect(within(list).getByText('사용자 공지')).toBeInTheDocument()
     expect(within(list).getAllByText('프리셋 CHAT_BLOCK')).toHaveLength(2)
-    expect(within(list).getByText('연결 PRESET CHAT_BLOCK')).toBeInTheDocument()
+    expect(within(list).getByText('연결 장애 대응 프리셋 CHAT_BLOCK')).toBeInTheDocument()
+    // 기록 이름·상태는 기록의 종류에 맞는 한글 표로(HP-527) — 공지 PUBLISHED, 인시던트 RESOURCE_LINKED·MITIGATING
+    expect(within(list).getByText('게시', { selector: 'header strong' })).toBeInTheDocument()
+    expect(within(list).getByText('게시 중', { selector: 'header .feature-state' })).toBeInTheDocument()
+    expect(within(list).getByText('리소스 연결', { selector: 'header strong' })).toBeInTheDocument()
+    expect(within(list).getByText('완화', { selector: 'header .feature-state' })).toBeInTheDocument()
     expect(within(list).getByText('r4 → r5')).toBeInTheDocument()
     expect(within(list).getAllByRole('link', { name: /변경 세트 #17/ })).toHaveLength(2)
   })
