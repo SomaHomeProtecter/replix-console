@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { blindMessage, listAuthorMessages } from '../api/admin'
+import { approveBlindBatch, blindMessage, listAuthorMessages } from '../api/admin'
 import type { AuthorMessage, ReportItem } from '../api/types'
+import type { ProductionWriteApproval } from '../prodWriteConfirmation'
 
 /**
  * 상태 표식(HP-298). Redis {@code status}는 네 값이다 — {@code visible} ·
@@ -63,6 +64,7 @@ interface BlindOutcome {
  */
 async function blindEach(
   episodeId: number, targets: string[], signal: AbortSignal, onEach: () => void,
+  approval: ProductionWriteApproval | undefined,
 ): Promise<BlindOutcome> {
   const failed: string[] = []
   let next = 0
@@ -71,7 +73,7 @@ async function blindEach(
     while (next < targets.length && !signal.aborted) {
       const msgId = targets[next++]
       try {
-        await blindMessage(episodeId, msgId, signal)
+        await blindMessage(episodeId, msgId, signal, approval)
       } catch {
         failed.push(msgId)
       }
@@ -272,19 +274,38 @@ export default function AuthorMessages({ report, busy, onActionDone, onBusyChang
   })
 
   const blindPicked = () => {
-    if (picked.size === 0 || blocked) return
+    if (picked.size === 0 || blocked || authorId === null) return
     const targets = [...picked]
     const controller = new AbortController()
     canceller.current = controller
     setProgress({ done: 0, total: targets.length, sending: true })
     setActionError(null)
-    // 보내는 즉시 선택을 비운다 — 이걸로 "같은 건이 두 번 나가는" 창이 닫힌다.
+    // 누르는 즉시 선택을 비운다 — 이걸로 "같은 건이 두 번 나가는" 창이 닫힌다.
     setPicked(new Set())
 
     void (async () => {
+      // PROD면 묶음 전체를 먼저 한 번 확인받는다(HP-514). 건마다 확인을 걸면 동시에 흘려보낸
+      // 요청 중 첫 건만 확인 창에 닿고 나머지는 "다른 PROD 변경 확인이 진행 중"으로 전부 실패했다.
+      // 잠금은 확인을 기다리는 동안에도 건다(위) — 누른 순간부터 다른 조치와 겹치지 않게.
+      let approval: ProductionWriteApproval | undefined
+      try {
+        approval = await approveBlindBatch(report.episodeId, authorId, targets)
+      } catch {
+        // 확인을 취소했다 — 아무것도 보내지 않았으니 잠금을 풀고 고른 것을 되돌려 다시 누를 수 있게 한다.
+        if (alive.current) {
+          setPicked(new Set(targets))
+          setProgress(null)
+        }
+        canceller.current = null
+        return
+      }
+      // 확인을 기다리는 사이 패널이 사라졌으면 보내지 않는다 — 결과를 알릴 화면이 없다(언마운트 효과 주석).
+      if (!alive.current || controller.signal.aborted) return
+
       const { failed, skipped } = await blindEach(
           report.episodeId, targets, controller.signal,
-          () => { if (alive.current) setProgress((p) => (p ? { ...p, done: p.done + 1 } : p)) })
+          () => { if (alive.current) setProgress((p) => (p ? { ...p, done: p.done + 1 } : p)) },
+          approval)
       const left = [...failed, ...skipped]
       const succeeded = targets.length - left.length
       const cancelled = controller.signal.aborted

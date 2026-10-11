@@ -120,8 +120,8 @@ describe('작성자 글 일괄 보기·가림(HP-298)', () => {
     await userEvent.click(blindButton())
 
     expect(blindMessage).toHaveBeenCalledTimes(2)
-    expect(blindMessage).toHaveBeenCalledWith(42, 'M-1', expect.any(AbortSignal))
-    expect(blindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A', expect.any(AbortSignal))
+    expect(blindMessage).toHaveBeenCalledWith(42, 'M-1', expect.any(AbortSignal), undefined)
+    expect(blindMessage).toHaveBeenCalledWith(42, '01FIXTUREMSG0000000000000A', expect.any(AbortSignal), undefined)
     expect(onActionDone).toHaveBeenCalled()
   })
 
@@ -849,7 +849,7 @@ describe('재조회 실패·창 밖 선택·언마운트(2026-08-12 독립 리�
     await userEvent.click(blindButton())
 
     expect(blindMessage).toHaveBeenLastCalledWith(42, '01FIXTUREMSG0000000000000A',
-        expect.any(AbortSignal))
+        expect.any(AbortSignal), undefined)
     expect(await screen.findByRole('button', { name: /선택 0건 가림/ })).toBeDisabled()
   })
 })

@@ -11,6 +11,7 @@ vi.mock('../env', () => ({
   env: envMock,
 }))
 
+import { approveProductionBatch, registerProductionWriteGuard } from '../prodWriteConfirmation'
 import { API_TIMEOUT_MS, ApiHttpError, apiFetch, qs } from './client'
 
 describe('apiFetch', () => {
@@ -51,6 +52,40 @@ describe('apiFetch', () => {
     await expect(apiFetch('/x', { method: 'POST', body: '{}' }))
         .rejects.toThrow('요청 설명이 없어')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('묶음 승인은 확인한 건수만큼만 창 없이 보내고, 넘으면 fetch 전에 막는다(HP-514)', async () => {
+    envMock.environment = 'PROD'
+    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }))
+    const confirm = vi.fn(async () => undefined)
+    const unregister = registerProductionWriteGuard(confirm)
+    try {
+      const approval = await approveProductionBatch({ target: '메시지 2건', change: '가림', reason: '도배' }, 2)
+      expect(confirm).toHaveBeenCalledTimes(1)
+
+      await apiFetch('/a', { method: 'POST' }, approval)
+      await apiFetch('/b', { method: 'POST' }, approval)
+      await expect(apiFetch('/c', { method: 'POST' }, approval)).rejects.toThrow('승인 건수를 넘어')
+
+      expect(confirm).toHaveBeenCalledTimes(1) // 승인으로 보낸 두 건은 창을 다시 띄우지 않았다
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      unregister()
+    }
+  })
+
+  it('확인 창을 거치지 않고 만든 같은 모양의 객체는 승인으로 인정하지 않는다', async () => {
+    envMock.environment = 'PROD'
+    const confirm = vi.fn(async () => { throw new Error('PROD 변경을 취소했습니다') })
+    const unregister = registerProductionWriteGuard(confirm)
+    try {
+      const forged = { summary: { target: 't', change: 'c', reason: 'r' }, count: 5 }
+      // 위조 객체는 설명으로 취급돼 확인 창으로 간다 — 여기서는 취소되므로 보내지 않는다
+      await expect(apiFetch('/x', { method: 'POST' }, forged as never)).rejects.toThrow('취소')
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+    }
   })
 
   it('BE ApiError 본문(code·message)을 ApiHttpError로 옮긴다', async () => {
