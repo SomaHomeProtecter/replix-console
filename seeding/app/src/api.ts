@@ -1,6 +1,6 @@
 /* 시딩 1단계 API(HP-434) — /api/v1/admin/seeding/**. 전부 관리자 롤 JWT 필요. */
 import { accessToken } from './auth'
-import { API_BASE } from './env'
+import { WORKSPACE } from './env'
 
 export type SourceKind = 'DCINSIDE' | 'THEQOO'
 export type WorkSource = { id: number; kind: SourceKind; boardId: string; enabled: boolean }
@@ -51,7 +51,7 @@ export class ApiError extends Error {
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const t = await accessToken()
   if (!t) throw new ApiError(401, 'NO_TOKEN', '로그인이 필요합니다')
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${WORKSPACE.api}${path}`, {
     method,
     headers: { Accept: 'application/json', Authorization: `Bearer ${t}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -112,7 +112,7 @@ export const api = {
   async download(id: number): Promise<void> {
     const t = await accessToken()
     if (!t) throw new ApiError(401, 'NO_TOKEN', '로그인이 필요합니다')
-    const res = await fetch(`${API_BASE}/api/v1/admin/seeding/collections/${id}/export`, { headers: { Authorization: `Bearer ${t}` } })
+    const res = await fetch(`${WORKSPACE.api}/api/v1/admin/seeding/collections/${id}/export`, { headers: { Authorization: `Bearer ${t}` } })
     if (!res.ok) throw new ApiError(res.status, null, `${res.status} ${res.statusText}`)
     const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `seed-collection-${id}.json`
     const blob = await res.blob()

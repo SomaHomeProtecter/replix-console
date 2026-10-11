@@ -13,15 +13,15 @@ vi.mock('./secondaryAuth', () => ({
 }))
 
 import { SeedingWorkspace } from './App'
-import { OTHER } from './env'
 import { bindHost } from './host'
 
 type Json = Record<string, unknown>
 type Handler = (match: RegExpMatchArray, body: Json | undefined) => unknown
 type Route = { method: string; host: 'workspace' | 'other'; path: RegExp; handle: Handler }
 
-// 작업 서버(개발)가 아닌 쪽 — 주소는 연결 프로필에서 온다(env.ts의 OTHER, 테스트 값은 vite.config.ts).
-const OTHER_API = new URL(OTHER.api).origin
+// 작업 서버(개발)가 아닌 쪽 = 운영 — vite.config.ts의 PROD 테스트 값. env.ts에서 읽지 않고 고정값으로 둔다:
+// 시딩이 '다른 환경'으로 운영을 겨누는지까지 이 테스트가 함께 확인한다.
+const OTHER_API = 'http://prod-api.test'
 
 /* 회차 화면은 작품 → 회차 → 계획 순으로 읽기가 이어진다. 기본 대기(1초)는 바쁜 머신에서 모자라 결과가 흔들리므로
    넉넉히 기다린다 — 기다림이 길어질 뿐 판정은 같다. */

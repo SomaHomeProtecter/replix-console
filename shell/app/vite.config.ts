@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { existsSync } from 'node:fs'
 import { copyFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
@@ -30,6 +31,29 @@ function copyToToolPaths(): Plugin {
   }
 }
 
+/**
+ * 옛 폴더별 설치(shell/app·moderation/app·seeding/app·core의 node_modules)가 남아 있으면 배포 빌드를 멈춘다.
+ *
+ * <p>의존성을 루트 한 벌로 합치기 전(HP-524)에는 폴더마다 npm install을 했다. 그 폴더가 gitignore된 채 남은 클론에서
+ * 루트 빌드를 돌리면 소스마다 가까운 node_modules를 불러와 라이브러리가 두 벌 번들된다 — React가 두 벌이면 첫 훅에서
+ * 콘솔이 통째로 멈추는데, 빌드·타입 검사·테스트는 모두 통과해 docs/에 그대로 커밋될 수 있다(2026-10-12 리뷰 재현).
+ * dedupe가 React 계열은 한 벌로 모으지만, 그 밖의 라이브러리까지 막으려면 원인을 지우는 편이 확실하다.
+ */
+function singleInstallOnly(): Plugin {
+  return {
+    name: 'replix-console:single-install-only',
+    apply: 'build',
+    buildStart() {
+      const stale = ['shell/app', 'moderation/app', 'seeding/app', 'core']
+        .filter((dir) => existsSync(`${REPO}${dir}/node_modules`))
+      if (stale.length) {
+        this.error(`옛 폴더별 node_modules가 남아 있습니다: ${stale.join(', ')} — 의존성은 저장소 루트 한 벌입니다(HP-524). `
+          + `그 폴더의 node_modules를 지우고 루트에서 npm ci 뒤 다시 빌드하세요. 그대로 빌드하면 라이브러리가 두 벌 실려 콘솔이 멈출 수 있습니다.`)
+      }
+    },
+  }
+}
+
 export default defineConfig(({ command }) => ({
   // 의존성은 저장소 루트에 한 벌이고(HP-524) 명령도 루트에서 돈다(npm run dev·build) — 이 폴더를 앱 뿌리로 못박는다.
   root: ROOT,
@@ -38,11 +62,13 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     tailwindcss(),
-    ...(command === 'build' ? [viteSingleFile({ overrideConfig: { base: '/' } }), copyToToolPaths()] : []),
+    ...(command === 'build' ? [singleInstallOnly(), viteSingleFile({ overrideConfig: { base: '/' } }), copyToToolPaths()] : []),
   ],
-  // 담당 폴더(HP-456 D3)는 그대로 두고 소스만 불러온다 — 시딩 = 조현빈, 조치 = 김지호. 의존성은 저장소 루트에 한 벌이라
-  // (HP-524) 예전처럼 폴더마다 React가 따로 깔려 훅이 깨질 일이 없다 — 그래서 dedupe도 두지 않는다.
+  // 담당 폴더(HP-456 D3)는 그대로 두고 소스만 불러온다 — 시딩 = 조현빈, 조치 = 김지호.
+  // dedupe: 의존성은 루트 한 벌이지만(HP-524) 옛 폴더별 node_modules가 남은 클론에서는 소스마다 다른 React를 불러와
+  // 훅이 깨진다. 설치가 한 벌이면 아무 일도 하지 않으므로 안전장치로 둔다(singleInstallOnly와 짝).
   resolve: {
+    dedupe: ['react', 'react-dom', 'react-router', 'keycloak-js'],
     alias: { '@core': `${REPO}core/src`, '@seeding': `${REPO}seeding/app/src`, '@moderation': `${REPO}moderation/app/src` },
   },
   // 연결 환경 값(API·Keycloak 주소)은 공용 기반의 호스팅 프로필(core/hosted-env)이 정본이다. 개발 서버는 이 폴더의 .env.local.

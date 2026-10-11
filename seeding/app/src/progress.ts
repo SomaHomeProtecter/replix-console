@@ -1,5 +1,6 @@
 /* 회차 작업 네 단계(수집 → 시각 맞추기 → AI 계획 → 채팅 넣기)의 진행 판정 — 시딩 영역의 규칙이라 여기 둔다(HP-523).
-   공용 틀 홈의 '최근 회차'가 쓴다. 종전에는 홈과 시딩 화면 머리가 기준을 따로 들고 있었다. */
+   공용 틀 홈의 '최근 회차'가 쓴다. 시딩 회차 화면 머리(App.tsx EpisodeWorkspace)는 아직 자기 문구로 따로 판정한다 —
+   화면 정비(HP-525) 때 이 판정으로 합친다. */
 import type { Collection, Injection, Plan, SyncAnchor } from './api'
 
 export type StepState = 'done' | 'current' | 'idle'

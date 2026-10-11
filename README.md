@@ -35,6 +35,7 @@ npm run build                                   # typecheck + docs/index.html �
 - 포트 5173 고정: Keycloak `replix-web` redirect URI에 등록된 개발 주소다. 포트가 밀리면 로그인이 조용히 깨져 기동을 실패시킨다.
 - 호스팅 빌드는 공용 기반의 호스팅 프로필 `core/hosted-env/.env.production`만 읽는다(DEV·PROD만 싣고 LOCAL은 없다).
 - 시딩·조치 폴더에는 따로 띄우는 개발 서버·빌드가 없다(HP-521) — 공용 틀 하나로 개발하고 빌드한다.
+- 2026-10 이전에 클론했다면 폴더별로 설치한 `shell/app`·`moderation/app`·`seeding/app`의 `node_modules`를 지우고 루트에서 `npm ci`를 한다. 남아 있으면 `npm run build`가 멈춘다 — 그대로 빌드하면 라이브러리가 두 벌 실려 콘솔이 멈출 수 있다.
 - 연결 환경 규칙(주소 경로 `/moderation/prod|dev/`, 깊은 주소 복원, 쓰기 중 이탈 차단)은 `core/README.md`.
 
 `docs/404.html`이 필요한 이유: GitHub Pages는 없는 경로에 404를 주는데, 조치는 주소마다 화면이 달라 `/moderation/prod/users/42` 같은 깊은 주소에서 새로고침하거나 로그인에서 돌아오면 그 404를 받는다. 404.html이 `/moderation/*` 경로를 `/moderation/?p=`로 넘기고, 콘솔 부팅이 원래 주소를 되살린다. 시딩은 쿼리(`?view=prompts`, `?work=&episode=`)만 써서 영향이 없다.
