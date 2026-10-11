@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { planNavigation } from './navigation'
-import { environmentForPath, hasConsoleRole, homeEnvironment, moderationBasename, sectionOf } from './sections'
+import { environmentForPath, homeEnvironment, moderationBasename, sectionOf } from './sections'
 
 describe('sectionOf — 주소 첫 조각이 구역을 고른다', () => {
   it.each([
@@ -65,17 +65,5 @@ describe('planNavigation — 같은 서버면 페이지 안에서, 서버가 바
   it('개발 서버의 DEV 콘솔은 홈·시딩·조치를 모두 페이지 안에서 옮긴다', () => {
     expect(planNavigation('/seeding/?view=prompts', false, 'DEV')).toBe('in-app')
     expect(planNavigation('/moderation/dev/', false, 'DEV')).toBe('in-app')
-  })
-})
-
-describe('hasConsoleRole', () => {
-  it('콘솔 역할이 하나라도 있으면 들어온다', () => {
-    expect(hasConsoleRole(['offline_access', 'admin_console_viewer'])).toBe(true)
-    expect(hasConsoleRole(['feature_flag_operator'])).toBe(true)
-  })
-
-  it('일반 회원 역할뿐이면 권한 없음 화면으로 간다', () => {
-    expect(hasConsoleRole(['offline_access', 'uma_authorization', 'default-roles-replix'])).toBe(false)
-    expect(hasConsoleRole([])).toBe(false)
   })
 })

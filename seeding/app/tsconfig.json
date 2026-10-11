@@ -19,7 +19,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* 콘솔 공용 기반(HP-522) */
+    "paths": {
+      "@core/*": ["../../core/src/*"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }

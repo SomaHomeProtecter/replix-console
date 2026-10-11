@@ -4,7 +4,8 @@ import { verifyEnvironment } from '@core/environmentGuard'
 import { confirmProductionWrite } from '@core/prodWriteConfirmation'
 import { bindHost } from '@seeding/host'
 import { isHostedConsole } from './navigation'
-import { hasConsoleRole, homeEnvironment, sectionOf } from './sections'
+import { hasConsoleRole } from '@core/roles'
+import { homeEnvironment, sectionOf } from './sections'
 
 export type BootResult = { kind: 'console' } | { kind: 'denied' }
 

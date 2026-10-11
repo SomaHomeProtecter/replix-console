@@ -16,6 +16,21 @@ import SuspensionBoardPage from './pages/SuspensionBoardPage'
 import UserDetailPage from './pages/UserDetailPage'
 
 /**
+ * 조치 메뉴 — 공용 틀의 왼쪽 메뉴와 홈 카드가 이 목록 하나를 쓴다(HP-523). 화면을 더하면 아래 라우트와 여기만 고친다.
+ * 경로는 라우터 basename(/moderation/&lt;env&gt;) 기준이다.
+ */
+export const MODERATION_MENU: readonly { label: string; path: string }[] = [
+  { label: '신고 큐', path: '/' },
+  { label: '정지 현황', path: '/suspensions' },
+  { label: '조치 로그', path: '/actions' },
+  { label: '오탐 검토', path: '/moderation-reviews' },
+  { label: '운영 협업', path: '/operation-cases' },
+  { label: '정책 실험', path: '/moderation-policies' },
+  { label: '기능 제어', path: '/feature-control' },
+  { label: '피드백', path: '/feedback' },
+]
+
+/**
  * 조치 콘솔 화면 경로 묶음 — 운영 콘솔 공용 틀(shell/app, HP-506)이 자기 톱바·메뉴 안에 이것을 그린다.
  * 경로는 라우터 basename(/moderation/&lt;env&gt;) 기준이다.
  *

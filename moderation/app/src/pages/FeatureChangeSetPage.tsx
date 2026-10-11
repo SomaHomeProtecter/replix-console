@@ -11,6 +11,7 @@ import type {
   FeatureDryRunRow, FeatureFlagRow,
 } from '../api/types'
 import { realmRoles } from '@core/auth'
+import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
@@ -24,10 +25,7 @@ const STATUS_LABEL: Record<FeatureChangeSet['status'], string> = {
 
 function permissions() {
   const roles = realmRoles()
-  return {
-    operate: roles.includes('admin') || roles.includes('feature_flag_operator'),
-    approve: roles.includes('admin') || roles.includes('prod_change_approver'),
-  }
+  return { operate: can(roles, 'operateFeatures'), approve: can(roles, 'approveProd') }
 }
 
 function ChangeSetCreateDialog({ flags, onClose, onCreated }: {

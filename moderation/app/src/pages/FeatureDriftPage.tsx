@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { createDriftReapplyChangeSet, listFeatureDrift } from '../api/admin'
 import type { FeatureChangeSet, FeatureDriftReapply, FeatureDriftState } from '../api/types'
 import { realmRoles } from '@core/auth'
+import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { env } from '@core/env'
 import { formatKstShort, kstInputToIso } from '@core/time'
@@ -18,8 +19,7 @@ const ACTION_LABEL: Record<string, string> = {
 }
 
 function canOperate() {
-  const roles = realmRoles()
-  return roles.includes('admin') || roles.includes('feature_flag_operator')
+  return can(realmRoles(), 'operateFeatures')
 }
 
 function ReapplyDialog({ drift, onClose, onCreated }: {

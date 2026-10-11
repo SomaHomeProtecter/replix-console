@@ -42,17 +42,3 @@ export function environmentForPath(
 export function moderationBasename(environment: ConsoleEnvironment): string {
   return environmentBasename(MODERATION_BASE_PATH, environment)
 }
-
-/**
- * 콘솔에 들어올 수 있는 역할. 하나도 없으면 서버 대조 요청을 보내기 전에 권한 없음 화면을 보인다 — 종전 조치 콘솔은
- * 이때 "콘솔 초기화 실패(관리자 권한이 없습니다)"로 멈췄다. 작품 탐색에 일반 계정으로 로그인해 두면 콘솔도 그 계정으로
- * 자동 로그인되는 함정(2026-09-30)이 가장 흔한 경로라, 계정을 바꾸는 길을 함께 보인다. 서버가 같은 역할을 다시 검사하므로
- * 이 판정은 안내용이지 보안 경계가 아니다.
- */
-export const CONSOLE_ROLES: readonly string[] = [
-  'admin', 'admin_console_viewer', 'moderation_operator', 'feature_flag_operator', 'prod_change_approver',
-]
-
-export function hasConsoleRole(roles: readonly string[]): boolean {
-  return roles.some((role) => CONSOLE_ROLES.includes(role))
-}

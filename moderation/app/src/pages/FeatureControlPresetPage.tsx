@@ -5,14 +5,14 @@ import type {
   FeatureChangeSet, FeatureControlPreset, FeatureControlPresetApply,
 } from '../api/types'
 import { realmRoles } from '@core/auth'
+import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { env } from '@core/env'
 import { useWriting } from '@core/writing'
 import { kstInputToIso } from '@core/time'
 
 function canOperate() {
-  const roles = realmRoles()
-  return roles.includes('admin') || roles.includes('feature_flag_operator')
+  return can(realmRoles(), 'operateFeatures')
 }
 
 function PresetDialog({ preset, onClose, onCreated }: {

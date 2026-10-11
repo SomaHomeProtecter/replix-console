@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { isoToKstInput, kstInputToIso } from '@core/time'
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
 import { canRead, canWrite, currentUser, logout } from './auth'
 import { OTHER, WORKSPACE, type Env } from './env'
@@ -46,11 +47,6 @@ function fmtDuration(a: string | null, b: string | null) {
   const s = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 1000)
   return s < 60 ? `${s}초` : `${Math.floor(s / 60)}분 ${s % 60}초`
 }
-function isoToLocalInput(iso: string | null): string {
-  if (!iso) return ''
-  return new Intl.DateTimeFormat('sv-SE', { timeZone: KST, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)).replace(' ', 'T')
-}
-function localInputToIso(v: string): string | null { return v ? new Date(`${v}:00+09:00`).toISOString() : null }
 function lastAirDate(weekday: number | null): string {
   const now = new Date(new Date().toLocaleString('en-US', { timeZone: KST }))
   if (!weekday) return now.toISOString().slice(0, 10)
@@ -228,7 +224,7 @@ function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged, onError }
 /* ─── 회차 정보 ────────────────────────────────────────────────────── */
 /* 편집 칸에 넣을 값 — 회차의 지금 값을 칸의 글자로 바꾼 것. */
 function episodeFields(e: Episode) {
-  return { label: e.label ?? '', start: isoToLocalInput(e.airStartAt), end: isoToLocalInput(e.airEndAt), runtime: e.runtimeSec ? String(Math.round(e.runtimeSec / 60)) : '' }
+  return { label: e.label ?? '', start: isoToKstInput(e.airStartAt), end: isoToKstInput(e.airEndAt), runtime: e.runtimeSec ? String(Math.round(e.runtimeSec / 60)) : '' }
 }
 
 function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode: Episode; work: Work; writable: boolean; onChanged: () => void; onError: (m: string) => void }) {
@@ -265,12 +261,12 @@ function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode:
   }, [latest.label, latest.start, latest.end, latest.runtime]) // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     const o = opened.current
-    const airStartAt = start === o.start ? episode.airStartAt : localInputToIso(start)
+    const airStartAt = start === o.start ? episode.airStartAt : kstInputToIso(start)
     if (!airStartAt) { onError('방영 시작 시각은 비울 수 없습니다.'); return }
     const body = {
       label: label === o.label ? episode.label : (label || null),
       airStartAt,
-      airEndAt: end === o.end ? episode.airEndAt : localInputToIso(end),
+      airEndAt: end === o.end ? episode.airEndAt : kstInputToIso(end),
       runtimeSec: runtime === o.runtime ? episode.runtimeSec : (runtime ? Number(runtime) * 60 : null),
       episodeId: episode.episodeId,
     }

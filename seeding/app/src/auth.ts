@@ -1,11 +1,8 @@
 /* 시딩 도구 권한(HP-435 → HP-506). 로그인은 운영 콘솔 공용 틀(shell/app)이 콘솔을 열 때 한 번 하고, 시딩은 틀이
    넘겨준 사용자·토큰을 쓴다(host.ts). 시딩이 따로 Keycloak에 로그인하던 길은 단독 앱과 함께 지웠다(HP-521).
    롤 게이트는 안내용이지 보안 경계가 아니다 — 서버도 같은 롤을 검사한다. */
+import { can } from '@core/roles'
 import { seedingHost } from './host'
-
-/* BE SecurityConfig 의 /api/v1/admin/** 과 같은 집합 — GET 은 이 셋, 변경은 admin·moderation_operator 만. */
-const READ_ROLES = ['admin', 'admin_console_viewer', 'moderation_operator']
-const WRITE_ROLES = ['admin', 'moderation_operator']
 
 export type AuthUser = { name: string; sub: string; roles: string[] }
 
@@ -19,5 +16,6 @@ export async function accessToken(): Promise<string | null> {
   return host ? host.token() : null
 }
 
-export function canRead(u: AuthUser | null) { return !!u && u.roles.some((r) => READ_ROLES.includes(r)) }
-export function canWrite(u: AuthUser | null) { return !!u && u.roles.some((r) => WRITE_ROLES.includes(r)) }
+/* 보기 = admin·admin_console_viewer·moderation_operator, 넣기·고치기 = admin·moderation_operator(콘솔 역할 표, core/roles.ts). */
+export function canRead(u: AuthUser | null) { return !!u && can(u.roles, 'view') }
+export function canWrite(u: AuthUser | null) { return !!u && can(u.roles, 'moderate') }

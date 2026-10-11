@@ -8,6 +8,7 @@ import type {
   FeatureControlPreset, ServiceNotice, ServiceNoticeCreate, ServiceNoticeKind,
 } from '../api/types'
 import { realmRoles } from '@core/auth'
+import { can } from '@core/roles'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
@@ -33,8 +34,7 @@ const PRESETS: { value: FeatureControlPreset['id']; label: string }[] = [
 const HTTPS_LINK = /^https:\/\/\S+$/
 
 function canOperate() {
-  const roles = realmRoles()
-  return roles.includes('admin') || roles.includes('feature_flag_operator')
+  return can(realmRoles(), 'operateFeatures')
 }
 
 function NoticePreview({ kind, title, message, linkUrl }: {

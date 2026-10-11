@@ -44,6 +44,14 @@ function profile(environment: ConsoleEnvironment, grafanaBaseUrl: string | null)
 }
 
 /**
+ * 그 환경의 연결 값(API·Keycloak 주소) — 지금 연결한 환경({@link env})을 바꾸지 않고 읽기만 한다. 시딩은 콘솔이 붙은
+ * 서버와 별개로 넣을 서버를 고르므로(시딩 결정 ②③) 두 환경의 값을 함께 본다(HP-523 — 종전에는 시딩이 주소를 따로 적어 뒀다).
+ */
+export function connectionProfile(environment: ConsoleEnvironment): ConsoleProfile {
+  return profile(environment, optional('VITE_GRAFANA_URL'))
+}
+
+/**
  * 지금 연결한 환경의 프로필 — {@link initEnv}가 채운다.
  *
  * <p>모듈을 평가하는 순간에는 채우지 않는다(HP-456). 싱글파일 빌드는 동적 import까지 한 파일로 합쳐 즉시

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { env } from '@core/env'
 import { elapsedSince } from '@moderation/format'
+import { MODERATION_MENU } from '@moderation/routes'
 import GlobalUserSearch from '../GlobalUserSearch'
 import { airDateLabel, loadModerationSummary, loadRecentEpisodes, OPEN_REPORT_PAGE } from '../home/homeData'
 import type { ModerationSummary, RecentEpisode } from '../home/homeData'
@@ -117,15 +118,13 @@ function ModerationRow({ href, label, go, children }: { href: string; label: str
 function ModerationCard() {
   const summary = useLoaded(loadModerationSummary)
   const base = moderationBasename(env.environment)
-  const links: readonly [string, string][] = [
-    ['조치 로그', '/actions'], ['오탐 검토', '/moderation-reviews'], ['운영 협업', '/operation-cases'],
-    ['정책 실험', '/moderation-policies'], ['기능 제어', '/feature-control'], ['피드백', '/feedback'],
-  ]
+  // 신고 큐·정지 현황은 위의 줄(건수)로 들어가므로 아래 바로 가기에는 나머지 메뉴만 둔다.
+  const links = MODERATION_MENU.filter(({ path }) => path !== '/' && path !== '/suspensions')
   return (
     <Workspace
         mark={<ShieldIcon />} title="조치" href={`${base}/`} caption="지금 볼 것"
         description="신고를 처리하고 계정을 정지하며, 기능 제어와 사용자 공지를 다룹니다."
-        footer={links.map(([label, sub]) => <InAppLink key={sub} href={`${base}${sub}`} className="cs-chip">{label}</InAppLink>)}>
+        footer={links.map(({ label, path }) => <InAppLink key={path} href={`${base}${path}`} className="cs-chip">{label}</InAppLink>)}>
       {summary.state === 'loading' && <div className="cs-ws-empty">불러오는 중…</div>}
       {summary.state === 'error' && <div className="error-box" role="alert">{summary.message}</div>}
       {summary.state === 'ready' && <ModerationRows summary={summary.value} base={base} />}
