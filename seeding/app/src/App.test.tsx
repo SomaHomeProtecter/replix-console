@@ -1,10 +1,11 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /*
- * 시딩 작업 화면의 회귀 테스트(HP-517·518·519). API 모듈은 가짜로 바꾸지 않고 fetch만 가짜 서버로 둔다 — 결함이 난
- * 실제 경로를 거친다. jsdom의 주소는 localhost라 작업 서버(WORKSPACE)는 개발, 다른 환경(OTHER)은 운영이다(env.ts).
+ * 시딩 작업 화면의 회귀 테스트(HP-517·518·519·525·526). API 모듈은 가짜로 바꾸지 않고 fetch만 가짜 서버로 둔다 — 결함이
+ * 난 실제 경로를 거친다. jsdom의 주소는 localhost라 작업 서버(WORKSPACE)는 개발, 다른 환경(OTHER)은 운영이다(env.ts).
+ * 작업 서버가 운영일 때의 쓰기 확인은 App.prod.test.tsx.
  */
 vi.mock('./secondaryAuth', () => ({
   secondaryToken: vi.fn(async () => 'other-token'),
@@ -84,6 +85,8 @@ const confirmProductionWrite = vi.fn(async () => undefined)
 
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
+  window.history.replaceState(null, '', '/seeding/')
   confirmProductionWrite.mockClear()
   bindHost({ user: { name: '조현빈', sub: 'u-1', roles: ['admin'] }, token: async () => 'console-token', logout: vi.fn(), confirmProductionWrite })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -293,5 +296,216 @@ describe('회차 머리 — 네 단계는 홈의 최근 회차와 같은 판정�
     expect(step('AI 계획')).toHaveTextContent('검수 대기')
     expect(step('수집')).toHaveClass('is-idle')
     expect(step('채팅 넣기')).toHaveTextContent('아직')
+  }, TEST_TIMEOUT)
+})
+
+/** 회차 하나를 열 때 읽는 목록을 모두 빈 값으로. */
+function emptyEpisodeRoutes(id: number): Route[] {
+  return ['collections', 'anchors', 'scene-notes', 'plans', 'injections'].map((what) => (
+    { method: 'GET', host: 'workspace', path: new RegExp(`/episodes/${id}/${what}$`), handle: () => [] }))
+}
+const failWith = (status: number, message: string) => () => new Response(JSON.stringify({ message }), { status })
+/** 단계 카드(제목으로 찾는다 — 카드는 제목을 이름으로 갖는 영역이다). */
+const card = (title: RegExp) => screen.getByRole('region', { name: title })
+
+describe('고른 회차는 주소와 세션에 남는다 — 새로고침·AI 프롬프트 다녀오기(HP-526)', () => {
+  const second = { ...baseEpisode, id: 12, airDate: '2026-10-15', label: '33기 10회', airStartAt: '2026-10-15T13:30:00Z' }
+  const routes = (): Route[] => [
+    { method: 'GET', host: 'workspace', path: /\/seeding\/works$/, handle: () => [work] },
+    { method: 'GET', host: 'workspace', path: /\/works\/1\/episodes$/, handle: () => [baseEpisode, second] },
+    ...emptyEpisodeRoutes(11), ...emptyEpisodeRoutes(12),
+  ]
+
+  it('회차를 고르면 popstate 없이 주소를 바꾸고 세션에도 남겨, 메뉴로 돌아와도(쿼리 없음) 그 회차를 연다', async () => {
+    vi.stubGlobal('fetch', serve(routes()))
+    const popstate = vi.fn()
+    window.addEventListener('popstate', popstate)
+    const user = userEvent.setup()
+    const { unmount } = render(<SeedingWorkspace view="work" />)
+
+    // 처음 연 회차(첫 회차)도 주소에 남는다
+    await waitFor(() => expect(window.location.search).toBe('?work=1&episode=11'), WAIT)
+    await user.click(await screen.findByRole('button', { name: /^33기 10회/ }, WAIT))
+    await waitFor(() => expect(window.location.search).toBe('?work=1&episode=12'), WAIT)
+    expect(window.location.pathname).toBe('/seeding/')
+    expect(JSON.parse(sessionStorage.getItem('replix_seeding_selection_dev') ?? 'null')).toEqual({ workId: 1, episodeId: 12 })
+    // 공용 틀은 popstate를 받으면 주소를 다시 읽어 시딩 화면을 처음부터 다시 그린다 — 고를 때마다 그러면 안 된다
+    expect(popstate).not.toHaveBeenCalled()
+    window.removeEventListener('popstate', popstate)
+
+    // 'AI 프롬프트'에 다녀와 왼쪽 메뉴 '회차 작업'(쿼리 없음)으로 돌아오면, 공용 틀은 회차 없이 화면을 새로 그린다
+    unmount()
+    render(<SeedingWorkspace view="work" />)
+    expect(await screen.findByRole('heading', { level: 1, name: /33기 10회/ }, WAIT)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^33기 10회/ })).toHaveAttribute('aria-current', 'true')
+  }, TEST_TIMEOUT)
+
+  it('주소의 회차(홈의 최근 회차·새로고침·뒤로 가기)가 세션에 남은 회차보다 먼저다', async () => {
+    sessionStorage.setItem('replix_seeding_selection_dev', JSON.stringify({ workId: 1, episodeId: 12 }))
+    vi.stubGlobal('fetch', serve(routes()))
+    render(<SeedingWorkspace view="work" workId={1} episodeId={11} />)
+
+    expect(await screen.findByRole('heading', { level: 1, name: /33기 9회/ }, WAIT)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^33기 9회/ })).toHaveAttribute('aria-current', 'true')
+  }, TEST_TIMEOUT)
+})
+
+describe('계획 도착 — 탭이 보이는 동안 30초마다 다시 읽는다(HP-526)', () => {
+  const next = { ...plan, id: 8, label: '새 AI 계획', createdAt: '2026-10-09T01:00:00Z' }
+  const setVisibility = (state: DocumentVisibilityState) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }
+  afterEach(() => {
+    vi.useRealTimers()
+    delete (document as { visibilityState?: unknown }).visibilityState
+  })
+
+  it('파이프라인이 만든 계획이 회차를 다시 고르지 않아도 나타나고, 보던 계획은 바뀌지 않는다', async () => {
+    // 주기만 가짜 시계로 돌린다(그 밖의 기다림은 실제 시간).
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let planList: Json[] = [plan]
+    const fetchMock = serve([
+      { method: 'GET', host: 'workspace', path: /\/episodes\/11\/plans$/, handle: () => planList },
+      ...episodeRoutes(() => baseEpisode),
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/7$/, handle: () => planView('DRAFT', [planItem(1)]) },
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/8$/, handle: () => ({ ...planView('DRAFT', [planItem(2)]), plan: next }) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SeedingWorkspace view="work" />)
+    expect(await screen.findByRole('button', { name: /#7 AI 계획/ }, WAIT)).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('채팅 1', {}, WAIT)).toBeInTheDocument()
+
+    // 목록은 최신순이다 — 새 검수 대기 계획이 맨 앞에 온다
+    planList = [next, plan]
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000) })
+    expect(await screen.findByRole('button', { name: /#8 새 AI 계획/ }, WAIT)).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /#7 AI 계획/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('채팅 1')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/seeding/plans/8'))).toBe(false)
+  }, TEST_TIMEOUT)
+
+  it('탭이 가려진 동안은 다시 읽지 않고, 다시 보이면 곧바로 읽는다', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let planList: Json[] = []
+    const fetchMock = serve([
+      { method: 'GET', host: 'workspace', path: /\/episodes\/11\/plans$/, handle: () => planList },
+      ...episodeRoutes(() => baseEpisode),
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/7$/, handle: () => planView('DRAFT', [planItem(1)]) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SeedingWorkspace view="work" />)
+    const planReads = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/episodes/11/plans')).length
+    // 빈 목록은 화면이 바뀌지 않아 읽기 자체를 기다린다(화면의 '아직 계획이 없습니다'는 읽기 전에도 보인다)
+    await vi.waitFor(() => expect(planReads()).toBe(1), WAIT)
+    expect(await screen.findByText(/아직 계획이 없습니다/, {}, WAIT)).toBeInTheDocument()
+
+    act(() => setVisibility('hidden'))
+    planList = [plan]
+    await act(async () => { await vi.advanceTimersByTimeAsync(90_000) })
+    expect(planReads()).toBe(1)
+    expect(screen.queryByRole('button', { name: /#7 AI 계획/ })).not.toBeInTheDocument()
+
+    act(() => setVisibility('visible'))
+    expect(await screen.findByRole('button', { name: /#7 AI 계획/ }, WAIT)).toBeInTheDocument()
+    expect(planReads()).toBe(2)
+  }, TEST_TIMEOUT)
+})
+
+describe('오류는 그 단계 카드 안에 뜬다(HP-526)', () => {
+  it('수집 목록·계획 목록 오류가 각자 카드에 뜨고, 하나를 닫아도 다른 카드의 오류는 남는다', async () => {
+    vi.stubGlobal('fetch', serve([
+      { method: 'GET', host: 'workspace', path: /\/episodes\/11\/collections$/, handle: failWith(500, '수집 목록 오류') },
+      { method: 'GET', host: 'workspace', path: /\/episodes\/11\/plans$/, handle: failWith(503, '계획 목록 오류') },
+      ...episodeRoutes(() => baseEpisode),
+    ]))
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+
+    expect(await screen.findByText(/수집 목록 오류/, {}, WAIT)).toBeInTheDocument()
+    expect(await screen.findByText(/계획 목록 오류/, {}, WAIT)).toBeInTheDocument()
+    const collect = card(/^1\s*수집$/), aiPlan = card(/^3\s*AI 채팅 계획$/)
+    expect(within(collect).getByText(/수집 목록 오류/)).toBeInTheDocument()
+    expect(within(collect).queryByText(/계획 목록 오류/)).not.toBeInTheDocument()
+    expect(within(aiPlan).getByText(/계획 목록 오류/)).toBeInTheDocument()
+
+    await user.click(within(collect).getByRole('button', { name: '닫기' }))
+    expect(screen.queryByText(/수집 목록 오류/)).not.toBeInTheDocument()
+    expect(within(aiPlan).getByText(/계획 목록 오류/)).toBeInTheDocument()
+  }, TEST_TIMEOUT)
+
+  it('채팅 넣기에서 난 오류는 4단계 카드에 뜬다', async () => {
+    const linked = { ...baseEpisode, episodeId: 123 }
+    vi.stubGlobal('fetch', serve([
+      ...episodeRoutes(() => linked, { plans: [plan] }),
+      // 계획 쪽에 넷플릭스 회차 정보가 없다 — 다른 환경에 넣기가 멈추고 알린다
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/7$/, handle: () => ({ ...planView('DRAFT', [planItem(1)]), platformEpisodeId: null }) },
+    ]))
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+
+    await user.click(await screen.findByRole('button', { name: '운영에 1건 넣기' }, WAIT))
+    const message = await screen.findByText(/넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다/, {}, WAIT)
+    expect(card(/^4\s*채팅 넣기$/)).toContainElement(message)
+    expect(card(/^3\s*AI 채팅 계획$/)).not.toContainElement(message)
+  }, TEST_TIMEOUT)
+
+  it('일부만 들어간 넣기는 오류가 아니라 주의(공용 .notice-box)로 4단계 카드에 뜬다', async () => {
+    const linked = { ...baseEpisode, episodeId: 123 }
+    vi.stubGlobal('fetch', serve([
+      ...episodeRoutes(() => linked, { plans: [plan] }),
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/7$/, handle: () => planView('DRAFT', [planItem(1), planItem(2)]) },
+      { method: 'POST', host: 'other', path: /\/external-injections$/, handle: () => ({ episodeId: 900, results: [
+        { ref: '1', injectionId: 7001, error: null }, { ref: '2', injectionId: null, error: '그 서버에 회차가 없습니다' }] }) },
+      { method: 'POST', host: 'other', path: /\/engagement$/, handle: () => ({ emojis: 1, watchSeconds: 60 }) },
+      { method: 'PUT', host: 'workspace', path: /\/plans\/7\/external\/prod$/, handle: (_m, body) => planView('DRAFT', [
+        planItem(1, { external: JSON.stringify({ prod: { id: 7001, batchKey: body!.batchKey } }) }), planItem(2)]) },
+    ]))
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+
+    await user.click(await screen.findByRole('button', { name: '운영에 2건 넣기' }, WAIT))
+    const message = await screen.findByText(/운영 서버에 1건을 넣었고 1건은 실패했습니다/, {}, WAIT)
+    expect(message.closest('.notice-box')).not.toBeNull()
+    expect(message.closest('.error-box')).toBeNull()
+    expect(card(/^4\s*채팅 넣기$/)).toContainElement(message)
+  }, TEST_TIMEOUT)
+
+  it('작품 목록을 못 읽으면 작업 공간 맨 위에 뜬다(단계 카드가 없다)', async () => {
+    vi.stubGlobal('fetch', serve([
+      { method: 'GET', host: 'workspace', path: /\/seeding\/works$/, handle: failWith(500, '작품 목록 오류') },
+    ]))
+    render(<SeedingWorkspace view="work" />)
+    expect(await screen.findByRole('alert', {}, WAIT)).toHaveTextContent('작품 목록 오류')
+    expect(screen.queryByRole('region')).not.toBeInTheDocument()
+  }, TEST_TIMEOUT)
+})
+
+describe('운영 쓰기 확인 — 개발 서버에서는 브라우저 확인 창으로(HP-526)', () => {
+  it('프롬프트 저장은 확인을 거치고, 취소하면 저장하지 않는다', async () => {
+    const saves: Json[] = []
+    const prompt = { key: 'scene', title: '장면 복원', description: '설명', content: '원래 내용', version: 7, updatedBy: '한서윤', updatedAt: '2026-10-07T08:20:00Z' }
+    vi.stubGlobal('fetch', serve([
+      { method: 'GET', host: 'workspace', path: /\/seeding\/prompts$/, handle: () => [saves.length ? { ...prompt, content: '새 내용', version: 8 } : prompt] },
+      { method: 'PUT', host: 'workspace', path: /\/seeding\/prompts\/scene$/, handle: (_m, body) => { saves.push(body!); return { ...prompt, content: body!.content, version: 8 } } },
+    ]))
+    const confirmSpy = vi.mocked(window.confirm).mockReturnValue(false)
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="prompts" />)
+
+    const editor = await screen.findByDisplayValue('원래 내용', {}, WAIT)
+    await user.clear(editor)
+    await user.type(editor, '새 내용')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("'장면 복원' 프롬프트를 저장합니다"))
+    expect(saves).toHaveLength(0)
+
+    confirmSpy.mockReturnValue(true)
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(saves).toHaveLength(1), WAIT)
+    expect(saves[0].content).toBe('새 내용')
+    // 개발 서버 쓰기는 'PROD' 입력 창을 띄우지 않는다
+    expect(confirmProductionWrite).not.toHaveBeenCalled()
+    expect(await screen.findByText(/장면 복원 저장됨/, {}, WAIT)).toBeInTheDocument()
   }, TEST_TIMEOUT)
 })

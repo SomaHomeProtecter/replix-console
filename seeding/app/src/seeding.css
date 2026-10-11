@@ -20,7 +20,9 @@
   min-width: 0; background: var(--panel); border: 1px solid var(--frame); border-radius: 10px;
   box-shadow: 0 6px 20px color-mix(in srgb, var(--ink) 7%, transparent);
 }
-.sd-guide { padding: 36px 18px; color: var(--muted-2); text-align: center; }
+.sd-guide { margin: 0; padding: 36px 18px; color: var(--muted-2); text-align: center; }
+.sd-guide-box { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; }
+.sd-guide-box .sd-guide { padding: 20px 0; }
 
 /* 왼쪽 목록(작품·회차, 프롬프트) — 고른 줄은 공용 틀 왼쪽 메뉴의 켜짐과 같은 모양이다. */
 .sd-side { display: flex; flex-direction: column; overflow: hidden; }

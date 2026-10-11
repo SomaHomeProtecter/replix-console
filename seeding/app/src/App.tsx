@@ -14,7 +14,8 @@ import './seeding.css'
    원칙(조현빈): 함축·생략보다 각 기능의 용도가 문장으로 이해돼야 한다. 직관적인 것은 단순한 것이 아니고, 친절한 것은 장황한 것이
    아니다. 표·그래프·목록은 담길 분량에 맞게 넓게 잡는다.
    구조: 왼쪽에 작품·회차 목록, 오른쪽에 고른 회차의 네 단계를 위에서 아래로. 단계마다 "무엇을 하는 단계"와 "지금 상태"를 먼저 말한다.
-   라우팅은 없다(관리자 한 명이 한 회차씩 다루는 도구). 진행 중인 작업은 2초마다 다시 읽는다.
+   라우팅은 없다(관리자 한 명이 한 회차씩 다루는 도구). 진행 중인 작업은 2초마다, 고른 회차는 탭이 보이는 동안 30초마다
+   다시 읽는다. 고른 작품·회차는 주소와 이 탭의 세션 저장소에 남고, 오류는 그 단계 카드 안에 뜬다(HP-526).
    모양은 콘솔 공용 기반의 토큰·버튼과 seeding.css(sd- 클래스)를 쓴다 — 조치 화면과 같은 패널·표·상태 알약(HP-525). */
 
 const KST = 'Asia/Seoul'
@@ -62,12 +63,51 @@ function lastAirDate(weekday: number | null): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 function errText(e: unknown) { return e instanceof ApiError ? `${e.message}${e.code ? ` (${e.code})` : ''}` : e instanceof Error ? e.message : String(e) }
-/* 채팅을 넣고 지우는 일의 최종 확인. 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력 확인 창(공용 틀, HP-506)을
-   쓰고, 개발 서버는 브라우저 확인 창을 쓴다. */
+/* 운영 쓰기의 최종 확인. 운영 서버를 건드릴 때는 조치 콘솔과 같은 'PROD' 입력 확인 창(공용 틀, HP-506)을 쓰고, 개발
+   서버는 브라우저 확인 창을 쓴다. 되돌리기 어렵거나 서버 동작을 바꾸는 쓰기가 모두 여기를 거친다(HP-526) — 채팅 넣기·지우기,
+   프롬프트 저장·되돌리기·기본값 복원(저장 즉시 AI 작업이 새 내용을 쓴다, 시딩 결정 ⑥), 장면 메모 전체 교체·모두 지우기,
+   회차 정보·방영 시각(수집 범위와 시각 환산의 기준), 넷플릭스 연결 끊기, 수집·기준점·계획 지우기. 계획 행 수락·거부,
+   계획 올리기(검수 대기 초안), 회차 추가, 수집 시작(새 수집을 더할 뿐 지난 수집을 지우지 않는다)은 확인 없이 한다. */
 async function confirmWrite(env: Env, summary: ProductionWriteSummary, message: string): Promise<boolean> {
   const host = seedingHost()
   if (host && env === 'prod') return host.confirmProductionWrite(summary).then(() => true, () => false)
   return confirm(message)
+}
+/** 확인 창의 '대상' 칸 — 작업 서버(이 콘솔이 붙은 서버)의 무엇을 바꾸는지. */
+function workspaceTarget(what: string) { return `${WORKSPACE.label} 서버 · ${what}` }
+function episodeName(e: Episode) { return e.label ?? e.airDate }
+const AIR_TIME_REASON = '방영 시각은 글을 모을 범위와 채팅 시각 계산의 기준입니다'
+const PROMPT_REASON = '저장하는 순간 AI 작업과 서버의 "다시 써서 넣기"가 새 내용을 씁니다. 지금 내용은 이력에 남아 되돌릴 수 있습니다'
+
+/* ─── 고른 작품·회차 기억(HP-526) ─────────────────────────────────── */
+/* 고른 작품·회차를 주소(?work=&episode=)와 이 탭의 세션 저장소에 남긴다. 주소는 새로고침과 뒤로 가기('AI 프롬프트'에
+   다녀올 때)가, 세션 저장소는 쿼리 없는 왼쪽 메뉴 '회차 작업'·홈의 '열기'로 돌아올 때가 읽는다. 작업 서버마다 id가
+   다르므로 서버별로 둔다. */
+type Selection = { workId: number | null; episodeId: number | null }
+const selectionKey = () => `replix_seeding_selection_${WORKSPACE.env}`
+function readSelection(): Selection {
+  const id = (x: unknown) => (typeof x === 'number' && Number.isInteger(x) && x > 0 ? x : null)
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(selectionKey()) ?? 'null') as Partial<Selection> | null
+    return { workId: id(saved?.workId), episodeId: id(saved?.episodeId) }
+  } catch { return { workId: null, episodeId: null } }
+}
+function rememberSelection(workId: number, episodeId: number | null) {
+  try { sessionStorage.setItem(selectionKey(), JSON.stringify({ workId, episodeId })) } catch { /* 저장할 수 없으면 주소에만 남긴다 */ }
+  /* replaceState만 쓰고 popstate는 내지 않는다 — 공용 틀은 popstate로 주소를 다시 읽고, 쿼리가 바뀌면 시딩 화면을 처음부터
+     다시 그린다(SeedingSection의 key). 고를 때마다 다시 그리면 펼친 목록·고른 계획·스크롤이 날아간다. */
+  const url = new URL(window.location.href)
+  url.searchParams.set('work', String(workId))
+  if (episodeId != null) url.searchParams.set('episode', String(episodeId))
+  else url.searchParams.delete('episode')
+  const next = `${url.pathname}${url.search}${url.hash}`
+  if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history.replaceState(window.history.state, '', next)
+}
+/** 처음 열 회차 — 주소가 먼저(홈의 최근 회차·새로고침·뒤로 가기), 없으면 이 탭에서 마지막으로 고른 회차. */
+function initialSelection(workId: number | null, episodeId: number | null): Selection {
+  const saved = readSelection()
+  if (workId == null && episodeId == null) return saved
+  return { workId, episodeId: episodeId ?? (saved.workId != null && saved.workId === workId ? saved.episodeId : null) }
 }
 
 /* ─── 틀 ─────────────────────────────────────────────────────────── */
@@ -99,9 +139,12 @@ function Gate({ title, body, children }: { title: string; body: string; children
   )
 }
 
-function Banner({ kind, children, onClose }: { kind: 'bad' | 'info'; children: ReactNode; onClose?: () => void }) {
+/* 알림 칸 — bad = 오류(공용 .error-box), notice = 주의(공용 .notice-box — 일부 실패처럼 고장이 아니라 다시 손볼 일),
+   info = 안내. 일부 실패를 오류와 같은 외피로 그리면 둘을 구분하지 못한다(core.css .notice-box). */
+type AlertTone = 'bad' | 'notice'
+function Banner({ kind, children, onClose }: { kind: AlertTone | 'info'; children: ReactNode; onClose?: () => void }) {
   return (
-    <div className={`sd-banner ${kind === 'bad' ? 'error-box' : 'sd-info'}`} role={kind === 'bad' ? 'alert' : 'status'}>
+    <div className={`sd-banner ${kind === 'bad' ? 'error-box' : kind === 'notice' ? 'notice-box' : 'sd-info'}`} role={kind === 'info' ? 'status' : 'alert'}>
       <div>{children}</div>
       {onClose && <button type="button" className="sd-banner-close" onClick={onClose}>닫기</button>}
     </div>
@@ -112,18 +155,27 @@ function State({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`sd-state is-${tone}`}>{children}</span>
 }
 
-/* 단계 카드 — 머리에 "무엇을 하는 단계인지"(제목·설명)와 그 단계의 버튼, 몸에 지금 상태. */
-function Card({ no, title, lead, actions, children }: { no?: number; title: ReactNode; lead?: ReactNode; actions?: ReactNode; children: ReactNode }) {
+/* 단계 카드 — 머리에 "무엇을 하는 단계인지"(제목·설명)와 그 단계의 버튼, 몸에 지금 상태. 그 단계에서 난 오류는 카드 몸
+   맨 위에 뜨고 닫을 수 있다(HP-526) — 종전에는 오른쪽 열 맨 위 한 칸에만 떠서 아래쪽 단계의 오류를 놓쳤다. */
+function Card({ no, title, lead, actions, error, errorTone = 'bad', onCloseError, notice, children }: {
+  no?: number; title: ReactNode; lead?: ReactNode; actions?: ReactNode
+  error?: string | null; errorTone?: AlertTone; onCloseError?: () => void; notice?: string | null; children: ReactNode
+}) {
+  const titleId = useId()
   return (
-    <section className="sd-panel">
+    <section className="sd-panel" aria-labelledby={titleId}>
       <div className="sd-card-head">
         <div className="sd-card-title">
-          <h2>{no != null && <span className="sd-step-no">{no}</span>}{title}</h2>
+          <h2 id={titleId}>{no != null && <span className="sd-step-no">{no}</span>}{title}</h2>
           {lead}
         </div>
         {actions ? <div className="sd-card-actions">{actions}</div> : null}
       </div>
-      <div className="sd-card-body">{children}</div>
+      <div className="sd-card-body">
+        {error && <Banner kind={errorTone} onClose={onCloseError}>{error}</Banner>}
+        {notice && <Banner kind="info">{notice}</Banner>}
+        {children}
+      </div>
     </section>
   )
 }
@@ -131,10 +183,12 @@ function Card({ no, title, lead, actions, children }: { no?: number; title: Reac
 /* ─── 작업 공간: 왼쪽 작품·회차, 오른쪽 단계 ───────────────────────── */
 /* initialWorkId·initialEpisodeId: 공용 틀 홈의 '최근 회차'에서 고른 회차로 바로 연다(HP-506). 없거나 지워졌으면 첫 작품·첫 회차. */
 function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: { writable: boolean; initialWorkId?: number | null; initialEpisodeId?: number | null }) {
+  const [initial] = useState(() => initialSelection(initialWorkId, initialEpisodeId))
   const [works, setWorks] = useState<Work[] | null>(null)
-  const [workId, setWorkId] = useState<number | null>(initialWorkId)
+  const [workId, setWorkId] = useState<number | null>(initial.workId)
   const [episodes, setEpisodes] = useState<Episode[]>([])
-  const [episodeId, setEpisodeId] = useState<number | null>(initialEpisodeId)
+  const [episodeId, setEpisodeId] = useState<number | null>(initial.episodeId)
+  // 작업 공간 맨 위 오류 칸은 작품·회차 목록을 읽다 난 오류만 — 단계에서 난 오류는 그 단계 카드에 뜬다(HP-526).
   const [error, setError] = useState<string | null>(null)
   const workSelectId = useId()
   const work = useMemo(() => works?.find((w) => w.id === workId) ?? null, [works, workId])
@@ -144,6 +198,12 @@ function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: 
   const loadEpisodes = useCallback((wid: number) => api.episodes(wid).then((es) => { setEpisodes(es); setEpisodeId((cur) => es.some((e) => e.id === cur) ? cur : (es[0]?.id ?? null)) }).catch((e) => setError(errText(e))), [])
   useEffect(() => { loadWorks() }, [loadWorks])
   useEffect(() => { if (workId != null) loadEpisodes(workId) }, [workId, loadEpisodes])
+  // 고른 작품·회차가 정해지면 남긴다. 작품을 바꾸는 사이(새 회차 목록 전)와 회차 목록을 읽는 중에는 남기지 않는다.
+  useEffect(() => {
+    if (!work) return
+    if (episode ? episode.workId !== work.id : episodeId != null) return
+    rememberSelection(work.id, episode?.id ?? null)
+  }, [work, episode, episodeId])
 
   return (
     <div className="sd-layout">
@@ -174,27 +234,28 @@ function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: 
             </li>
           ))}
         </ul>
-        {work && writable && <AddEpisode work={work} onAdded={(id) => { loadEpisodes(work.id); setEpisodeId(id) }} onError={setError} />}
+        {work && writable && <AddEpisode work={work} onAdded={(id) => { loadEpisodes(work.id); setEpisodeId(id) }} />}
       </aside>
 
       <section className="sd-main">
         {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
         {!episode && <div className="sd-panel sd-guide">왼쪽에서 회차를 고르면 그 회차의 작업 단계가 여기에 나타납니다.</div>}
-        {episode && work && <EpisodeWorkspace key={episode.id} work={work} episode={episode} writable={writable} onEpisodeChanged={() => loadEpisodes(work.id)} onError={setError} />}
+        {episode && work && <EpisodeWorkspace key={episode.id} work={work} episode={episode} writable={writable} onEpisodeChanged={() => loadEpisodes(work.id)} />}
       </section>
     </div>
   )
 }
 
-function AddEpisode({ work, onAdded, onError }: { work: Work; onAdded: (id: number) => void; onError: (m: string) => void }) {
+function AddEpisode({ work, onAdded }: { work: Work; onAdded: (id: number) => void }) {
   const [open, setOpen] = useState(false)
   const [airDate, setAirDate] = useState(() => lastAirDate(work.airWeekday))
   const [label, setLabel] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const add = async () => {
     setBusy(true)
-    try { const e = await api.createEpisode(work.id, { airDate, label: label || undefined }); setOpen(false); setLabel(''); onAdded(e.id) }
-    catch (e) { onError(errText(e)) } finally { setBusy(false) }
+    try { const e = await api.createEpisode(work.id, { airDate, label: label || undefined }); setOpen(false); setLabel(''); setError(null); onAdded(e.id) }
+    catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   return (
     <div className="sd-side-foot">
@@ -203,7 +264,8 @@ function AddEpisode({ work, onAdded, onError }: { work: Work; onAdded: (id: numb
           <label className="sd-field"><span>방영일</span><input type="date" value={airDate} onChange={(e) => setAirDate(e.target.value)} className="sd-input" /></label>
           <label className="sd-field"><span>이름 (예: 33기 9회)</span><input value={label} onChange={(e) => setLabel(e.target.value)} className="sd-input" /></label>
           <p className="sd-note">방영 시작 시각은 작품의 편성 시각으로 채워집니다. 종료 시각은 수집이 끝난 뒤 글 밀도를 보고 정합니다.</p>
-          <div className="sd-actions"><button className="btn sd-primary" disabled={busy} onClick={add}>추가</button><button className="btn" onClick={() => setOpen(false)}>취소</button></div>
+          {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
+          <div className="sd-actions"><button className="btn sd-primary" disabled={busy} onClick={add}>추가</button><button className="btn" onClick={() => { setOpen(false); setError(null) }}>취소</button></div>
         </div>
       )}
     </div>
@@ -211,16 +273,41 @@ function AddEpisode({ work, onAdded, onError }: { work: Work; onAdded: (id: numb
 }
 
 /* ─── 한 회차의 작업 흐름 ──────────────────────────────────────────── */
-function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged, onError }: { work: Work; episode: Episode; writable: boolean; onEpisodeChanged: () => void; onError: (m: string) => void }) {
+/* 회차를 열어 둔 동안 다시 읽는 간격(HP-526) — 파이프라인(관리자 PC의 AI 작업)이 만든 계획이 회차를 다시 고르지 않아도 뜨게. */
+const EPISODE_REFRESH_MS = 30_000
+/* 단계 카드 — 오류는 이 칸 이름으로 그 카드에 뜬다(HP-526). */
+type Step = 'info' | 'collect' | 'sync' | 'plan' | 'inject'
+
+function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged }: { work: Work; episode: Episode; writable: boolean; onEpisodeChanged: () => void }) {
   const [collections, setCollections] = useState<Collection[]>([])
   const [anchors, setAnchors] = useState<SyncAnchor[]>([])
   const [notes, setNotes] = useState<SceneNote[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
   const [injections, setInjections] = useState<Injection[]>([])
-  const reloadCollections = useCallback(() => api.collections(episode.id).then(setCollections).catch((e) => onError(errText(e))), [episode.id, onError])
-  const reloadSync = useCallback(() => Promise.all([api.anchors(episode.id), api.sceneNotes(episode.id)]).then(([a, n]) => { setAnchors(a); setNotes(n) }).catch((e) => onError(errText(e))), [episode.id, onError])
-  const reloadPlans = useCallback(() => Promise.all([api.plans(episode.id), api.injections(episode.id)]).then(([p, i]) => { setPlans(p); setInjections(i) }).catch((e) => onError(errText(e))), [episode.id, onError])
+  const [errors, setErrors] = useState<Partial<Record<Step, { text: string; tone: AlertTone }>>>({})
+  const report = useMemo(() => {
+    const to = (step: Step) => (text: string, tone: AlertTone = 'bad') => setErrors((cur) => ({ ...cur, [step]: { text, tone } }))
+    return { info: to('info'), collect: to('collect'), sync: to('sync'), plan: to('plan'), inject: to('inject') }
+  }, [])
+  const dismiss = (step: Step) => () => setErrors((cur) => { const next = { ...cur }; delete next[step]; return next })
+  // quiet = 뒤에서 다시 읽기(아래 30초 주기) — 실패를 띄우지 않고 다음 차례에 다시 읽는다. 사람이 누른 일의 실패는 띄운다.
+  const reloadCollections = useCallback((quiet?: boolean) => api.collections(episode.id).then(setCollections).catch((e) => { if (quiet !== true) report.collect(errText(e)) }), [episode.id, report])
+  const reloadSync = useCallback((quiet?: boolean) => Promise.all([api.anchors(episode.id), api.sceneNotes(episode.id)]).then(([a, n]) => { setAnchors(a); setNotes(n) }).catch((e) => { if (quiet !== true) report.sync(errText(e)) }), [episode.id, report])
+  const reloadPlans = useCallback((quiet?: boolean) => Promise.all([api.plans(episode.id), api.injections(episode.id)]).then(([p, i]) => { setPlans(p); setInjections(i) }).catch((e) => { if (quiet !== true) report.plan(errText(e)) }), [episode.id, report])
   useEffect(() => { reloadCollections(); reloadSync(); reloadPlans() }, [reloadCollections, reloadSync, reloadPlans])
+  /* 파이프라인이 만든 계획·기준점·장면 메모와 다른 곳에서 시작한 수집이 도착하면 회차를 다시 고르지 않아도 보이게, 탭이
+     보이는 동안 30초마다 다시 읽는다(HP-526). 목록만 바꾸므로 고른 계획·펼친 목록·스크롤은 그대로다. 탭이 가려지면
+     멈추고, 다시 보이면 곧바로 한 번 읽은 뒤 이어 간다. */
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null
+    const refresh = () => { reloadCollections(true); reloadSync(true); reloadPlans(true) }
+    const start = () => { if (timer == null) timer = setInterval(refresh, EPISODE_REFRESH_MS) }
+    const stop = () => { if (timer != null) { clearInterval(timer); timer = null } }
+    const onVisibility = () => { if (document.visibilityState === 'hidden') stop(); else { refresh(); start() } }
+    if (document.visibilityState !== 'hidden') start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [reloadCollections, reloadSync, reloadPlans])
 
   // 네 단계 판정은 공용 틀 홈의 '최근 회차'와 같은 것을 쓴다(progress.ts, HP-525) — 끝남·사람 차례·아직.
   const progress = episodeProgress(collections, anchors, plans, injections, notes)
@@ -242,10 +329,12 @@ function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged, onError }
         </ol>
       </header>
 
-      <EpisodeInfo episode={episode} work={work} writable={writable} onChanged={onEpisodeChanged} onError={onError} />
-      <CollectStep episode={episode} collections={collections} writable={writable} reload={reloadCollections} onEpisodeChanged={onEpisodeChanged} onError={onError} />
-      <SyncStep episode={episode} anchors={anchors} notes={notes} writable={writable} reload={reloadSync} onError={onError} />
-      <PlanStep episode={episode} plans={plans} injections={injections} writable={writable} reload={reloadPlans} onError={onError} />
+      <EpisodeInfo episode={episode} work={work} writable={writable} onChanged={onEpisodeChanged} onError={report.info} error={errors.info?.text} onCloseError={dismiss('info')} />
+      <CollectStep episode={episode} collections={collections} writable={writable} reload={reloadCollections} onEpisodeChanged={onEpisodeChanged} onError={report.collect} error={errors.collect?.text} onCloseError={dismiss('collect')} />
+      <SyncStep episode={episode} anchors={anchors} notes={notes} writable={writable} reload={reloadSync} onError={report.sync} error={errors.sync?.text} onCloseError={dismiss('sync')} />
+      <PlanStep episode={episode} plans={plans} injections={injections} writable={writable} reload={reloadPlans}
+          onPlanError={report.plan} planError={errors.plan?.text} onClosePlanError={dismiss('plan')}
+          onInjectError={report.inject} injectError={errors.inject} onCloseInjectError={dismiss('inject')} />
     </>
   )
 }
@@ -256,7 +345,19 @@ function episodeFields(e: Episode) {
   return { label: e.label ?? '', start: isoToKstInput(e.airStartAt), end: isoToKstInput(e.airEndAt), runtime: e.runtimeSec ? String(Math.round(e.runtimeSec / 60)) : '' }
 }
 
-function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode: Episode; work: Work; writable: boolean; onChanged: () => void; onError: (m: string) => void }) {
+/* 회차 정보 저장 확인 창의 '변경' 칸 — 바뀌는 칸만 적는다. */
+function episodeChange(e: Episode, next: { label: string | null; airStartAt: string; airEndAt: string | null; runtimeSec: number | null }) {
+  const same = (a: string | null, b: string | null) => (a == null || b == null ? a === b : new Date(a).getTime() === new Date(b).getTime())
+  const minutes = (sec: number | null) => (sec ? `${Math.round(sec / 60)}분` : '없음')
+  const parts: string[] = []
+  if ((next.label ?? null) !== (e.label ?? null)) parts.push(`이름 ${e.label ?? '없음'} → ${next.label ?? '없음'}`)
+  if (!same(next.airStartAt, e.airStartAt)) parts.push(`방영 시작 ${fmtKst(e.airStartAt)} → ${fmtKst(next.airStartAt)}`)
+  if (!same(next.airEndAt, e.airEndAt)) parts.push(`방영 종료 ${fmtKst(e.airEndAt)} → ${fmtKst(next.airEndAt)}`)
+  if ((next.runtimeSec ?? null) !== (e.runtimeSec ?? null)) parts.push(`본편 길이 ${minutes(e.runtimeSec)} → ${minutes(next.runtimeSec)}`)
+  return parts.join(', ')
+}
+
+function EpisodeInfo({ episode, work, writable, onChanged, onError, error, onCloseError }: { episode: Episode; work: Work; writable: boolean; onChanged: () => void; onError: (m: string) => void; error?: string; onCloseError: () => void }) {
   const [edit, setEdit] = useState(false)
   const [label, setLabel] = useState('')
   const [start, setStart] = useState('')
@@ -299,19 +400,24 @@ function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode:
       runtimeSec: runtime === o.runtime ? episode.runtimeSec : (runtime ? Number(runtime) * 60 : null),
       episodeId: episode.episodeId,
     }
+    const change = episodeChange(episode, body) || '바뀐 칸 없음(지금 값을 다시 저장)'
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${work.title} ${episodeName(episode)} 회차 정보`), change, reason: AIR_TIME_REASON },
+      `회차 정보를 저장합니다. ${AIR_TIME_REASON}.\n\n바뀌는 것: ${change}`)) return
     setBusy(true)
     try { await api.updateEpisode(episode.id, body); setEdit(false); onChanged() }
     catch (e) { onError(errText(e)) } finally { setBusy(false) }
   }
   const unlink = async () => {
-    if (!confirm('넷플릭스 회차와의 연결을 끊습니다. 익스텐션 패널에서 다시 연결할 수 있습니다.')) return
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${work.title} ${episodeName(episode)} 넷플릭스 회차 연결`), change: `넷플릭스 회차 id ${episode.episodeId} 연결 끊기`, reason: '채팅은 연결된 뒤에만 넣을 수 있습니다. 익스텐션 패널에서 다시 연결할 수 있습니다' },
+      '넷플릭스 회차와의 연결을 끊습니다. 익스텐션 패널에서 다시 연결할 수 있습니다.')) return
     try { await api.linkEpisode(episode.id, null); onChanged() } catch (e) { onError(errText(e)) }
   }
   return (
     <Card
         title="회차 정보"
         lead={<p className="sd-lead">방영 시각은 글을 모을 범위와 채팅 시각 계산의 기준입니다. 편성표 시각이 아니라 실제로 본편이 시작하고 끝난 시각을 적으세요. 정확한 값은 수집 뒤 분당 글 수 그래프와 AI 장면 복원이 알려 줍니다.</p>}
-        actions={writable && !edit && <button className="btn" onClick={startEdit}>고치기</button>}>
+        actions={writable && !edit && <button className="btn" onClick={startEdit}>고치기</button>}
+        error={error} onCloseError={onCloseError}>
       <div className="sd-info-grid">
         {!edit ? (
           <>
@@ -348,7 +454,7 @@ function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode:
 }
 
 /* ─── 1단계: 수집 ──────────────────────────────────────────────────── */
-function CollectStep({ episode, collections, writable, reload, onEpisodeChanged, onError }: { episode: Episode; collections: Collection[]; writable: boolean; reload: () => void; onEpisodeChanged: () => void; onError: (m: string) => void }) {
+function CollectStep({ episode, collections, writable, reload, onEpisodeChanged, onError, error, onCloseError }: { episode: Episode; collections: Collection[]; writable: boolean; reload: () => void; onEpisodeChanged: () => void; onError: (m: string) => void; error?: string; onCloseError: () => void }) {
   const [busy, setBusy] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const active = collections.some((c) => c.status === 'QUEUED' || c.status === 'RUNNING')
@@ -357,14 +463,16 @@ function CollectStep({ episode, collections, writable, reload, onEpisodeChanged,
   const start = async () => { setBusy(true); try { await api.startCollection(episode.id); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
   const cancel = async (id: number) => { try { await api.cancel(id); reload() } catch (e) { onError(errText(e)) } }
   const remove = async (c: Collection) => {
-    if (!confirm(`수집 #${c.id}의 글 ${c.postCount.toLocaleString()}건을 서버에서 지웁니다. 이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다.`)) return
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 수집 #${c.id}`), change: `수집한 글 ${c.postCount.toLocaleString()}건 지우기`, reason: '이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다. 지운 글은 되돌릴 수 없습니다' },
+      `수집 #${c.id}의 글 ${c.postCount.toLocaleString()}건을 서버에서 지웁니다. 이 수집으로 만든 계획이 있으면 그 계획의 원글 참조가 끊깁니다.`)) return
     try { await api.remove(c.id); reload() } catch (e) { onError(errText(e)) }
   }
   return (
     <Card
         no={1} title="수집"
         lead={<p className="sd-lead">방송 시간대에 디시인사이드와 더쿠에 올라온 글을 모아 서버에 저장합니다. 이 글이 뒤의 모든 단계의 재료입니다. 모으는 범위는 방영 시작 20분 전부터 종료 30분 뒤까지이고, 종료 시각을 모르면 시작 후 3시간까지 모은 뒤 분당 글 수를 보고 종료를 찾습니다. 한 회차에 보통 5분쯤 걸립니다.</p>}
-        actions={writable && <button className="btn sd-primary" disabled={busy || active} onClick={start}>{active ? '수집 중' : collections.length ? '다시 수집' : '수집 시작'}</button>}>
+        actions={writable && <button className="btn sd-primary" disabled={busy || active} onClick={start}>{active ? '수집 중' : collections.length ? '다시 수집' : '수집 시작'}</button>}
+        error={error} onCloseError={onCloseError}>
       {collections.length === 0 && <p className="sd-empty">아직 수집한 적이 없습니다.</p>}
       {collections.length > 0 && (
         <div className="sd-table-wrap">
@@ -409,6 +517,9 @@ function DensityChart({ collection: c, episode, writable, onEpisodeChanged, onEr
   const max = Math.max(1, ...d.buckets.map((b) => b.count))
   const x = (iso: string) => ((new Date(iso).getTime() - new Date(d.from).getTime()) / 60000) / Math.max(1, n - 1) * W
   const apply = async (field: 'airStartAt' | 'airEndAt', value: string) => {
+    const what = field === 'airStartAt' ? '방영 시작' : '방영 종료'
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 회차 정보`), change: `${what} ${fmtKst(episode[field])} → ${fmtKst(value)} (분당 글 수 그래프의 추정)`, reason: AIR_TIME_REASON },
+      `${what} 시각을 그래프가 추정한 ${fmtTime(value).slice(0, 5)}로 바꿉니다. ${AIR_TIME_REASON}.`)) return
     setBusy(true)
     try { await api.updateEpisode(episode.id, { label: episode.label, airStartAt: field === 'airStartAt' ? value : episode.airStartAt, airEndAt: field === 'airEndAt' ? value : episode.airEndAt, runtimeSec: episode.runtimeSec, episodeId: episode.episodeId }); onEpisodeChanged() }
     catch (e) { onError(errText(e)) } finally { setBusy(false) }
@@ -538,12 +649,17 @@ function PostBrowser({ collection: c, episode, onError }: { collection: Collecti
 }
 
 /* ─── 2단계: 싱크와 장면 ────────────────────────────────────────────── */
-function SyncStep({ episode, anchors, notes, writable, reload, onError }: { episode: Episode; anchors: SyncAnchor[]; notes: SceneNote[]; writable: boolean; reload: () => void; onError: (m: string) => void }) {
-  const removeAnchor = async (a: SyncAnchor) => { if (!confirm(`재생 ${fmtSec(a.playbackSec)} 기준점을 지웁니다.`)) return; try { await api.deleteAnchor(a.id); reload() } catch (e) { onError(errText(e)) } }
+function SyncStep({ episode, anchors, notes, writable, reload, onError, error, onCloseError }: { episode: Episode; anchors: SyncAnchor[]; notes: SceneNote[]; writable: boolean; reload: () => void; onError: (m: string) => void; error?: string; onCloseError: () => void }) {
+  const removeAnchor = async (a: SyncAnchor) => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 기준점`), change: `재생 ${fmtSec(a.playbackSec)} = 방송 ${fmtTime(a.wallclockAt)} 기준점 지우기`, reason: '채팅을 넣을 때 글의 방송 시각을 재생 시각으로 바꾸는 기준입니다' },
+      `재생 ${fmtSec(a.playbackSec)} 기준점을 지웁니다.`)) return
+    try { await api.deleteAnchor(a.id); reload() } catch (e) { onError(errText(e)) }
+  }
   return (
     <Card
         no={2} title="시각 맞추기와 장면 메모"
-        lead={<p className="sd-lead">수집한 글에는 방송 시각이 적혀 있고, 넷플릭스는 재생 시각으로 돕니다. 이 단계는 그 둘을 잇는 <b>기준점</b>과, 방송 1분마다 화면에서 무슨 일이 있었는지 적은 <b>장면 메모</b>를 다룹니다. 둘 다 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 자막과 글을 읽어 자동으로 만들어집니다.</p>}>
+        lead={<p className="sd-lead">수집한 글에는 방송 시각이 적혀 있고, 넷플릭스는 재생 시각으로 돕니다. 이 단계는 그 둘을 잇는 <b>기준점</b>과, 방송 1분마다 화면에서 무슨 일이 있었는지 적은 <b>장면 메모</b>를 다룹니다. 둘 다 익스텐션의 시딩 도구에서 "AI 채팅 작업 시작"을 누르면 자막과 글을 읽어 자동으로 만들어집니다.</p>}
+        error={error} onCloseError={onCloseError}>
       <section className="sd-section">
         <div>
           <h3>기준점 {anchors.length}개</h3>
@@ -604,8 +720,16 @@ function SceneNotesBlock({ episode, notes, writable, reload, onError }: { episod
   const main = notes.filter((n) => new Date(n.minuteAt) >= new Date(startAt) && (!endAt || new Date(n.minuteAt) <= new Date(endAt)))
   const post = notes.filter((n) => endAt && new Date(n.minuteAt) > new Date(endAt))
   const visible = (q ? notes.filter((n) => n.note.includes(q)) : [...(showPre ? pre : []), ...main])
-  const saveNotes = async () => { setBusy(true); try { await api.putSceneNotes(episode.id, parsed); setText(''); setPaste(false); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
-  const clearNotes = async () => { if (!confirm('장면 메모를 모두 지웁니다. AI 작업을 다시 돌리면 새로 만들어집니다.')) return; setBusy(true); try { await api.putSceneNotes(episode.id, []); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+  const saveNotes = async () => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 장면 메모`), change: `장면 메모 ${notes.length}분을 붙여 넣은 ${parsed.length}분으로 모두 바꾸기`, reason: 'AI 채팅 계획과 익스텐션의 시딩 도구가 이 메모를 씁니다. 지금 메모는 남지 않습니다' },
+      `장면 메모 ${notes.length}분을 붙여 넣은 ${parsed.length}분으로 모두 바꿉니다. 지금 메모는 남지 않습니다.`)) return
+    setBusy(true); try { await api.putSceneNotes(episode.id, parsed); setText(''); setPaste(false); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) }
+  }
+  const clearNotes = async () => {
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} 장면 메모`), change: `장면 메모 ${notes.length}분 모두 지우기`, reason: 'AI 채팅 계획과 익스텐션의 시딩 도구가 이 메모를 씁니다. AI 작업을 다시 돌리면 새로 만들어집니다' },
+      '장면 메모를 모두 지웁니다. AI 작업을 다시 돌리면 새로 만들어집니다.')) return
+    setBusy(true); try { await api.putSceneNotes(episode.id, []); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) }
+  }
   const row = (n: SceneNote) => {
     const unknown = n.note.startsWith('추정 불가')
     return (
@@ -684,19 +808,26 @@ function PromptsView({ writable }: { writable: boolean }) {
   useEffect(() => { reload() }, [reload])
   useEffect(() => { if (current) { setDraft(current.content); setNote(''); setShowVersions(false); setVersions(null) } }, [current?.key, current?.version]) // eslint-disable-line react-hooks/exhaustive-deps
   const dirty = !!current && draft !== current.content
+  const promptTarget = (p: Prompt) => workspaceTarget(`AI 프롬프트 '${p.title}'`)
   const save = async () => {
     if (!current) return
+    if (!await confirmWrite(WORKSPACE.env, { target: promptTarget(current), change: `지금 편집한 내용을 버전 ${current.version + 1}로 저장${note ? ` (메모: ${note})` : ''}`, reason: PROMPT_REASON },
+      `'${current.title}' 프롬프트를 저장합니다. ${PROMPT_REASON}.`)) return
     setBusy(true)
     try { await api.savePrompt(current.key, draft, note || null); await reload(); setSaved(`${current.title} 저장됨. 다음 실행부터 적용됩니다.`); setTimeout(() => setSaved(null), 4000) }
     catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   const openVersions = async () => { if (!current) return; try { setVersions(await api.promptVersions(current.key)); setShowVersions(true) } catch (e) { setError(errText(e)) } }
   const revert = async (v: PromptVersion) => {
-    if (!current || !confirm(`버전 ${v.version}의 내용으로 되돌립니다. 지금 내용은 이력에 남습니다.`)) return
+    if (!current) return
+    if (!await confirmWrite(WORKSPACE.env, { target: promptTarget(current), change: `버전 ${v.version}의 내용으로 되돌리기(버전 ${current.version + 1}로 저장)`, reason: PROMPT_REASON },
+      `버전 ${v.version}의 내용으로 되돌립니다. 지금 내용은 이력에 남습니다.`)) return
     setBusy(true); try { await api.revertPrompt(current.key, v.version); await reload() } catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   const reset = async () => {
-    if (!current || !confirm('저장소에 들어 있는 기본 프롬프트로 되돌립니다. 지금 내용은 이력에 남습니다.')) return
+    if (!current) return
+    if (!await confirmWrite(WORKSPACE.env, { target: promptTarget(current), change: `저장소에 들어 있는 기본 프롬프트로 되돌리기(버전 ${current.version + 1}로 저장)`, reason: PROMPT_REASON },
+      '저장소에 들어 있는 기본 프롬프트로 되돌립니다. 지금 내용은 이력에 남습니다.')) return
     setBusy(true); try { await api.resetPrompt(current.key); await reload() } catch (e) { setError(errText(e)) } finally { setBusy(false) }
   }
   return (
@@ -717,12 +848,17 @@ function PromptsView({ writable }: { writable: boolean }) {
         <p className="sd-note sd-side-foot">여기 저장한 내용이 정본입니다. 관리자 PC의 AI 작업은 시작할 때마다 최신 내용을 받아 쓰고, 서버의 "다시 써서 넣기"도 같은 내용을 씁니다. 파일 경로와 담당 구간 같은 실행 정보는 실행할 때 뒤에 자동으로 붙으므로 여기에 적지 않습니다.</p>
       </aside>
       <section className="sd-main">
-        {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
-        {saved && <Banner kind="info">{saved}</Banner>}
-        {!current && <div className="sd-panel sd-guide">왼쪽에서 프롬프트를 고르세요.</div>}
+        {/* 오류는 프롬프트 카드 안에 뜬다(HP-526). 목록을 못 읽어 고를 프롬프트가 없으면 안내 칸에 뜬다. */}
+        {!current && (
+          <div className="sd-panel sd-guide-box">
+            {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
+            <p className="sd-guide">왼쪽에서 프롬프트를 고르세요.</p>
+          </div>
+        )}
         {current && (
           <Card
               title={current.title}
+              error={error} onCloseError={() => setError(null)} notice={saved}
               lead={<>
                 <p className="sd-lead">{current.description}</p>
                 <p className="sd-note sd-meta">버전 {current.version} · 마지막 저장 {fmtKst(current.updatedAt)}{current.updatedBy && current.updatedBy !== 'default' ? ` · ${current.updatedBy}` : ' · 기본값'}</p>
@@ -843,7 +979,13 @@ async function settleOtherLedger(planId: number): Promise<{ view: PlanView | nul
 }
 
 /* ─── 3단계: AI 계획과 4단계: 주입 ───────────────────────────────────── */
-function PlanStep({ episode, plans, injections, writable, reload, onError }: { episode: Episode; plans: Plan[]; injections: Injection[]; writable: boolean; reload: () => void; onError: (m: string) => void }) {
+/* 3·4단계 카드의 오류 — 계획을 읽고 고르고 올리는 일은 3단계 카드에, 채팅을 넣고 지우는 일(계획 지우기 포함, 4단계 카드의
+   버튼이다)은 4단계 카드에 뜬다(HP-526). */
+function PlanStep({ episode, plans, injections, writable, reload, onPlanError, planError, onClosePlanError, onInjectError, injectError, onCloseInjectError }: {
+  episode: Episode; plans: Plan[]; injections: Injection[]; writable: boolean; reload: () => void
+  onPlanError: (m: string) => void; planError?: string; onClosePlanError: () => void
+  onInjectError: (m: string, tone?: AlertTone) => void; injectError?: { text: string; tone: AlertTone }; onCloseInjectError: () => void
+}) {
   const [planId, setPlanId] = useState<number | null>(null)
   const [view, setView] = useState<PlanView | null>(null)
   const [upload, setUpload] = useState(false)
@@ -853,7 +995,10 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
   const [kindFilter, setKindFilter] = useState<InjectionKind | ''>('')
   const current = plans.find((p) => p.id === planId) ?? plans.find((p) => p.status === 'RUNNING') ?? plans.find((p) => p.status === 'DRAFT') ?? plans[0] ?? null
   const currentId = current?.id ?? null, currentStatus = current?.status ?? null
-  useEffect(() => { if (!currentId) { setView(null); return } let alive = true; api.plan(currentId).then((v) => { if (alive) setView(v) }).catch((e) => onError(errText(e))); return () => { alive = false } }, [currentId, currentStatus, onError])
+  /* 처음 고른 계획(넣는 중 → 검수 대기 → 최신)을 붙잡아 둔다. 목록은 최신순이라, 30초마다 다시 읽은 목록에 새 검수 대기
+     계획이 끼면 보던 계획이 그쪽으로 바뀌었다(HP-526). */
+  useEffect(() => { if (planId == null && current) setPlanId(current.id) }, [planId, current])
+  useEffect(() => { if (!currentId) { setView(null); return } let alive = true; api.plan(currentId).then((v) => { if (alive) setView(v) }).catch((e) => onPlanError(errText(e))); return () => { alive = false } }, [currentId, currentStatus, onPlanError])
   useEffect(() => {
     if (!view || view.plan.status !== 'RUNNING') return
     const t = setInterval(async () => { try { const v = await api.plan(view.plan.id); setView(v); if (v.plan.status !== 'RUNNING') { setBusy(false); reload() } } catch { /* 다음 틱 */ } }, 2000)
@@ -864,8 +1009,8 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
     if (!text.trim()) return null
     try { const j = JSON.parse(text); const items: NewPlanItem[] = Array.isArray(j) ? j : j.items; return Array.isArray(items) ? { label: (Array.isArray(j) ? null : j.label) ?? null, source: (Array.isArray(j) ? null : j.source) ?? null, items } : null } catch { return null }
   }, [text])
-  const doUpload = async () => { if (!parsed) return; setBusy(true); try { const v = await api.createPlan(episode.id, parsed); setText(''); setUpload(false); reload(); setPlanId(v.plan.id) } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
-  const toggle = async (itemId: number, accepted: boolean) => { try { const it = await api.patchPlanItem(itemId, { accepted }); setView((v) => v && { ...v, items: v.items.map((x) => x.item.id === it.id ? { ...x, item: it } : x) }) } catch (e) { onError(errText(e)) } }
+  const doUpload = async () => { if (!parsed) return; setBusy(true); try { const v = await api.createPlan(episode.id, parsed); setText(''); setUpload(false); reload(); setPlanId(v.plan.id) } catch (e) { onPlanError(errText(e)) } finally { setBusy(false) } }
+  const toggle = async (itemId: number, accepted: boolean) => { try { const it = await api.patchPlanItem(itemId, { accepted }); setView((v) => v && { ...v, items: v.items.map((x) => x.item.id === it.id ? { ...x, item: it } : x) }) } catch (e) { onPlanError(errText(e)) } }
   const execute = async () => {
     if (!view) return
     const n = view.items.filter((x) => x.item.accepted && !x.item.injectionId).length
@@ -878,15 +1023,20 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
       /* 넣기는 서버 뒤에서 돌고 응답은 곧바로 온다. 넣을 행이 적으면 응답을 만들기 전에 끝나 RUNNING이 아니라 EXECUTED가
          오는데, 진행 지켜보기(위 효과)는 RUNNING일 때만 돌아 잠금이 영영 안 풀렸다(HP-519). 지켜볼 일이 없으면 곧바로 푼다. */
       if (v.plan.status !== 'RUNNING') { setBusy(false); reload() }
-    } catch (e) { onError(errText(e)); setBusy(false) }
+    } catch (e) { onInjectError(errText(e)); setBusy(false) }
   }
   const rollback = async () => {
     if (!view || !await confirmWrite(WORKSPACE.env, { target: `${WORKSPACE.label} 서버 · ${episode.label ?? episode.airDate} 채팅`, change: `계획 #${view.plan.id}이 넣은 채팅 모두 지우기`, reason: '계획을 검수 대기 상태로 되돌립니다' },
       '이 계획이 넣은 채팅을 모두 지우고 검수 대기 상태로 되돌립니다.')) return
-    setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+    setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onInjectError(errText(e)) } finally { setBusy(false) } }
   /* 다른 서버에만 넣으면 계획은 초안으로 남아 지울 수 있었다 — 지우면 그 서버의 채팅을 지울 화면이 사라진다(HP-518 리뷰). */
   const otherInjected = !!view && (view.items.some((x) => !!extOf(x.item)[OTHER.env]) || readOtherLedger(view.plan.id).attempted.length > 0)
-  const remove = async () => { if (!view || otherInjected || !confirm('이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return; setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+  const remove = async () => {
+    if (!view || otherInjected) return
+    if (!await confirmWrite(WORKSPACE.env, { target: workspaceTarget(`${episodeName(episode)} AI 계획 #${view.plan.id}`), change: `계획 #${view.plan.id}(${view.items.length.toLocaleString()}행) 지우기`, reason: '아직 채팅에 넣지 않은 계획만 지울 수 있습니다. 지운 계획은 되돌릴 수 없습니다' },
+      '이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return
+    setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onInjectError(errText(e)) } finally { setBusy(false) }
+  }
 
   /* 다른 환경에 넣기(HP-436): 수락했고 그 환경에 아직 안 넣은 행을, 정본 서버가 환산한 재생 초와 함께 그 서버의 외부 넣기 API 로
      보낸다(500건씩). 결과를 정본 서버에 행별로 기록해 표에 "개발 넣음"이 보이게 한다.
@@ -896,7 +1046,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
   const [otherEngagement, setOtherEngagement] = useState<EngagementSummary | null>(null)
   const injectOther = async () => {
     if (!view) return
-    if (!view.platformEpisodeId || !view.platformCode) { onError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
+    if (!view.platformEpisodeId || !view.platformCode) { onInjectError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
     setBusy(true)
     try {
       // 지난번에 기록하지 못한 결과부터 기록한다 — 그래야 아래 '넣을 행'에서 이미 들어간 행이 빠진다.
@@ -914,7 +1064,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
       const rows = current.items.filter((x) => x.item.accepted && !x.item.error && !extOf(x.item)[OTHER.env] && x.previewSec != null)
       if (rows.length === 0) {
         // 정산만으로 끝났으면 오류가 아니다 — 표에 방금 기록한 행이 '넣음'으로 보인다.
-        if (settled.length) { if (errors.length) onError(errors[0]); reload() } else onError(`${OTHER.label} 서버에 넣을 행이 없습니다.`)
+        if (settled.length) { if (errors.length) onInjectError(errors[0], 'notice'); reload() } else onInjectError(`${OTHER.label} 서버에 넣을 행이 없습니다.`, 'notice')
         return
       }
       if (!await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${current.plan.id}의 수락 ${rows.length.toLocaleString()}건을 채팅으로 넣기`, reason: `${OTHER.label} 서버에 그 회차가 없으면 실패합니다` },
@@ -945,9 +1095,10 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
         setExtProgress(`${OTHER.label} 서버에 반응·감상 시간 넣는 중`)
         setOtherEngagement(await engageOther(token, [batchKey], errors))
       }
-      if (errors.length) onError(`${OTHER.label} 서버에 ${injected}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`)
+      // 일부 실패는 주의로 띄운다 — 들어간 채팅은 들어갔고, 실패한 행만 다시 손보면 된다.
+      if (errors.length) onInjectError(`${OTHER.label} 서버에 ${injected}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`, 'notice')
       reload()
-    } catch (e) { onError(errText(e)) } finally { setExtProgress(null); setBusy(false) }
+    } catch (e) { onInjectError(errText(e)) } finally { setExtProgress(null); setBusy(false) }
   }
   const rollbackOther = async () => {
     if (!view) return
@@ -966,7 +1117,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
       const token = await secondaryToken(OTHER)
       for (const b of batches) await callOther(OTHER.api, token, 'DELETE', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(b)}`)
       setView(await api.clearExternal(current.plan.id, OTHER.env)); clearOtherLedger(current.plan.id); setOtherEngagement(null); reload()
-    } catch (e) { onError(errText(e)) } finally { setBusy(false) }
+    } catch (e) { onInjectError(errText(e)) } finally { setBusy(false) }
   }
 
   const stats = view ? { total: view.items.length, accepted: view.items.filter((x) => x.item.accepted).length, done: view.items.filter((x) => x.item.injectionId).length, failed: view.items.filter((x) => x.item.error).length, otherDone: view.items.filter((x) => !!extOf(x.item)[OTHER.env]).length,
@@ -984,7 +1135,8 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
               {(Object.keys(KIND_LABEL) as InjectionKind[]).map((k) => <div key={k} className="sd-kind"><dt>{KIND_LABEL[k]}</dt><dd>{KIND_DESC[k]}</dd></div>)}
             </dl>
           </>}
-          actions={writable && <button className="btn" onClick={() => setUpload((v) => !v)}>{upload ? '닫기' : '계획 파일을 손으로 올리기'}</button>}>
+          actions={writable && <button className="btn" onClick={() => setUpload((v) => !v)}>{upload ? '닫기' : '계획 파일을 손으로 올리기'}</button>}
+          error={planError} onCloseError={onClosePlanError}>
         {upload && (
           <div className="sd-stack">
             <p className="sd-note">관리자 PC의 파이프라인이 만든 plan.json 내용을 붙여 넣습니다. 보통은 AI 작업이 끝나면 자동으로 올라오므로 쓸 일이 없습니다.</p>
@@ -1055,6 +1207,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
 
       <Card
           no={4} title="채팅 넣기"
+          error={injectError?.text} errorTone={injectError?.tone} onCloseError={onCloseInjectError}
           lead={<p className="sd-lead">검수를 마친 계획의 수락 행을 회차의 채팅으로 넣습니다. 넣을 서버를 고를 수 있습니다. <b>{WORKSPACE.label}</b>은 이 콘솔이 붙은 서버라 바로 넣고, <b>{OTHER.label}</b>은 완성된 행을 그 서버로 보내 넣습니다(처음 한 번 {OTHER.label} 로그인 창이 뜹니다). 각 행은 시딩 전용 계정(유령 계정) 이름으로 저장되어 다른 사용자 채팅과 똑같이 보이고, 접속자 수나 활동 통계에는 잡히지 않습니다. 넷플릭스 회차가 연결되어 있어야 하며, 잘못 넣었으면 서버별로 계획 단위로 모두 지울 수 있습니다.</p>}>
         <div className="sd-toolbar">
           <div className="sd-stat"><b>{injections.length.toLocaleString()}</b><span>{WORKSPACE.label} 서버에 넣은 채팅</span></div>
