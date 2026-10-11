@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { CAPABILITIES } from '@core/roles'
 import { isoToKstInput, kstInputToIso } from '@core/time'
 import { api, ApiError, type Collection, type Density, type Episode, type Injection, type InjectionKind, type NewPlanItem, type NewSceneNote, type Plan, type PlanView, type Post, type PostsPage, type Prompt, type PromptVersion, type SceneNote, type SourceKind, type SyncAnchor, type Work } from './api'
 import { canRead, canWrite, currentUser, logout } from './auth'
 import { OTHER, WORKSPACE, type Env } from './env'
 import { seedingHost, type ProductionWriteSummary } from './host'
+import { episodeProgress } from './progress'
 import { callOther, type EngagementSummary, type ExternalItem, type ExternalResult, type PlanItem } from './api'
 import { secondaryToken, secondarySignedIn, secondaryLogout } from './secondaryAuth'
 import './seeding.css'
@@ -77,7 +79,7 @@ export function SeedingWorkspace({ view, workId, episodeId }: { view: 'work' | '
   return (
     <div className="sd-root">
       {!canRead(user)
-        ? <Gate title="이 계정에는 시딩 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(admin, moderation_operator, admin_console_viewer 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn sd-primary" onClick={logout}>다른 계정으로 로그인</button></Gate>
+        ? <Gate title="이 계정에는 시딩 권한이 없습니다" body={`${user.name} 계정에 관리자 역할(${CAPABILITIES.view.roles.join(', ')} 중 하나)이 없습니다. 팀 관리자에게 역할을 요청하세요.`}><button className="btn sd-primary" onClick={logout}>다른 계정으로 로그인</button></Gate>
         : view === 'work'
           ? <Workspace writable={canWrite(user)} initialWorkId={workId ?? null} initialEpisodeId={episodeId ?? null} />
           : <PromptsView writable={canWrite(user)} />}
@@ -220,14 +222,8 @@ function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged, onError }
   const reloadPlans = useCallback(() => Promise.all([api.plans(episode.id), api.injections(episode.id)]).then(([p, i]) => { setPlans(p); setInjections(i) }).catch((e) => onError(errText(e))), [episode.id, onError])
   useEffect(() => { reloadCollections(); reloadSync(); reloadPlans() }, [reloadCollections, reloadSync, reloadPlans])
 
-  const done = collections.filter((c) => c.status === 'DONE')
-  const latestDone = done[0] ?? null
-  const steps = [
-    { label: '수집', state: latestDone ? `완료 · ${latestDone.postCount.toLocaleString()}건` : collections.some((c) => c.status === 'RUNNING' || c.status === 'QUEUED') ? '진행 중' : '아직 없음', ok: !!latestDone },
-    { label: '시각 맞추기', state: anchors.length ? `기준점 ${anchors.length}개 · 장면 메모 ${notes.length}분` : '아직 없음', ok: anchors.length > 0 },
-    { label: 'AI 계획', state: plans.length ? `${plans.length}개 (검수 대기 ${plans.filter((p) => p.status === 'DRAFT').length})` : '아직 없음', ok: plans.length > 0 },
-    { label: '채팅 넣기', state: injections.length ? `${injections.length.toLocaleString()}건 넣음` : '아직 없음', ok: injections.length > 0 },
-  ]
+  // 네 단계 판정은 공용 틀 홈의 '최근 회차'와 같은 것을 쓴다(progress.ts, HP-525) — 끝남·사람 차례·아직.
+  const progress = episodeProgress(collections, anchors, plans, injections, notes)
 
   return (
     <>
@@ -236,11 +232,11 @@ function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged, onError }
           <div className="sd-eyebrow">{work.title}</div>
           <h1>{episode.label ?? episode.airDate} <span>{episode.airDate}</span></h1>
         </div>
-        <ol className="sd-progress">
-          {steps.map((s, i) => (
-            <li key={s.label} className={s.ok ? 'is-done' : undefined}>
+        <ol className="sd-progress" aria-label="작업 단계">
+          {progress.steps.map((s, i) => (
+            <li key={s.label} className={`is-${s.state}`}>
               <span className="sd-progress-no">{i + 1}</span>
-              <span className="sd-progress-text"><b>{s.label}</b><span>{s.state}</span></span>
+              <span className="sd-progress-text"><b>{s.label}</b><span>{s.detail}</span></span>
             </li>
           ))}
         </ol>

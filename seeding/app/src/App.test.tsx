@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -274,5 +274,24 @@ describe('다른 환경에 넣기 — 기록을 잃어도 같은 채팅을 다�
     vi.stubGlobal('fetch', fetchMock)
     render(<SeedingWorkspace view="work" />)
     expect(await screen.findByRole('button', { name: '계획 #7 지우기' }, WAIT)).toBeDisabled()
+  }, TEST_TIMEOUT)
+})
+
+describe('회차 머리 — 네 단계는 홈의 최근 회차와 같은 판정을 쓴다(HP-523에서 넘어온 항목, HP-525)', () => {
+  it('검수 대기 계획이 있으면 AI 계획을 사람 차례(진행)로 짚는다', async () => {
+    const fetchMock = serve([
+      ...episodeRoutes(() => baseEpisode, { plans: [plan] }),
+      { method: 'GET', host: 'workspace', path: /\/seeding\/plans\/7$/, handle: () => planView('DRAFT', [planItem(1)]) },
+    ])
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SeedingWorkspace view="work" />)
+
+    const steps = await screen.findByRole('list', { name: '작업 단계' }, WAIT)
+    const step = (label: string) => within(steps).getByText(label).closest('li')!
+    // 종전 화면 머리는 계획이 있기만 하면 끝난 단계로 칠했다 — 홈은 같은 회차를 '검수 대기'(사람 차례)로 보였다
+    await waitFor(() => expect(step('AI 계획')).toHaveClass('is-current'), WAIT)
+    expect(step('AI 계획')).toHaveTextContent('검수 대기')
+    expect(step('수집')).toHaveClass('is-idle')
+    expect(step('채팅 넣기')).toHaveTextContent('아직')
   }, TEST_TIMEOUT)
 })

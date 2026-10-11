@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { Collection, Injection, Plan, SyncAnchor } from './api'
+import type { Collection, Injection, Plan, SceneNote, SyncAnchor } from './api'
 import { episodeProgress } from './progress'
 
 const collection = (status: Collection['status'], postCount = 0) => ({ status, postCount }) as Collection
 const plan = (status: Plan['status']) => ({ status }) as Plan
 const anchors = (n: number) => Array.from({ length: n }, (_, id) => ({ id }) as SyncAnchor)
 const injections = (n: number) => Array.from({ length: n }, (_, id) => ({ id }) as Injection)
+const notes = (n: number) => Array.from({ length: n }, (_, id) => ({ id }) as SceneNote)
 
 describe('episodeProgress — 회차 작업 네 단계', () => {
   it('아무것도 없으면 수집 전이다', () => {
@@ -48,5 +49,19 @@ describe('episodeProgress — 회차 작업 네 단계', () => {
   it('넣은 것을 모두 지웠으면 채팅 넣기 전으로 돌아간다', () => {
     const progress = episodeProgress([collection('DONE', 10)], anchors(1), [plan('EXECUTED')], [])
     expect(progress.status).toEqual({ state: 'idle', label: '채팅 넣기 전' })
+  })
+
+  it('장면 메모를 넘기면 시각 맞추기 문구에 메모 수를 더하고, 판정은 그대로다(시딩 화면 머리, HP-525)', () => {
+    const withNotes = episodeProgress([collection('DONE', 10)], anchors(5), [plan('DRAFT')], [], notes(122))
+    const withoutNotes = episodeProgress([collection('DONE', 10)], anchors(5), [plan('DRAFT')], [])
+    expect(withNotes.steps[1]).toEqual({ label: '시각 맞추기', state: 'done', detail: '기준점 5개 · 장면 메모 122분' })
+    expect(withoutNotes.steps[1]).toEqual({ label: '시각 맞추기', state: 'done', detail: '기준점 5개' })
+    expect(withNotes.steps.map((step) => step.state)).toEqual(withoutNotes.steps.map((step) => step.state))
+    expect(withNotes.status).toEqual(withoutNotes.status)
+  })
+
+  it('장면 메모만 있고 기준점이 없으면 시각 맞추기는 아직이다 — 완료는 기준점이 정한다', () => {
+    const progress = episodeProgress([collection('DONE', 10)], [], [], [], notes(30))
+    expect(progress.steps[1]).toEqual({ label: '시각 맞추기', state: 'idle', detail: '아직' })
   })
 })
