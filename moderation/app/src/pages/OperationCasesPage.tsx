@@ -5,15 +5,11 @@ import {
 import type {
   CaseNoteType, OperationCaseDetail, OperationCaseRow, OperationCaseView,
 } from '../api/types'
-import { formatKstShort } from '../format'
+import { formatKstShort, isoToKstInput, kstInputToIso } from '../format'
 
 const VIEWS: Array<[OperationCaseView, string]> = [
   ['ALL', '전체'], ['MINE', '내 담당'], ['UNASSIGNED', '미배정'], ['OVERDUE', '기한 초과'],
 ]
-const toLocalInput = (value: string) => {
-  const date = new Date(value)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
-}
 
 export default function OperationCasesPage() {
   const [view, setView] = useState<OperationCaseView>('ALL')
@@ -43,7 +39,7 @@ export default function OperationCasesPage() {
   const applyDetail = (detail: OperationCaseDetail) => {
     setSelected(detail)
     setAssignee(detail.item.assignee ? String(detail.item.assignee.id) : '')
-    setDueAt(detail.item.dueAt ? toLocalInput(detail.item.dueAt) : '')
+    setDueAt(isoToKstInput(detail.item.dueAt))
   }
 
   const open = async (id: number, reflectInUrl = true) => {
@@ -72,8 +68,8 @@ export default function OperationCasesPage() {
     finally { setBusy(false) }
   }
 
-  return <section className="feature-page" aria-label="운영 협업">
-    <div className="page-title-row"><div><h1>운영 협업</h1><p>신고 케이스의 담당·인계·재검토와 동시 처리 상태를 감사합니다.</p></div>
+  return <section className="feature-control" aria-label="운영 협업">
+    <div className="board-head"><div><h1>운영 협업</h1><p>신고 케이스의 담당·인계·재검토와 동시 처리 상태를 감사합니다.</p></div>
       <button className="btn" type="button" onClick={() => void load()}>새로고침</button></div>
     {error && <div className="error-box" role="alert">{error}</div>}
     {truncated && <div className="incident-guide"><strong>최근 열린 케이스 200건 기준</strong>
@@ -93,23 +89,23 @@ export default function OperationCasesPage() {
         <span className="feature-state">version {selected.item.version}</span><h2>신고 #{selected.item.reportId}</h2>
         <p className="sub">{selected.item.targetUser.displayName} · {selected.item.reason} · 접수 {formatKstShort(selected.item.createdAt)}</p>
         {(selected.item.stale || selected.item.overdue) && <div className="incident-guide"><strong>동시 처리 확인 필요</strong><p>{selected.item.overdue ? '처리 기한을 지났습니다.' : '30분 이상 갱신되지 않은 상태입니다.'} 저장 전 최신 version을 다시 확인합니다.</p></div>}
-        <div className="dialog-fields"><label><span>담당자 사용자 ID</span><input value={assignee} placeholder="비우면 미배정" onChange={(e) => setAssignee(e.target.value)} /></label>
+        <div className="feature-form-grid"><label><span>담당자 사용자 ID</span><input value={assignee} placeholder="비우면 미배정" onChange={(e) => setAssignee(e.target.value)} /></label>
           <label><span>기한</span><input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></label>
           <label className="span2"><span>배정·인계 사유</span><input value={reason} onChange={(e) => setReason(e.target.value)} /></label></div>
         <button className="btn" type="button" disabled={busy || !reason.trim()} onClick={() => void run(() => assignOperationCase(
           selected.item.reportId, selected.item.version, assignee ? Number(assignee) : null,
-          dueAt ? new Date(dueAt).toISOString() : null, reason))}>담당·기한 저장</button>
-        <h3>내부 메모·인수인계</h3><div className="dialog-fields"><label><span>유형</span><select value={noteType} onChange={(e) => setNoteType(e.target.value as CaseNoteType)}>
+          kstInputToIso(dueAt), reason))}>담당·기한 저장</button>
+        <h3>내부 메모·인수인계</h3><div className="feature-form-grid"><label><span>유형</span><select value={noteType} onChange={(e) => setNoteType(e.target.value as CaseNoteType)}>
           <option value="INTERNAL">내부 메모</option><option value="HANDOFF">인수인계</option><option value="REVIEW_REQUEST">재검토 요청</option></select></label>
           <label className="span2"><span>내용</span><textarea value={note} onChange={(e) => setNote(e.target.value)} /></label></div>
         <button className="btn" type="button" disabled={busy || !note.trim()} onClick={() => void run(async () => {
           const next = await addOperationCaseNote(selected.item.reportId, selected.item.version, noteType, note); setNote(''); return next
         })}>기록 추가</button>
-        <h3>협업 메모</h3><ol className="incident-timeline">{selected.notes.map((entry) => <li key={entry.id}>
+        <h3>협업 메모</h3><ol className="case-log">{selected.notes.map((entry) => <li key={entry.id}>
           <span>{formatKstShort(entry.createdAt)}</span><strong>{entry.type}</strong>
           <p>{entry.body} · {entry.author.displayName ?? `#${entry.author.id}`}</p></li>)}</ol>
         {selected.notes.length === 0 && <div className="empty-hint">아직 등록된 메모가 없습니다</div>}
-        <h3>감사 타임라인</h3><ol className="incident-timeline">{selected.events.map((event) => <li key={event.id}>
+        <h3>감사 타임라인</h3><ol className="case-log">{selected.events.map((event) => <li key={event.id}>
           <span>{formatKstShort(event.createdAt)}</span><strong>{event.type}</strong><p>{event.detail} · {event.actor.displayName ?? `#${event.actor.id}`}</p></li>)}</ol>
         {selected.events.length === 0 && <div className="empty-hint">아직 기록된 변경이 없습니다</div>}
       </>}

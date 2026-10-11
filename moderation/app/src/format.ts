@@ -51,6 +51,32 @@ export function formatKstShort(iso: string | null): string {
   return `${p.month}-${p.day} ${p.hour}:${p.minute}`
 }
 
+/**
+ * 날짜·시각 입력 칸(datetime-local)의 값 → 저장값(ISO). <b>칸의 값은 한국 시각이다</b>(HP-516).
+ *
+ * <p>변환을 화면마다 따로 두던 동안 한쪽이 어긋났다 — 변경 세트는 저장할 때는 칸의 값을 UTC로 바꾸면서
+ * 칸에 넣을 때는 UTC 문자열의 앞 16자를 그대로 써서, 10:00으로 저장한 만료 시각이 01:00으로 보였고
+ * 분만 고쳐 저장하면 9시간 이른 시각이 저장됐다. 그래서 두 방향을 이 한 쌍으로 모은다.
+ *
+ * <p>브라우저 시간대가 아니라 한국 시각으로 읽는다 — 이 콘솔은 모든 시각을 한국 시각으로 보여 주므로
+ * (위 formatKst*), 입력만 브라우저 시간대를 따르면 해외에서 연 운영자에게 보이는 값과 저장되는 값이 갈린다.
+ */
+export function kstInputToIso(value: string): string | null {
+  if (!value) return null
+  const d = new Date(`${value}:00+09:00`)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+/** 저장값(ISO) → 날짜·시각 입력 칸의 값("2026-10-12T10:00", 한국 시각). {@link kstInputToIso}의 반대. */
+export function isoToKstInput(iso: string | null): string {
+  const d = kstDate(iso)
+  if (d === null) return ''
+  const p = kstParts(d)
+  // 엔진에 따라 hour12:false가 자정을 "24"로 줄 수 있다 — 칸은 00~23만 받는다.
+  const hour = p.hour === '24' ? '00' : p.hour
+  return `${p.year}-${p.month}-${p.day}T${hour}:${p.minute}`
+}
+
 /** EXT 신고 사유 칩과 1:1(HP-224). */
 export const REASON_LABELS: Record<ReportReason, string> = {
   ABUSE: '욕설·혐오', SPOILER: '스포일러', SPAM: '도배·광고', OTHER: '기타',

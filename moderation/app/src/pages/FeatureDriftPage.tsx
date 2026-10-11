@@ -5,7 +5,7 @@ import type { FeatureChangeSet, FeatureDriftReapply, FeatureDriftState } from '.
 import { realmRoles } from '../auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { env } from '../env'
-import { formatKstShort } from '../format'
+import { formatKstShort, kstInputToIso } from '../format'
 import { useWriting } from '../writing'
 
 const STATUS_LABEL: Record<FeatureDriftState['status'], string> = {
@@ -22,15 +22,11 @@ function canOperate() {
   return roles.includes('admin') || roles.includes('feature_flag_operator')
 }
 
-function localInputToIso(value: string) {
-  return value ? new Date(value).toISOString() : null
-}
-
 function ReapplyDialog({ drift, onClose, onCreated }: {
   drift: FeatureDriftState; onClose: () => void; onCreated: (changeSet: FeatureChangeSet) => void
 }) {
   const [reason, setReason] = useState('')
-  const [jira, setJira] = useState('HP-343')
+  const [jira, setJira] = useState('')
   const [incident, setIncident] = useState('')
   const [safetyExpiresAt, setSafetyExpiresAt] = useState('')
   const [autoRollback, setAutoRollback] = useState(true)
@@ -43,7 +39,7 @@ function ReapplyDialog({ drift, onClose, onCreated }: {
     if (reason.trim().length < 10) { setError('복구 사유를 10자 이상 입력하세요'); return }
     const request: FeatureDriftReapply = {
       reason: reason.trim(), jiraReference: jira.trim() || null,
-      incidentReference: incident.trim() || null, safetyExpiresAt: localInputToIso(safetyExpiresAt),
+      incidentReference: incident.trim() || null, safetyExpiresAt: kstInputToIso(safetyExpiresAt),
       autoRollbackEnabled: autoRollback, verificationWindowSeconds: windowSeconds,
     }
     setBusy(true); setWriting(true); setError(null)

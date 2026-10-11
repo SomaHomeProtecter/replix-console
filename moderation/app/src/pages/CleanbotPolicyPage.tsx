@@ -53,8 +53,8 @@ export default function CleanbotPolicyPage() {
   }))
   const parsedChangeSetId = Number(changeSetId)
   const validChangeSetId = Number.isInteger(parsedChangeSetId) && parsedChangeSetId > 0
-  return <section className="feature-page" aria-label="클린봇 정책">
-    <div className="page-title-row"><div><h1>클린봇 정책</h1><p>정책 버전과 과거 차단 표본 dry-run을 분리해 운영 데이터 변경 없이 비교합니다.</p></div>
+  return <section className="feature-control" aria-label="클린봇 정책">
+    <div className="board-head"><div><h1>클린봇 정책</h1><p>정책 버전과 과거 차단 표본 dry-run을 분리해 운영 데이터 변경 없이 비교합니다.</p></div>
       <button className="btn" type="button" onClick={() => openForm(null)}>새 정책</button></div>
     {error && <div className="error-box" role="alert">{error}</div>}
     <div className="change-workspace"><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
@@ -67,21 +67,24 @@ export default function CleanbotPolicyPage() {
           <div><dt>허용어</dt><dd>{selected.allowedTerms.join(', ') || '—'}</dd></div><div><dt>임계값</dt><dd>{selected.threshold}</dd></div>
           <div><dt>카테고리 매핑</dt><dd>{Object.entries(selected.categoryMapping).map(([from, to]) => `${from} → ${to}`).join(', ') || '—'}</dd></div>
           <div><dt>PROD 변경 세트</dt><dd>{selected.activatedChangeSetId ? `#${selected.activatedChangeSetId}` : '—'}</dd></div></dl>
-        <label><span>조치 사유</span><input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
-        {env.environment === 'PROD' && <label><span>적용 완료 변경 세트 ID</span><input value={changeSetId} onChange={(e) => setChangeSetId(e.target.value)} /></label>}
-        <div className="dialog-actions">
-          {selected.status === 'DRAFT' && <button className="btn" type="button" disabled={busy} onClick={() => openForm(selected)}>초안 수정</button>}
-          {selected.status === 'DRAFT' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => requestCleanbotPolicyReview(selected.id, selected.revision, reason))}>검토 요청</button>}
-          {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
-          {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
-          {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
-          <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { setSimulation(await simulateCleanbotPolicy(selected.id, 100)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }}>표본 dry-run</button>
+        <div className="change-actions">
+          <label><span>조치 사유</span><input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+          {env.environment === 'PROD' && <label><span>적용 완료 변경 세트 ID</span><input value={changeSetId} onChange={(e) => setChangeSetId(e.target.value)} /></label>}
+          <div className="dialog-actions">
+            {selected.status === 'DRAFT' && <button className="btn" type="button" disabled={busy} onClick={() => openForm(selected)}>초안 수정</button>}
+            {selected.status === 'DRAFT' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => requestCleanbotPolicyReview(selected.id, selected.revision, reason))}>검토 요청</button>}
+            {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
+            {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
+            {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
+            <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { setSimulation(await simulateCleanbotPolicy(selected.id, 100)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }}>표본 dry-run</button>
+          </div>
         </div>
         {simulation && <div className="incident-guide"><strong>무변경 시뮬레이션 · 표본 {simulation.sampleCount}</strong>
           <p>신규 차단 {simulation.newlyBlocked} · 신규 허용 {simulation.newlyAllowed} · 유지 {simulation.unchanged} · 실패 {simulation.failures}</p><p>{simulation.limitation}</p></div>}
       </>}</aside></div>
-    {formOpen && <div className="modal-backdrop"><div className="modal-card"><div className="dialog-head"><h2>{editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'}</h2></div>
-      <div className="dialog-fields"><label className="span2"><span>이름</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
+    {formOpen && <div className="dialog-backdrop"><div className="dialog feature-dialog" role="dialog" aria-modal="true" aria-labelledby="cleanbot-form-title">
+      <h2 id="cleanbot-form-title">{editing ? '클린봇 정책 초안 수정' : '새 클린봇 정책'}</h2>
+      <div className="feature-form-grid"><label className="span2"><span>이름</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="span2"><span>차단어 (쉼표 구분)</span><textarea value={blocked} onChange={(e) => setBlocked(e.target.value)} /></label>
         <label className="span2"><span>허용어 (쉼표 구분)</span><textarea value={allowed} onChange={(e) => setAllowed(e.target.value)} /></label>
         <label><span>임계값 0~1</span><input type="number" min="0" max="1" step="0.05" value={threshold} onChange={(e) => setThreshold(e.target.value)} /></label>

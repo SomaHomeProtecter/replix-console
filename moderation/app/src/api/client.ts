@@ -1,7 +1,7 @@
 import { getToken } from '../auth'
 import { env } from '../env'
-import { confirmProductionWrite } from '../prodWriteConfirmation'
-import type { ProductionWriteSummary } from '../prodWriteConfirmation'
+import { confirmProductionWrite, isProductionApproval, spendProductionApproval } from '../prodWriteConfirmation'
+import type { ProductionWriteApproval, ProductionWriteSummary } from '../prodWriteConfirmation'
 
 /** BE ApiError(code·message)를 상태와 함께 실어 나른다 — 403은 서버 판정을 그대로 화면에 드러낸다(DoD). */
 export class ApiHttpError extends Error {
@@ -80,7 +80,7 @@ function endWrite(): void {
 }
 
 export async function apiFetch<T>(
-  path: string, init?: RequestInit, writeSummary?: ProductionWriteSummary,
+  path: string, init?: RequestInit, writeSummary?: ProductionWriteSummary | ProductionWriteApproval,
 ): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase()
   const isWrite = method !== 'GET' && method !== 'HEAD'
@@ -90,7 +90,15 @@ export async function apiFetch<T>(
     if (!writeSummary) {
       throw new Error('PROD 쓰기 요청 설명이 없어 전송을 차단했습니다')
     }
-    await confirmProductionWrite(writeSummary)
+    // 묶음 확인(HP-514)으로 이미 확인받은 쓰기는 창을 다시 띄우지 않는다 — 대신 확인한
+    // 건수를 넘으면 막는다. 승인이 아닌 설명이면 지금처럼 건마다 확인한다.
+    if (isProductionApproval(writeSummary)) {
+      if (!spendProductionApproval(writeSummary)) {
+        throw new Error('묶음 확인의 승인 건수를 넘어 전송을 차단했습니다')
+      }
+    } else {
+      await confirmProductionWrite(writeSummary)
+    }
   }
 
   const controller = new AbortController()

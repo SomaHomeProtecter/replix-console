@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, isSuspensionActive,
-  reporterTrustLine, rowStatusLabel, suspensionChip, suspensionState, withRo,
+  actionLabel, elapsedSince, formatKst, formatKstShort, formatKstTime, isoToKstInput, isSuspensionActive,
+  kstInputToIso, reporterTrustLine, rowStatusLabel, suspensionChip, suspensionState, withRo,
 } from './format'
 
 describe('formatKst 계열', () => {
@@ -229,5 +229,33 @@ describe('withRo — 로/으로를 받침에 맞춰 붙인다', () => {
   /** 한글이 아닌 끝 글자는 규칙을 적용할 근거가 없으므로 "로"로 둔다. */
   it('한글이 아닌 끝 글자는 "로"', () => {
     expect(withRo('Grafana')).toBe('Grafana로')
+  })
+})
+
+/**
+ * 날짜·시각 입력 칸 ↔ 저장값(HP-516). 칸은 <b>한국 시각</b>이다 — 이 콘솔은 모든 시각을 한국 시각으로
+ * 보여 주므로 입력도 같은 기준이어야 한다. 브라우저 시간대에 기대지 않으니 테스트 머신의 TZ와도 무관하다.
+ */
+describe('날짜·시각 입력 칸 변환', () => {
+  it('칸의 값을 한국 시각으로 읽어 UTC ISO로 바꾼다', () => {
+    expect(kstInputToIso('2026-10-12T10:00')).toBe('2026-10-12T01:00:00.000Z')
+  })
+
+  it('저장값을 칸에 넣으면 같은 한국 시각이 보인다', () => {
+    expect(isoToKstInput('2026-10-12T01:00:00.000Z')).toBe('2026-10-12T10:00')
+    // 날짜 경계 — UTC로는 전날 15시가 한국 시각 자정이다
+    expect(isoToKstInput('2026-10-11T15:00:00Z')).toBe('2026-10-12T00:00')
+  })
+
+  it('저장 → 표시 → 저장 왕복에서 값이 바뀌지 않는다', () => {
+    const saved = '2026-12-31T14:59:00.000Z'
+    expect(kstInputToIso(isoToKstInput(saved))).toBe(saved)
+  })
+
+  it('빈 값·읽을 수 없는 값은 비운다', () => {
+    expect(kstInputToIso('')).toBeNull()
+    expect(kstInputToIso('깨진값')).toBeNull()
+    expect(isoToKstInput(null)).toBe('')
+    expect(isoToKstInput('깨진값')).toBe('')
   })
 })

@@ -20,14 +20,26 @@ const CHIP_CLASSES: Record<UserStatus, string> = {
 type Tab = 'reports' | 'timeline' | 'actions' | 'suspensions'
 
 /**
+ * 사용자 상세 진입점 — <b>사용자가 바뀌면 화면을 새로 만든다</b>(HP-515).
+ *
+ * <p>주소가 /users/A → /users/B로 바뀌어도 라우트는 같은 부품을 다시 쓴다. 그래서 A의 상세·타임라인이
+ * 상태에 남은 채 B의 번호로 그려졌고, 특히 통합 타임라인은 "이미 읽었으면 다시 읽지 않는다"는 조건
+ * 때문에 B 화면에 A의 기록이 그대로 보였다 — 운영자가 남의 이력을 보고 조치할 수 있었다.
+ * 상태마다 초기화 효과를 붙이는 대신 사용자 번호를 key로 줘 <b>통째로 새로 마운트</b>한다. 그러면
+ * A의 늦은 응답도 이미 사라진 부품으로 가서 B 화면을 덮지 못한다(경합까지 구조적으로 없어진다).
+ */
+export default function UserDetailPage() {
+  const { userId } = useParams()
+  return <UserDetailView key={userId} id={Number(userId)} />
+}
+
+/**
  * 사용자 상세(시안 cm2) — 헤더(아바타·이름·상태 칩(정지 만료 lazy 계산)·userId/provider) +
  * 좌 기본 정보 블록(읽기 전용) / 우 탭 3개(건수 표기). 신고·정지·조치 로그·검색에서 진입한다.
  * 정지/해제 버튼은 정본이 침묵한 보완 — 해제 동선이 없으면 콘솔에서 정지를 되돌릴 수 없다.
  */
-export default function UserDetailPage() {
-  const { userId } = useParams()
+function UserDetailView({ id }: { id: number }) {
   const location = useLocation()
-  const id = Number(userId)
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

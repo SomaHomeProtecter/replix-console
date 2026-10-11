@@ -12,7 +12,7 @@ import type {
 } from '../api/types'
 import { realmRoles } from '../auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
-import { formatKstShort } from '../format'
+import { formatKstShort, isoToKstInput, kstInputToIso } from '../format'
 import { useWriting } from '../writing'
 
 const ROLLOUT_PRESETS = [0, 10, 25, 50, 100]
@@ -30,10 +30,6 @@ function permissions() {
   }
 }
 
-function localInputToIso(value: string) {
-  return value ? new Date(value).toISOString() : null
-}
-
 function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
   flags: FeatureFlagRow[]
   onClose: () => void
@@ -41,7 +37,7 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
 }) {
   const [title, setTitle] = useState('')
   const [purpose, setPurpose] = useState('')
-  const [jira, setJira] = useState('HP-343')
+  const [jira, setJira] = useState('')
   const [incident, setIncident] = useState('')
   const [autoRollback, setAutoRollback] = useState(true)
   const [verificationWindow, setVerificationWindow] = useState(60)
@@ -137,8 +133,8 @@ function ChangeSetCreateDialog({ flags, onClose, onCreated }: {
                         aria-pressed={item.rolloutPercentage === preset}
                         onClick={() => patchItem(flag.key, { rolloutPercentage: preset })}>{preset}%</button>)}</>}
                 <input aria-label={`${flag.displayName} 만료 시각`} type="datetime-local"
-                    value={item.expiresAt ? item.expiresAt.slice(0, 16) : ''}
-                    onChange={(event) => patchItem(flag.key, { expiresAt: localInputToIso(event.target.value) })} />
+                    value={isoToKstInput(item.expiresAt)}
+                    onChange={(event) => patchItem(flag.key, { expiresAt: kstInputToIso(event.target.value) })} />
               </div>}
             </div>
           })}
@@ -255,14 +251,14 @@ function ChangeSetDetail({ changeSet, onReload }: {
           cancelFeatureChangeSet(changeSet.id, changeSet.version, reason))}>취소 처리</button>}
         {workflow}
         {rollbackable && <button className="btn btn-danger-solid" disabled={!operate || busy} onClick={() => void action(() =>
-          rollbackFeatureChangeSet(changeSet.id, changeSet.version, localInputToIso(safetyExpiresAt), reason))}>롤백 초안</button>}
+          rollbackFeatureChangeSet(changeSet.id, changeSet.version, kstInputToIso(safetyExpiresAt), reason))}>롤백 초안</button>}
       </div>
       {rollbackable && changeSet.environment === 'PROD' && <label><span>OFF 복구 안전 만료</span>
         <input type="datetime-local" value={safetyExpiresAt} onChange={(event) => setSafetyExpiresAt(event.target.value)} /></label>}
       {schedulable && <div className="schedule-row"><input aria-label="예약 적용 시각" type="datetime-local"
           value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} />
         <button className="btn" disabled={!operate || busy || !scheduledAt} onClick={() => void action(() =>
-          scheduleFeatureChangeSet(changeSet.id, changeSet.version, localInputToIso(scheduledAt)!, reason))}>예약 적용</button></div>}
+          scheduleFeatureChangeSet(changeSet.id, changeSet.version, kstInputToIso(scheduledAt)!, reason))}>예약 적용</button></div>}
     </div>}
     <h3>불변 이벤트</h3>
     <ol className="change-events">{changeSet.events.map((event) => <li key={event.id}>

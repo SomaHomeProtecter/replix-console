@@ -265,18 +265,56 @@ function EpisodeWorkspace({ work, episode, writable, onEpisodeChanged, onError }
 }
 
 /* ─── 회차 정보 ────────────────────────────────────────────────────── */
+/* 편집 칸에 넣을 값 — 회차의 지금 값을 칸의 글자로 바꾼 것. */
+function episodeFields(e: Episode) {
+  return { label: e.label ?? '', start: isoToLocalInput(e.airStartAt), end: isoToLocalInput(e.airEndAt), runtime: e.runtimeSec ? String(Math.round(e.runtimeSec / 60)) : '' }
+}
+
 function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode: Episode; work: Work; writable: boolean; onChanged: () => void; onError: (m: string) => void }) {
   const [edit, setEdit] = useState(false)
-  const [label, setLabel] = useState(episode.label ?? '')
-  const [start, setStart] = useState(isoToLocalInput(episode.airStartAt))
-  const [end, setEnd] = useState(isoToLocalInput(episode.airEndAt))
-  const [runtime, setRuntime] = useState(episode.runtimeSec ? String(Math.round(episode.runtimeSec / 60)) : '')
+  const [label, setLabel] = useState('')
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [runtime, setRuntime] = useState('')
   const [busy, setBusy] = useState(false)
+  /* 칸은 '고치기'를 누른 순간의 회차 값으로 채운다(HP-517). 처음 열 때만 채우던 동안, 그래프의 '회차 정보에 적용'으로
+     바뀐 방영 시각을 칸이 몰라 저장하는 순간 옛 값으로 되돌렸다(비어 있던 종료 시각이면 지웠다). 칸을 연 뒤 다른 곳에서
+     또 바뀌는 경우까지 막으려고, 사람이 손대지 않은 칸은 저장할 때의 회차 값을 그대로 보낸다. */
+  const opened = useRef(episodeFields(episode))
+  const startEdit = () => {
+    const f = episodeFields(episode)
+    opened.current = f
+    setLabel(f.label); setStart(f.start); setEnd(f.end); setRuntime(f.runtime); setEdit(true)
+  }
+  /* 편집하는 사이 회차가 바뀌면(그래프의 '회차 정보에 적용' 등) 손대지 않은 칸을 새 값으로 다시 채운다 — 저장은 어차피 새 값을
+     보내므로, 칸이 옛 값을 보이면 보이는 것과 저장되는 것이 갈린다. 사람이 고친 칸은 그대로 둔다. */
+  const latest = episodeFields(episode)
+  useEffect(() => {
+    if (!edit) return
+    const o = opened.current
+    if (label === o.label) setLabel(latest.label)
+    if (start === o.start) setStart(latest.start)
+    if (end === o.end) setEnd(latest.end)
+    if (runtime === o.runtime) setRuntime(latest.runtime)
+    opened.current = {
+      label: label === o.label ? latest.label : o.label, start: start === o.start ? latest.start : o.start,
+      end: end === o.end ? latest.end : o.end, runtime: runtime === o.runtime ? latest.runtime : o.runtime,
+    }
+    // 칸의 값이 아니라 회차 값이 바뀔 때만 돈다 — 칸을 고칠 때마다 돌면 '손대지 않음' 판정이 흐려진다.
+  }, [latest.label, latest.start, latest.end, latest.runtime]) // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
-    const s = localInputToIso(start)
-    if (!s) { onError('방영 시작 시각은 비울 수 없습니다.'); return }
+    const o = opened.current
+    const airStartAt = start === o.start ? episode.airStartAt : localInputToIso(start)
+    if (!airStartAt) { onError('방영 시작 시각은 비울 수 없습니다.'); return }
+    const body = {
+      label: label === o.label ? episode.label : (label || null),
+      airStartAt,
+      airEndAt: end === o.end ? episode.airEndAt : localInputToIso(end),
+      runtimeSec: runtime === o.runtime ? episode.runtimeSec : (runtime ? Number(runtime) * 60 : null),
+      episodeId: episode.episodeId,
+    }
     setBusy(true)
-    try { await api.updateEpisode(episode.id, { label: label || null, airStartAt: s, airEndAt: localInputToIso(end), runtimeSec: runtime ? Number(runtime) * 60 : null, episodeId: episode.episodeId }); setEdit(false); onChanged() }
+    try { await api.updateEpisode(episode.id, body); setEdit(false); onChanged() }
     catch (e) { onError(errText(e)) } finally { setBusy(false) }
   }
   const unlink = async () => {
@@ -290,7 +328,7 @@ function EpisodeInfo({ episode, work, writable, onChanged, onError }: { episode:
           <h2 className="font-bold">회차 정보</h2>
           <p className="lead mt-1">방영 시각은 글을 모을 범위와 채팅 시각 계산의 기준입니다. 편성표 시각이 아니라 실제로 본편이 시작하고 끝난 시각을 적으세요. 정확한 값은 수집 뒤 분당 글 수 그래프와 AI 장면 복원이 알려 줍니다.</p>
         </div>
-        {writable && !edit && <button className="btn" onClick={() => setEdit(true)}>고치기</button>}
+        {writable && !edit && <button className="btn" onClick={startEdit}>고치기</button>}
       </div>
       <div className="card-body grid grid-cols-2 gap-x-10 gap-y-4">
         {!edit ? (
@@ -775,6 +813,65 @@ function engagementLine(e: EngagementSummary | null | undefined) {
   return <p className="text-xs text-muted mt-1">채팅과 함께 넣은 것 — 장면 반응 {e.emojis.toLocaleString()}개 · 누적 감상 시간 {h > 0 ? `${h}시간 ` : ''}{m}분. 지울 때 함께 빠집니다.</p>
 }
 
+/* ─── 다른 환경 넣기 장부(HP-518) ──────────────────────────────────── */
+/* 계획 행의 다른 환경 넣기 기록 — external = {env: {id, batchKey}}(정본 서버가 행마다 남긴다). */
+function extOf(it: PlanItem): Record<string, { id: number; batchKey: string }> { try { return it.external ? JSON.parse(it.external) : {} } catch { return {} } }
+/* 대상 서버에 넣었지만 정본 서버에 아직 기록하지 못한 결과(pending)와, 보내 본 묶음 키(attempted). 이 브라우저에만 남는다 —
+   서버에 둘 자리가 없어서다. 장부가 사라져도(다른 브라우저·저장소 정리) 종전보다 나빠지지는 않는다. */
+type OtherRecord = { batchKey: string; results: { itemId: number; remoteInjectionId: number | null }[] }
+type OtherLedger = { attempted: string[]; pending: OtherRecord[] }
+const otherLedgerKey = (planId: number) => `replix_seeding_other_${WORKSPACE.env}_${OTHER.env}_${planId}`
+function readOtherLedger(planId: number): OtherLedger {
+  try { const s = localStorage.getItem(otherLedgerKey(planId)); const l = s ? JSON.parse(s) as Partial<OtherLedger> : {}; return { attempted: l.attempted ?? [], pending: l.pending ?? [] } }
+  catch { return { attempted: [], pending: [] } }
+}
+function writeOtherLedger(planId: number, l: OtherLedger) {
+  try { if (l.attempted.length || l.pending.length) localStorage.setItem(otherLedgerKey(planId), JSON.stringify(l)); else localStorage.removeItem(otherLedgerKey(planId)) }
+  catch { /* 저장할 수 없으면 이번 넣기 안에서만 지킨다 */ }
+}
+function noteOtherAttempt(planId: number, batchKey: string) { const l = readOtherLedger(planId); if (!l.attempted.includes(batchKey)) writeOtherLedger(planId, { ...l, attempted: [...l.attempted, batchKey] }) }
+function keepOtherPending(planId: number, record: OtherRecord) { const l = readOtherLedger(planId); writeOtherLedger(planId, { ...l, pending: [...l.pending, record] }) }
+function clearOtherLedger(planId: number) { writeOtherLedger(planId, { attempted: [], pending: [] }) }
+
+/* 정본 서버 기록 — 순간 오류로 결과를 잃지 않게 세 번까지 시도한다(1초·2초 간격). 서버는 같은 기록을 다시 받아도 같은 값으로 덮는다. */
+async function recordOtherWithRetry(planId: number, batchKey: string, results: OtherRecord['results']): Promise<PlanView> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await api.recordExternal(planId, OTHER.env, batchKey, results) }
+    catch (e) { if (attempt >= 2) throw e; await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt)) }
+  }
+}
+
+/* 묶음들의 장면 반응·감상 시간을 대상 서버에 만든다(HP-436). 실패는 errors에 모으고 계속한다 — 채팅은 이미 들어갔다.
+   돌려주는 값은 마지막으로 받은 요약이다. */
+async function engageOther(token: string, batchKeys: string[], errors: string[]): Promise<EngagementSummary | null> {
+  let eng: EngagementSummary | null = null
+  for (const key of batchKeys) {
+    try { eng = await callOther(OTHER.api, token, 'POST', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(key)}/engagement`) as EngagementSummary }
+    catch (e) { errors.unshift(`반응·감상 시간 넣기 실패: ${errText(e)}`) }
+  }
+  return eng
+}
+
+/* 장부에 남은 결과를 먼저 기록한다. 하나라도 못 하면 멈춘다 — 기록을 마치기 전에 다시 넣으면 같은 채팅이 또 들어간다.
+   돌려주는 view는 마지막 기록의 응답(기록할 것이 없었으면 null), settled는 이번에 기록을 마친 묶음 키다. */
+async function settleOtherLedger(planId: number): Promise<{ view: PlanView | null; settled: string[] }> {
+  const l = readOtherLedger(planId)
+  if (l.pending.length === 0) return { view: null, settled: [] }
+  let view: PlanView | null = null
+  const left: OtherRecord[] = []
+  const settled: string[] = []
+  for (const p of l.pending) {
+    try { view = await recordOtherWithRetry(planId, p.batchKey, p.results); settled.push(p.batchKey) }
+    catch { left.push(p) }
+  }
+  writeOtherLedger(planId, { ...readOtherLedger(planId), pending: left })
+  if (left.length) {
+    const n = left.reduce((a, p) => a + p.results.length, 0)
+    throw new Error(`지난번 ${OTHER.label} 넣기 결과 ${n.toLocaleString()}건을 아직 운영 서버에 기록하지 못했습니다. 같은 채팅이 두 번 들어가지 않도록, 기록을 마칠 때까지 다시 넣지 않습니다. 잠시 뒤 다시 누르세요.`)
+  }
+  return { view, settled: Array.from(new Set(settled)) }
+}
+
 /* ─── 3단계: AI 계획과 4단계: 주입 ───────────────────────────────────── */
 function PlanStep({ episode, plans, injections, writable, reload, onError }: { episode: Episode; plans: Plan[]; injections: Injection[]; writable: boolean; reload: () => void; onError: (m: string) => void }) {
   const [planId, setPlanId] = useState<number | null>(null)
@@ -804,63 +901,101 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
     const n = view.items.filter((x) => x.item.accepted && !x.item.injectionId).length
     if (!await confirmWrite(WORKSPACE.env, { target: `${WORKSPACE.label} 서버 · ${episode.label ?? episode.airDate} 채팅`, change: `계획 #${view.plan.id}의 수락 ${n.toLocaleString()}건을 채팅으로 넣기`, reason: '넣은 뒤에는 "넣은 것 모두 지우기"로 계획 단위로 되돌릴 수 있습니다' },
       `수락한 ${n.toLocaleString()}건을 이 회차의 채팅으로 넣습니다. 넣은 뒤에는 "넣은 채팅 모두 지우기"나 익스텐션의 시딩 도구에서 한 건씩 지울 수 있습니다.`)) return
-    setBusy(true); try { setView(await api.executePlan(view.plan.id)) } catch (e) { onError(errText(e)); setBusy(false) }
+    setBusy(true)
+    try {
+      const v = await api.executePlan(view.plan.id)
+      setView(v)
+      /* 넣기는 서버 뒤에서 돌고 응답은 곧바로 온다. 넣을 행이 적으면 응답을 만들기 전에 끝나 RUNNING이 아니라 EXECUTED가
+         오는데, 진행 지켜보기(위 효과)는 RUNNING일 때만 돌아 잠금이 영영 안 풀렸다(HP-519). 지켜볼 일이 없으면 곧바로 푼다. */
+      if (v.plan.status !== 'RUNNING') { setBusy(false); reload() }
+    } catch (e) { onError(errText(e)); setBusy(false) }
   }
   const rollback = async () => {
     if (!view || !await confirmWrite(WORKSPACE.env, { target: `${WORKSPACE.label} 서버 · ${episode.label ?? episode.airDate} 채팅`, change: `계획 #${view.plan.id}이 넣은 채팅 모두 지우기`, reason: '계획을 검수 대기 상태로 되돌립니다' },
       '이 계획이 넣은 채팅을 모두 지우고 검수 대기 상태로 되돌립니다.')) return
     setBusy(true); try { setView(await api.rollbackPlan(view.plan.id)); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
-  const remove = async () => { if (!view || !confirm('이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return; setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
+  /* 다른 서버에만 넣으면 계획은 초안으로 남아 지울 수 있었다 — 지우면 그 서버의 채팅을 지울 화면이 사라진다(HP-518 리뷰). */
+  const otherInjected = !!view && (view.items.some((x) => !!extOf(x.item)[OTHER.env]) || readOtherLedger(view.plan.id).attempted.length > 0)
+  const remove = async () => { if (!view || otherInjected || !confirm('이 계획을 지웁니다. 아직 채팅에 넣지 않은 계획만 지울 수 있습니다.')) return; setBusy(true); try { await api.deletePlan(view.plan.id); setPlanId(null); reload() } catch (e) { onError(errText(e)) } finally { setBusy(false) } }
 
   /* 다른 환경에 넣기(HP-436): 수락했고 그 환경에 아직 안 넣은 행을, 정본 서버가 환산한 재생 초와 함께 그 서버의 외부 넣기 API 로
-     보낸다(500건씩). 결과를 정본 서버에 행별로 기록해 표에 "개발 넣음"이 보이게 한다. */
-  const extOf = (it: PlanItem): Record<string, { id: number; batchKey: string }> => { try { return it.external ? JSON.parse(it.external) : {} } catch { return {} } }
+     보낸다(500건씩). 결과를 정본 서버에 행별로 기록해 표에 "개발 넣음"이 보이게 한다.
+     대상 서버는 같은 행이 다시 와도 걸러 내지 않으므로 기록을 잃으면 안 된다(HP-518) — 기록이 끝내 실패하면 결과를 장부에
+     남기고 멈추며, 다음 넣기·지우기는 장부부터 기록한다. 시도한 묶음 키도 보내기 전에 장부에 적어 '모두 지우기'가 지운다. */
   const [extProgress, setExtProgress] = useState<string | null>(null)
   const [otherEngagement, setOtherEngagement] = useState<EngagementSummary | null>(null)
   const injectOther = async () => {
     if (!view) return
     if (!view.platformEpisodeId || !view.platformCode) { onError('이 회차는 넷플릭스 회차와 연결되지 않아 다른 환경에 넣을 수 없습니다.'); return }
-    const rows = view.items.filter((x) => x.item.accepted && !x.item.error && !extOf(x.item)[OTHER.env] && x.previewSec != null)
-    if (rows.length === 0) { onError(`${OTHER.label} 서버에 넣을 행이 없습니다.`); return }
-    if (!await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${view.plan.id}의 수락 ${rows.length.toLocaleString()}건을 채팅으로 넣기`, reason: `${OTHER.label} 서버에 그 회차가 없으면 실패합니다` },
-      `수락한 ${rows.length.toLocaleString()}건을 ${OTHER.label} 서버(${OTHER.api})의 같은 회차 채팅에 넣습니다. ${OTHER.label} 서버에 그 회차가 없으면 실패합니다.`)) return
     setBusy(true)
     try {
-      const token = await secondaryToken(OTHER)
-      const batchKey = `plan:${WORKSPACE.env}:${view.plan.id}:${Date.now().toString(36)}`
-      const results: { itemId: number; remoteInjectionId: number | null }[] = []
+      // 지난번에 기록하지 못한 결과부터 기록한다 — 그래야 아래 '넣을 행'에서 이미 들어간 행이 빠진다.
+      const { view: fresh, settled } = await settleOtherLedger(view.plan.id)
+      const current = fresh ?? view
+      if (fresh) setView(fresh)
       const errors: string[] = []
+      let token: string | null = null
+      if (settled.length) {
+        // 기록만 늦게 마친 묶음의 반응·감상 시간은 여기서 바로 부른다 — 새로 넣을 행이 없거나 아래 확인을 취소해도
+        // 빠지지 않게(HP-518 리뷰). 서버는 이미 만든 묶음이면 그 요약을 그대로 준다.
+        token = await secondaryToken(OTHER)
+        setOtherEngagement(await engageOther(token, settled, errors))
+      }
+      const rows = current.items.filter((x) => x.item.accepted && !x.item.error && !extOf(x.item)[OTHER.env] && x.previewSec != null)
+      if (rows.length === 0) {
+        // 정산만으로 끝났으면 오류가 아니다 — 표에 방금 기록한 행이 '넣음'으로 보인다.
+        if (settled.length) { if (errors.length) onError(errors[0]); reload() } else onError(`${OTHER.label} 서버에 넣을 행이 없습니다.`)
+        return
+      }
+      if (!await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${current.plan.id}의 수락 ${rows.length.toLocaleString()}건을 채팅으로 넣기`, reason: `${OTHER.label} 서버에 그 회차가 없으면 실패합니다` },
+        `수락한 ${rows.length.toLocaleString()}건을 ${OTHER.label} 서버(${OTHER.api})의 같은 회차 채팅에 넣습니다. ${OTHER.label} 서버에 그 회차가 없으면 실패합니다.`)) return
+      token ??= await secondaryToken(OTHER)
+      const batchKey = `plan:${WORKSPACE.env}:${current.plan.id}:${Date.now().toString(36)}`
+      noteOtherAttempt(current.plan.id, batchKey)
+      let injected = 0
       for (let i = 0; i < rows.length; i += 500) {
         const chunk = rows.slice(i, i + 500)
         setExtProgress(`${OTHER.label} 서버에 넣는 중 ${Math.min(i + 500, rows.length)} / ${rows.length}`)
         const items: ExternalItem[] = chunk.map((x) => ({ ref: String(x.item.id), ghostKey: x.item.ghostKey ?? (x.item.seedPostId != null ? `post:${x.item.seedPostId}` : null), message: x.item.message, playbackSec: x.previewSec!, spoiler: x.item.spoiler, kind: x.item.kind }))
-        const r = await callOther(OTHER.api, token, 'POST', '/api/v1/admin/seeding/external-injections', { platformCode: view.platformCode, platformEpisodeId: view.platformEpisodeId, batchKey, origin: `${WORKSPACE.env}:plan:${view.plan.id}`, items }) as { results: ExternalResult[] }
+        const r = await callOther(OTHER.api, token!, 'POST', '/api/v1/admin/seeding/external-injections', { platformCode: current.platformCode, platformEpisodeId: current.platformEpisodeId, batchKey, origin: `${WORKSPACE.env}:plan:${current.plan.id}`, items }) as { results: ExternalResult[] }
+        const results: { itemId: number; remoteInjectionId: number | null }[] = []
         for (const x of r.results) { if (x.injectionId) results.push({ itemId: Number(x.ref), remoteInjectionId: x.injectionId }); else if (x.error) errors.push(x.error) }
-        setView(await api.recordExternal(view.plan.id, OTHER.env, batchKey, results))
+        if (results.length === 0) continue
+        try {
+          setView(await recordOtherWithRetry(current.plan.id, batchKey, results))
+          injected += results.length
+        } catch (e) {
+          // 대상 서버에는 들어갔는데 정본 서버에 기록하지 못했다. 결과를 장부에 남기고 멈춘다 — 계속 넣으면 기록 못 한 행만 늘어난다.
+          keepOtherPending(current.plan.id, { batchKey, results })
+          throw new Error(`${OTHER.label} 서버에 넣은 ${results.length.toLocaleString()}건을 운영 서버에 기록하지 못했습니다. 다시 누르면 기록부터 마치고 이어서 넣습니다. (${errText(e)})`)
+        }
       }
       // 채팅이 다 들어간 뒤 한 번 — 묶음 전체를 보고 장면 반응·감상 시간을 만든다(HP-436, 2026-10-02 결정).
-      let eng: EngagementSummary | null = null
-      if (results.length) {
+      if (injected) {
         setExtProgress(`${OTHER.label} 서버에 반응·감상 시간 넣는 중`)
-        try { eng = await callOther(OTHER.api, token, 'POST', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(batchKey)}/engagement`) as EngagementSummary }
-        catch (e) { errors.unshift(`반응·감상 시간 넣기 실패: ${errText(e)}`) }
+        setOtherEngagement(await engageOther(token, [batchKey], errors))
       }
-      setExtProgress(null)
-      setOtherEngagement(eng)
-      if (errors.length) onError(`${OTHER.label} 서버에 ${results.length}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`)
+      if (errors.length) onError(`${OTHER.label} 서버에 ${injected}건을 넣었고 ${errors.length}건은 실패했습니다. 첫 실패: ${errors[0]}`)
       reload()
-    } catch (e) { setExtProgress(null); onError(errText(e)) } finally { setBusy(false) }
+    } catch (e) { onError(errText(e)) } finally { setExtProgress(null); setBusy(false) }
   }
   const rollbackOther = async () => {
     if (!view) return
-    const batches = Array.from(new Set(view.items.map((x) => extOf(x.item)[OTHER.env]?.batchKey).filter(Boolean))) as string[]
-    if (batches.length === 0 || !await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${view.plan.id}이 넣은 채팅 모두 지우기`, reason: `${OTHER.label} 서버에 넣은 묶음만 지웁니다` },
-      `${OTHER.label} 서버에 넣은 이 계획의 채팅을 모두 지웁니다.`)) return
     setBusy(true)
     try {
+      // 다른 사람이 그사이 넣거나 지웠을 수 있다 — 낡은 화면이 아니라 방금 읽은 계획으로 지울 묶음을 정한다.
+      const { view: fresh } = await settleOtherLedger(view.plan.id)
+      const current = fresh ?? await api.plan(view.plan.id)
+      setView(current)
+      // 기록된 묶음에 더해, 보내 보았지만 기록이 없는 묶음(응답을 못 받고 끊긴 경우)도 지운다 — 대상 서버에 없으면 0건이다.
+      const recorded = current.items.map((x) => extOf(x.item)[OTHER.env]?.batchKey).filter(Boolean) as string[]
+      const batches = Array.from(new Set([...recorded, ...readOtherLedger(current.plan.id).attempted]))
+      if (batches.length === 0) return
+      if (!await confirmWrite(OTHER.env, { target: `${OTHER.label} 서버(${OTHER.api}) · 같은 회차 채팅`, change: `계획 #${current.plan.id}이 넣은 채팅 모두 지우기`, reason: `${OTHER.label} 서버에 넣은 묶음만 지웁니다` },
+        `${OTHER.label} 서버에 넣은 이 계획의 채팅을 모두 지웁니다.`)) return
       const token = await secondaryToken(OTHER)
       for (const b of batches) await callOther(OTHER.api, token, 'DELETE', `/api/v1/admin/seeding/external-injections/${encodeURIComponent(b)}`)
-      setView(await api.clearExternal(view.plan.id, OTHER.env)); setOtherEngagement(null); reload()
+      setView(await api.clearExternal(current.plan.id, OTHER.env)); clearOtherLedger(current.plan.id); setOtherEngagement(null); reload()
     } catch (e) { onError(errText(e)) } finally { setBusy(false) }
   }
 
@@ -965,7 +1100,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
             {stats && <div className="stat"><b>{stats.otherDone.toLocaleString()}</b><span>{OTHER.label} 서버에 넣은 채팅 (이 계획)</span></div>}
             <span className="flex-1" />
             {!episode.episodeId && <span className="text-sm text-warn">넷플릭스 회차가 연결되지 않아 채팅을 넣을 수 없습니다.</span>}
-            {view && writable && view.plan.status === 'DRAFT' && <button className="btn-danger" disabled={busy} onClick={remove}>계획 #{view.plan.id} 지우기</button>}
+            {view && writable && view.plan.status === 'DRAFT' && <button className="btn-danger" disabled={busy || otherInjected} title={otherInjected ? `${OTHER.label} 서버에 넣은 채팅을 먼저 지우세요` : undefined} onClick={remove}>계획 #{view.plan.id} 지우기</button>}
           </div>
           {view && writable && stats && (
             <div className="grid grid-cols-2 gap-4">
@@ -987,7 +1122,7 @@ function PlanStep({ episode, plans, injections, writable, reload, onError }: { e
                   <button className="btn-primary" disabled={busy || !episode.episodeId || stats.accepted - stats.otherDone <= 0} onClick={injectOther}>
                     {extProgress ?? `${OTHER.label}에 ${Math.max(0, stats.accepted - stats.otherDone).toLocaleString()}건 넣기`}
                   </button>
-                  {stats.otherDone > 0 && <button className="btn-danger" disabled={busy} onClick={rollbackOther}>{OTHER.label}에 넣은 것 모두 지우기</button>}
+                  {(stats.otherDone > 0 || readOtherLedger(view.plan.id).attempted.length > 0) && <button className="btn-danger" disabled={busy} onClick={rollbackOther}>{OTHER.label}에 넣은 것 모두 지우기</button>}
                 </div>
                 {engagementLine(otherEngagement)}
               </div>

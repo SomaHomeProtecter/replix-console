@@ -6,8 +6,8 @@ import type {
 } from '../api/types'
 import { formatKstShort } from '../format'
 
-/** 확장·웹의 제출 화면과 1:1(세트 A 문구). 값이 아니라 사람이 읽는 말로 보여 준다. */
-const SURFACE_LABELS: Record<FeedbackSurface, string> = { EXT: '확장', WEB: '웹' }
+/** 익스텐션·웹의 제출 화면과 1:1(세트 A 문구). 값이 아니라 사람이 읽는 말로 보여 준다. */
+const SURFACE_LABELS: Record<FeedbackSurface, string> = { EXT: '익스텐션', WEB: '웹' }
 const CATEGORY_LABELS: Record<FeedbackCategory, string> = {
   ANNOY: '불편해요', BUG: '버그예요', IDEA: '이런 게 있으면', PRAISE: '잘 쓰고 있어요',
 }

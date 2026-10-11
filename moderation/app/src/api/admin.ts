@@ -1,3 +1,6 @@
+import { env } from '../env'
+import { approveProductionBatch } from '../prodWriteConfirmation'
+import type { ProductionWriteApproval } from '../prodWriteConfirmation'
 import { apiDownload, apiFetch, qs } from './client'
 import type {
   AdminActionLogResponse, AdminActionType, AuthorMessages, ReportPage, ReportReason, ReportStatus,
@@ -78,14 +81,32 @@ export function reopenReport(reportId: number): Promise<ResolveResult> {
  * @param signal 일괄 가림이 <b>취소</b>를 걸 수 있게 받는다(HP-298). 취소해도 이미 서버에 닿은
  *   건은 처리될 수 있으므로, 취소 뒤에는 목록을 다시 읽어 실제 상태로 맞춘다 — 취소는 "안 나간
  *   것으로 친다"가 아니라 "더 보내지 않고 기다리기를 멈춘다"이다.
+ * @param approval 묶음 확인({@link approveBlindBatch})으로 받은 승인(HP-514). 있으면 건마다 확인 창을
+ *   띄우지 않고 그 승인을 한 건 쓴다 — 확인한 건수를 넘으면 apiFetch가 막는다.
  */
 export function blindMessage(
-  episodeId: number, msgId: string, signal?: AbortSignal,
+  episodeId: number, msgId: string, signal?: AbortSignal, approval?: ProductionWriteApproval,
 ): Promise<{ blinded: boolean }> {
-  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST', signal }, {
+  return apiFetch(`/api/v1/admin/messages/${episodeId}/${msgId}/blind`, { method: 'POST', signal }, approval ?? {
     target: `메시지 ${episodeId}:${msgId}`, change: '현재 상태 → 강제 가림',
     reason: '운영자가 신고·작성자 메시지를 검토해 선택',
   })
+}
+
+/**
+ * 작성자 글 일괄 가림의 묶음 확인(HP-514). PROD가 아니면 확인 없이 undefined —
+ * DEV 쓰기는 원래 확인 창을 거치지 않는다. 취소하면 reject.
+ */
+export function approveBlindBatch(
+  episodeId: number, authorId: number, msgIds: string[],
+): Promise<ProductionWriteApproval | undefined> {
+  if (env.environment !== 'PROD') return Promise.resolve(undefined)
+  const shown = msgIds.slice(0, 5).join(', ') + (msgIds.length > 5 ? ` 외 ${msgIds.length - 5}건` : '')
+  return approveProductionBatch({
+    target: `회차 ${episodeId} · 작성자 #${authorId}의 메시지 ${msgIds.length}건 (${shown})`,
+    change: `현재 상태 → 강제 가림 ${msgIds.length}건 (건마다 조치 기록 1행)`,
+    reason: '운영자가 신고·작성자 메시지를 검토해 선택',
+  }, msgIds.length)
 }
 
 /**

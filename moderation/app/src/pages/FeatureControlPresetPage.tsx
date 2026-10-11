@@ -8,10 +8,7 @@ import { realmRoles } from '../auth'
 import FeatureControlTabs from '../components/FeatureControlTabs'
 import { env } from '../env'
 import { useWriting } from '../writing'
-
-function localInputToIso(value: string) {
-  return value ? new Date(value).toISOString() : null
-}
+import { kstInputToIso } from '../format'
 
 function canOperate() {
   const roles = realmRoles()
@@ -25,7 +22,7 @@ function PresetDialog({ preset, onClose, onCreated }: {
 }) {
   const [reason, setReason] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
-  const [jira, setJira] = useState('HP-343')
+  const [jira, setJira] = useState('')
   const [incident, setIncident] = useState('')
   const [autoRollback, setAutoRollback] = useState(true)
   const [verificationWindow, setVerificationWindow] = useState(60)
@@ -38,7 +35,7 @@ function PresetDialog({ preset, onClose, onCreated }: {
     if (reason.trim().length < 10) { setError('적용 사유를 10자 이상 입력하세요'); return }
     if (expiryRequired && !expiresAt) { setError('PROD 중지 프리셋은 만료 시각이 필요합니다'); return }
     const request: FeatureControlPresetApply = {
-      reason: reason.trim(), expiresAt: localInputToIso(expiresAt),
+      reason: reason.trim(), expiresAt: kstInputToIso(expiresAt),
       jiraReference: jira.trim() || null, incidentReference: incident.trim() || null,
       autoRollbackEnabled: autoRollback, verificationWindowSeconds: verificationWindow,
     }
