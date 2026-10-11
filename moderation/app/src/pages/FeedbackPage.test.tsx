@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import { realmRoles } from '@core/auth'
 import type {
   CoveredElement, FeedbackCategory, FeedbackItem, FeedbackSurface, FeedbackTrigger, UninstallReason,
   WantedService,
@@ -394,5 +395,18 @@ describe('피드백 삭제가 겹칠 때', () => {
     expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled() // 2번은 아직 지우는 중
     await user.click(screen.getByRole('button', { name: '삭제' }))
     expect(deleteFeedback).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('조회 전용 계정(HP-529)', () => {
+  it('삭제 버튼을 끄고 이유를 보인다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    renderPage()
+    await user.click((await waitFor(() => rows()))[0])
+    const remove = screen.getByRole('button', { name: '삭제' })
+    expect(remove).toBeDisabled()
+    expect(remove).toHaveAttribute('title', '조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다')
+    expect(screen.getByText('조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다', { selector: '.readonly-note' })).toBeInTheDocument()
   })
 })

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { effectiveActions, mergeSuspendResolve } from '../actionHistory'
 import { exportUserTimeline, getUserDetail, getUserTimeline, suspendUser, unsuspendUser, warnUser } from '../api/admin'
+import { moderateDenied } from '../permissions'
 import type { SuspendDuration, UserDetail, UserStatus, UserTimeline, WarningReason } from '../api/types'
 import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
@@ -42,6 +43,7 @@ function UserDetailView({ id }: { id: number }) {
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [warningOpen, setWarningOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('reports')
@@ -142,23 +144,24 @@ function UserDetailView({ id }: { id: number }) {
           {/* 보낸 신고 집계(HP-270) — 받은 신고 탭과 <b>반대 축</b>이라 라벨 없이는 어느 쪽
               수인지 알 수 없다. 정지 여부를 인상이 아니라 이 수로 판단하라는 자리다. */}
           <div className="sent-trust">{reporterTrustLine(detail.reportsSent)}</div>
+          {denied && <p className="readonly-note">{denied}</p>}
         </div>
         <div className="top-act">
           {profile.status !== 'WITHDRAWN' && (
-            <button type="button" className="btn btn-warn" disabled={busy}
-                onClick={() => setWarningOpen(true)}>
+            <button type="button" className="btn btn-warn" disabled={busy || denied !== null}
+                title={denied ?? undefined} onClick={() => setWarningOpen(true)}>
               경고…
             </button>
           )}
           {profile.status === 'SUSPENDED' && (
-            <button type="button" className="btn" disabled={busy}
-                onClick={() => run(async () => { await unsuspendUser(id) })}>
+            <button type="button" className="btn" disabled={busy || denied !== null}
+                title={denied ?? undefined} onClick={() => run(async () => { await unsuspendUser(id) })}>
               정지 해제
             </button>
           )}
           {profile.status !== 'WITHDRAWN' && (
-            <button type="button" className="btn btn-susp" disabled={busy}
-                onClick={() => setDialogOpen(true)}>
+            <button type="button" className="btn btn-susp" disabled={busy || denied !== null}
+                title={denied ?? undefined} onClick={() => setDialogOpen(true)}>
               계정 정지…
             </button>
           )}

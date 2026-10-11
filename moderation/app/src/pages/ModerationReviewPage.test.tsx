@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import { realmRoles } from '@core/auth'
 import type { ModerationReviewPage as ReviewPage } from '../api/types'
 import ModerationReviewPage from './ModerationReviewPage'
 
@@ -181,5 +182,17 @@ it('더 보기는 현재 행 수를 offset으로 보내고 기존 상세 뒤에 
   expect(screen.getByText('모델 오탐 후보')).toBeInTheDocument()
   expect(admin.listModerationReviews).toHaveBeenLastCalledWith({
     view: 'PENDING', stage: '', offset: 2,
+  })
+})
+
+describe('조회 전용 계정(HP-529)', () => {
+  it('오탐·정탐 판정 버튼을 끄고 이유를 보인다', async () => {
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    render(<ModerationReviewPage />)
+    const decisions = [...await screen.findAllByRole('button', { name: '오탐' }),
+      ...screen.getAllByRole('button', { name: '정탐' })]
+    expect(decisions.length).toBeGreaterThan(0)
+    for (const button of decisions) expect(button).toBeDisabled()
+    expect(screen.getByText('조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다', { selector: '.readonly-note' })).toBeInTheDocument()
   })
 })

@@ -41,6 +41,15 @@ describe('공용 틀 — 개발 서버(localhost)', () => {
     expect(within(nav()).getByRole('link', { name: '신고 큐' })).toHaveAttribute('href', '/moderation/dev/')
   })
 
+  it('조치 메뉴는 성격별 묶음으로 나뉜다 — 묶음 이름이 무리 이름으로 읽힌다(HP-529)', () => {
+    render(<Shell section="moderation" path="/moderation/dev/" search={null}>본문</Shell>)
+    const names = (group: string) => within(screen.getByRole('group', { name: group }))
+      .getAllByRole('link').map((link) => link.textContent)
+    expect(names('신고·제재')).toEqual(['신고 큐', '운영 협업', '정지 현황', '조치 로그'])
+    expect(names('클린봇')).toEqual(['오탐 검토', '정책 실험'])
+    expect(names('서비스 운영')).toEqual(['기능 제어', '피드백'])
+  })
+
   it('조치가 쓰기 중이면 이동 수단을 모두 잠근다', () => {
     render(
       <Shell section="moderation" path="/moderation/dev/" locked lockedTitle="처리 중" search={null}>본문</Shell>)

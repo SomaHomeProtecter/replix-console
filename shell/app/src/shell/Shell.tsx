@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { logout, roleLabel, switchEnvironment, userName } from '@core/auth'
 import { env } from '@core/env'
@@ -55,10 +56,13 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
     { label: '회차 작업', href: SEEDING_PATH, active: section === 'seeding' && view !== 'prompts', target: targetOf(SEEDING_PATH) },
     { label: 'AI 프롬프트', href: `${SEEDING_PATH}?view=prompts`, active: section === 'seeding' && view === 'prompts', target: targetOf(SEEDING_PATH) },
   ]
-  const moderation: NavItem[] = MODERATION_MENU.map(({ label, path: sub }) => {
-    const href = sub === '/' ? `${basename}/` : `${basename}${sub}`
-    return { label, href, active: section === 'moderation' && moderationActive(rest, sub), target: environment }
-  })
+  const moderation = MODERATION_MENU.map(({ group, items }) => ({
+    group,
+    items: items.map(({ label, path: sub }): NavItem => {
+      const href = sub === '/' ? `${basename}/` : `${basename}${sub}`
+      return { label, href, active: section === 'moderation' && moderationActive(rest, sub), target: environment }
+    }),
+  }))
   // 홈·시딩은 PROD 전용이다(시딩 작업물 정본 = 운영). DEV로 조치를 시험하다 누르면 PROD로 새로 연다.
   const seedingFixed = hosted && environment === 'PROD'
 
@@ -153,7 +157,15 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
               <span className="cs-group-sub">신고 · 정지 · 기능 제어</span>
             </span>
           </div>
-          {moderation.map((item) => link(item, 'cs-nav-item'))}
+          {/* 조치는 성격별 묶음으로 나눈다(HP-529) — 묶음 이름은 화면 읽기 프로그램에 무리 이름으로 읽힌다. */}
+          {moderation.map(({ group, items }) => (
+            <Fragment key={group}>
+              <div className="cs-nav-sub" role="group" aria-label={group}>
+                <span className="cs-nav-subcaption" aria-hidden="true">{group}</span>
+                {items.map((item) => link(item, 'cs-nav-item'))}
+              </div>
+            </Fragment>
+          ))}
 
           {/* 지표 화면은 콘솔에 만들지 않고 있는 곳으로 보낸다(HP-223 확정 제약 ③, HP-297). */}
           {env.grafanaUrl && (

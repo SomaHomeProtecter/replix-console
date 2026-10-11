@@ -5,7 +5,7 @@ import type { FeatureChangeSet, FeatureDriftReapply, FeatureDriftState } from '.
 import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { env } from '@core/env'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
@@ -99,7 +99,7 @@ export default function FeatureDriftPage() {
   }), [rows])
 
   return <section className="feature-control drift-page" aria-label="runtime drift 해소">
-    <div className="board-head"><div><h1>기능 제어</h1><p>의도한 전파와 실제 drift를 구분해 다음 조치를 결정합니다.</p></div>
+    <div className="board-head"><div><h1>{featureControlTitle('/feature-control/drift')}</h1><p>의도한 전파와 실제 drift를 구분해 다음 조치를 결정합니다.</p></div>
       <span className="filter-note">점검 {counts.blocking} · 전파 중 {counts.propagating}</span>
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>
     <FeatureControlTabs />

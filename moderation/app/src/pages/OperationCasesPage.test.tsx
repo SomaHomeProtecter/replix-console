@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import { realmRoles } from '@core/auth'
 import type { OperationCaseDetail, OperationCasePage } from '../api/types'
 import OperationCasesPage from './OperationCasesPage'
 
@@ -39,5 +40,19 @@ describe('운영 협업 화면(HP-347)', () => {
     await user.type(screen.getByLabelText('배정·인계 사유'), '신고 검토를 인계합니다')
     await user.click(screen.getByRole('button', { name: '담당·기한 저장' }))
     await waitFor(() => expect(admin.assignOperationCase).toHaveBeenCalledWith(7, 0, 3, null, '신고 검토를 인계합니다'))
+  })
+})
+
+describe('조회 전용 계정(HP-529)', () => {
+  it('담당·기한 저장과 기록 추가를 끄고 이유를 보인다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    render(<OperationCasesPage />)
+    await user.click(await screen.findByText('신고 #7'))
+    const save = await screen.findByRole('button', { name: '담당·기한 저장' })
+    expect(save).toBeDisabled()
+    expect(save).toHaveAttribute('title', '조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다')
+    expect(screen.getByRole('button', { name: '기록 추가' })).toBeDisabled()
+    expect(screen.getByText('조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다', { selector: '.readonly-note' })).toBeInTheDocument()
   })
 })

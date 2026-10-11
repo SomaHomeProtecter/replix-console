@@ -6,6 +6,7 @@ import type {
   CaseNoteType, OperationCaseDetail, OperationCaseRow, OperationCaseView,
 } from '../api/types'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
+import { moderateDenied } from '../permissions'
 
 const VIEWS: Array<[OperationCaseView, string]> = [
   ['ALL', '전체'], ['MINE', '내 담당'], ['UNASSIGNED', '미배정'], ['OVERDUE', '기한 초과'],
@@ -19,6 +20,7 @@ export default function OperationCasesPage() {
   const [truncated, setTruncated] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [assignee, setAssignee] = useState('')
   const [dueAt, setDueAt] = useState('')
   const [reason, setReason] = useState('')
@@ -71,6 +73,7 @@ export default function OperationCasesPage() {
   return <section className="feature-control" aria-label="운영 협업">
     <div className="board-head"><div><h1>운영 협업</h1><p>신고 케이스의 담당·인계·재검토와 동시 처리 상태를 감사합니다.</p></div>
       <button className="btn" type="button" onClick={() => void load()}>새로고침</button></div>
+    {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
     {truncated && <div className="incident-guide"><strong>최근 열린 케이스 200건 기준</strong>
       <p>업무량과 목록은 조회 상한 안의 값입니다. 오래된 케이스는 기존 신고 큐에서 검색하세요.</p></div>}
@@ -92,13 +95,13 @@ export default function OperationCasesPage() {
         <div className="feature-form-grid"><label><span>담당자 사용자 ID</span><input value={assignee} placeholder="비우면 미배정" onChange={(e) => setAssignee(e.target.value)} /></label>
           <label><span>기한</span><input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} /></label>
           <label className="span2"><span>배정·인계 사유</span><input value={reason} onChange={(e) => setReason(e.target.value)} /></label></div>
-        <button className="btn" type="button" disabled={busy || !reason.trim()} onClick={() => void run(() => assignOperationCase(
+        <button className="btn" type="button" disabled={busy || !reason.trim() || denied !== null} title={denied ?? undefined} onClick={() => void run(() => assignOperationCase(
           selected.item.reportId, selected.item.version, assignee ? Number(assignee) : null,
           kstInputToIso(dueAt), reason))}>담당·기한 저장</button>
         <h3>내부 메모·인수인계</h3><div className="feature-form-grid"><label><span>유형</span><select value={noteType} onChange={(e) => setNoteType(e.target.value as CaseNoteType)}>
           <option value="INTERNAL">내부 메모</option><option value="HANDOFF">인수인계</option><option value="REVIEW_REQUEST">재검토 요청</option></select></label>
           <label className="span2"><span>내용</span><textarea value={note} onChange={(e) => setNote(e.target.value)} /></label></div>
-        <button className="btn" type="button" disabled={busy || !note.trim()} onClick={() => void run(async () => {
+        <button className="btn" type="button" disabled={busy || !note.trim() || denied !== null} title={denied ?? undefined} onClick={() => void run(async () => {
           const next = await addOperationCaseNote(selected.item.reportId, selected.item.version, noteType, note); setNote(''); return next
         })}>기록 추가</button>
         <h3>협업 메모</h3><ol className="case-log">{selected.notes.map((entry) => <li key={entry.id}>

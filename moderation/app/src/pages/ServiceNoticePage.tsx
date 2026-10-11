@@ -10,7 +10,7 @@ import type {
 import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
@@ -220,7 +220,7 @@ export default function ServiceNoticePage() {
   }), [notices])
 
   return <section className="feature-control notice-page" aria-label="사용자 공지 관리">
-    <div className="board-head"><div><h1>기능 제어</h1><p>환경별 안내를 미리 보고 예약·게시·종료합니다.</p></div>
+    <div className="board-head"><div><h1>{featureControlTitle('/feature-control/notices')}</h1><p>환경별 안내를 미리 보고 예약·게시·종료합니다.</p></div>
       <span className="filter-note">게시 중 {counts.published} · 예약 {counts.scheduled}</span>
       <button type="button" className="btn" disabled={!canOperate() || loading} onClick={() => setCreating(true)}>새 공지</button>
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>

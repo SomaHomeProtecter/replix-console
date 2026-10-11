@@ -7,6 +7,7 @@ import type { CleanbotPolicy, CleanbotSimulation } from '../api/types'
 import Dialog from '@core/Dialog'
 import { env } from '@core/env'
 import { formatKstShort } from '@core/time'
+import { moderateDenied } from '../permissions'
 
 export default function CleanbotPolicyPage() {
   const [policies, setPolicies] = useState<CleanbotPolicy[]>([])
@@ -14,6 +15,7 @@ export default function CleanbotPolicyPage() {
   const [simulation, setSimulation] = useState<CleanbotSimulation | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<CleanbotPolicy | null>(null)
   const [name, setName] = useState('')
@@ -56,7 +58,8 @@ export default function CleanbotPolicyPage() {
   const validChangeSetId = Number.isInteger(parsedChangeSetId) && parsedChangeSetId > 0
   return <section className="feature-control" aria-label="클린봇 정책">
     <div className="board-head"><div><h1>클린봇 정책</h1><p>정책 버전과 과거 차단 표본 dry-run을 분리해 운영 데이터 변경 없이 비교합니다.</p></div>
-      <button className="btn" type="button" onClick={() => openForm(null)}>새 정책</button></div>
+      <button className="btn" type="button" disabled={denied !== null} title={denied ?? undefined} onClick={() => openForm(null)}>새 정책</button></div>
+    {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
     <div className="change-workspace"><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
       {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} onClick={() => { setSelected(p); setSimulation(null) }}>
@@ -72,12 +75,12 @@ export default function CleanbotPolicyPage() {
           <label><span>조치 사유</span><input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
           {env.environment === 'PROD' && <label><span>적용 완료 변경 세트 ID</span><input value={changeSetId} onChange={(e) => setChangeSetId(e.target.value)} /></label>}
           <div className="dialog-actions">
-            {selected.status === 'DRAFT' && <button className="btn" type="button" disabled={busy} onClick={() => openForm(selected)}>초안 수정</button>}
-            {selected.status === 'DRAFT' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => requestCleanbotPolicyReview(selected.id, selected.revision, reason))}>검토 요청</button>}
-            {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim()} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
-            {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
-            {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId)} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
-            <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { setSimulation(await simulateCleanbotPolicy(selected.id, 100)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }}>표본 dry-run</button>
+            {selected.status === 'DRAFT' && <button className="btn" type="button" disabled={busy || denied !== null} title={denied ?? undefined} onClick={() => openForm(selected)}>초안 수정</button>}
+            {selected.status === 'DRAFT' && <button className="btn" disabled={busy || !reason.trim() || denied !== null} title={denied ?? undefined} onClick={() => void run(() => requestCleanbotPolicyReview(selected.id, selected.revision, reason))}>검토 요청</button>}
+            {selected.status === 'REVIEW_REQUESTED' && <button className="btn" disabled={busy || !reason.trim() || denied !== null} title={denied ?? undefined} onClick={() => void run(() => approveCleanbotPolicy(selected.id, selected.revision, reason))}>승인</button>}
+            {(selected.status === 'APPROVED' || selected.status === 'RETIRED') && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId) || denied !== null} title={denied ?? undefined} onClick={() => void run(() => activateCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>{selected.status === 'RETIRED' ? '이 버전으로 복구' : '활성화'}</button>}
+            {selected.status === 'ACTIVE' && <button className="btn" disabled={busy || !reason.trim() || (env.environment === 'PROD' && !validChangeSetId) || denied !== null} title={denied ?? undefined} onClick={() => void run(() => retireCleanbotPolicy(selected.id, selected.revision, reason, validChangeSetId ? parsedChangeSetId : undefined))}>정책 폐기</button>}
+            <button className="btn" disabled={busy || denied !== null} title={denied ?? undefined} onClick={async () => { setBusy(true); try { setSimulation(await simulateCleanbotPolicy(selected.id, 100)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }}>표본 dry-run</button>
           </div>
         </div>
         {simulation && <div className="incident-guide"><strong>무변경 시뮬레이션 · 표본 {simulation.sampleCount}</strong>

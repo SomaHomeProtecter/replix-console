@@ -15,20 +15,43 @@ import ServiceNoticePage from './pages/ServiceNoticePage'
 import SuspensionBoardPage from './pages/SuspensionBoardPage'
 import UserDetailPage from './pages/UserDetailPage'
 
+export type ModerationPage = { label: string; path: string }
+
 /**
  * 조치 메뉴 — 공용 틀의 왼쪽 메뉴와 홈 카드가 이 목록 하나를 쓴다(HP-523). 화면을 더하면 아래 라우트와 여기만 고친다.
  * 경로는 라우터 basename(/moderation/&lt;env&gt;) 기준이다.
+ *
+ * <p>성격별 묶음(HP-529) — 여덟 항목이 한 줄로 놓여 있으면 어디서 무엇을 하는지 메뉴만 보고는 알 수 없었다. 신고를
+ * 처리하고 제재하는 일, 자동 필터(클린봇)를 다듬는 일, 서비스 전체를 다루는 일로 나눈다.
  */
-export const MODERATION_MENU: readonly { label: string; path: string }[] = [
-  { label: '신고 큐', path: '/' },
-  { label: '정지 현황', path: '/suspensions' },
-  { label: '조치 로그', path: '/actions' },
-  { label: '오탐 검토', path: '/moderation-reviews' },
-  { label: '운영 협업', path: '/operation-cases' },
-  { label: '정책 실험', path: '/moderation-policies' },
-  { label: '기능 제어', path: '/feature-control' },
-  { label: '피드백', path: '/feedback' },
+export const MODERATION_MENU: readonly { group: string; items: readonly ModerationPage[] }[] = [
+  {
+    group: '신고·제재',
+    items: [
+      { label: '신고 큐', path: '/' },
+      { label: '운영 협업', path: '/operation-cases' },
+      { label: '정지 현황', path: '/suspensions' },
+      { label: '조치 로그', path: '/actions' },
+    ],
+  },
+  {
+    group: '클린봇',
+    items: [
+      { label: '오탐 검토', path: '/moderation-reviews' },
+      { label: '정책 실험', path: '/moderation-policies' },
+    ],
+  },
+  {
+    group: '서비스 운영',
+    items: [
+      { label: '기능 제어', path: '/feature-control' },
+      { label: '피드백', path: '/feedback' },
+    ],
+  },
 ]
+
+/** 묶음을 펼친 조치 화면 목록 — 메뉴 순서 그대로(홈 바로가기가 쓴다). */
+export const MODERATION_PAGES: readonly ModerationPage[] = MODERATION_MENU.flatMap((group) => group.items)
 
 /**
  * 조치 콘솔 화면 경로 묶음 — 운영 콘솔 공용 틀(shell/app, HP-506)이 자기 톱바·메뉴 안에 이것을 그린다.

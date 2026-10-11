@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { getIncidentTimeline } from '../api/admin'
 import type { IncidentTimeline } from '../api/types'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { formatKstShort } from '@core/time'
 
 const SOURCE_LABEL = { CHANGE_SET: '변경 세트', NOTICE: '사용자 공지', INCIDENT: '인시던트' } as const
@@ -29,7 +29,7 @@ export default function IncidentTimelinePage() {
     if (incident) { setReference(incident); void load(incident) } }, []) // eslint-disable-line
 
   return <section className="feature-control incident-page" aria-label="인시던트 통합 타임라인">
-    <div className="board-head"><div><h1>기능 제어</h1>
+    <div className="board-head"><div><h1>{featureControlTitle('/feature-control/incidents')}</h1>
       <p>인시던트에 연결된 변경·프리셋·공지와 revision 흐름을 하나의 감사 타임라인으로 확인합니다.</p></div>
       {timeline && <span className="filter-note">연결 소스 {timeline.sourceCount} · 이벤트 {timeline.entries.length}</span>}
     </div>

@@ -66,6 +66,9 @@
 }
 .queue-error { margin: 10px 16px 0; }
 
+/* 권한이 없어 조치 버튼을 끈 화면의 안내(HP-529) — 경고가 아니라 사실을 알리는 문장이라 중립색으로 둔다 */
+.readonly-note { margin: 6px 0; font-size: 11.5px; color: var(--muted); }
+
 /* 상세 모달 — 바깥 클릭·Esc·✕ = 목록 복귀. 정지 다이얼로그(.dialog-backdrop)가 이 위에 겹친다. */
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(31, 39, 50, 0.45);

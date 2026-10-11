@@ -24,6 +24,7 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(admin.listIncidents).mockResolv
 describe('Incident Mode 화면(HP-343)', () => {
   it('목록에서 primary 인시던트 상세와 불변 이벤트를 연다', async () => {
     const user = userEvent.setup(); render(<MemoryRouter><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
+    expect(screen.getByRole('heading', { level: 1, name: '기능 제어 · 인시던트' })).toBeInTheDocument()
     await user.click(await screen.findByText('채팅 지연'))
     const detail = await screen.findByRole('complementary', { name: '인시던트 INC-9 상세' })
     expect(within(detail).getByText('다수 사용자의 채팅이 지연되고 있습니다')).toBeInTheDocument()

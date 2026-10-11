@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import { realmRoles } from '@core/auth'
 import { makeSuspendedRow } from '../test/fixtures'
 import { useWriting, WritingProvider } from '@core/writing'
 import SuspensionBoardPage from './SuspensionBoardPage'
@@ -525,5 +526,16 @@ describe('정지 현황판 — 읽기 실패', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: '해제 확인' })).not.toBeInTheDocument())
     expect(unsuspendUser).not.toHaveBeenCalled()
+  })
+})
+
+describe('조회 전용 계정(HP-529)', () => {
+  it('정지 해제 버튼을 끄고 이유를 보인다', async () => {
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    renderPage()
+    const trigger = await screen.findByRole('button', { name: '정지 해제' })
+    expect(trigger).toBeDisabled()
+    expect(trigger).toHaveAttribute('title', '조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다')
+    expect(screen.getByText('조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다', { selector: '.readonly-note' })).toBeInTheDocument()
   })
 })

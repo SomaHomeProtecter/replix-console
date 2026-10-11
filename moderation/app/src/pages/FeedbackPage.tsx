@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteFeedback, listFeedback } from '../api/admin'
+import { moderateDenied } from '../permissions'
 import type {
   CoveredElement, FeedbackCategory, FeedbackFilters, FeedbackItem, FeedbackSurface,
   FeedbackTrigger, UninstallReason, WantedService,
@@ -121,6 +122,7 @@ export default function FeedbackPage() {
    * 지우는 중인 행의 버튼이 다시 켜진다 — 같은 행에 DELETE가 두 번 나가 이미 성공한 삭제가 404로 보인다.
    */
   const [deletingIds, setDeletingIds] = useState<ReadonlySet<number>>(() => new Set())
+  const denied = moderateDenied() // 조회 전용 계정은 조치 버튼이 꺼진다(HP-529)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loadSeq = useRef(0)
@@ -212,6 +214,7 @@ export default function FeedbackPage() {
         <h1>피드백</h1>
         <span className="filter-note">최신순 · 커서 페이징</span>
       </div>
+      {denied && <p className="readonly-note">{denied}</p>}
 
       <div className="action-filters" aria-label="피드백 필터">
         <label>
@@ -336,7 +339,8 @@ export default function FeedbackPage() {
                             <button
                                 type="button"
                                 className={`btn${confirming ? ' btn-danger-solid' : ''}`}
-                                disabled={deletingIds.has(item.id)}
+                                disabled={deletingIds.has(item.id) || denied !== null}
+                                title={denied ?? undefined}
                                 onClick={(event) => {
                                   event.stopPropagation() // 행 토글로 번지면 상세가 닫힌다
                                   if (confirming) void removeRow(item.id)

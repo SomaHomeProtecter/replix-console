@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as admin from '../api/admin'
+import { realmRoles } from '@core/auth'
 import type { CleanbotPolicy } from '../api/types'
 import CleanbotPolicyPage from './CleanbotPolicyPage'
 
@@ -51,5 +52,19 @@ describe('클린봇 정책 화면(HP-347)', () => {
     await user.click(screen.getByRole('button', { name: '정책 폐기' }))
     await waitFor(() => expect(admin.retireCleanbotPolicy)
       .toHaveBeenCalledWith(1, 3, 'DEV 검증 종료로 정책을 해제합니다', undefined))
+  })
+})
+
+describe('조회 전용 계정(HP-529)', () => {
+  it('새 정책·초안 수정·검토 요청·dry-run을 끄고 이유를 보인다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(realmRoles).mockReturnValue(['admin_console_viewer'])
+    render(<CleanbotPolicyPage />)
+    await user.click(await screen.findByText('정책 후보 A'))
+    for (const name of ['새 정책', '초안 수정', '검토 요청', '표본 dry-run']) {
+      expect(screen.getByRole('button', { name })).toBeDisabled()
+    }
+    expect(screen.getByRole('button', { name: '새 정책' })).toHaveAttribute('title', '조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다')
+    expect(screen.getByText('조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다', { selector: '.readonly-note' })).toBeInTheDocument()
   })
 })

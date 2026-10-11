@@ -13,7 +13,7 @@ import type {
 import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
@@ -294,7 +294,7 @@ export default function FeatureChangeSetPage() {
   }), [sets])
 
   return <section className="feature-control change-set-page" aria-label="기능 변경 세트">
-    <div className="board-head"><div><h1>기능 제어</h1><p>변경을 승인·예약·적용·복구 가능한 단위로 관리합니다.</p></div>
+    <div className="board-head"><div><h1>{featureControlTitle('/feature-control/change-sets')}</h1><p>변경을 승인·예약·적용·복구 가능한 단위로 관리합니다.</p></div>
       <span className="filter-note">대기 {counts.waiting} · 실패 {counts.failed}</span>
       <button type="button" className="btn" disabled={!writable || loading} onClick={() => setCreating(true)}>새 변경 세트</button>
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>

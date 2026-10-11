@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { env } from '@core/env'
 import { elapsedSince } from '@moderation/format'
-import { MODERATION_MENU } from '@moderation/routes'
+import { MODERATION_PAGES } from '@moderation/routes'
 import GlobalUserSearch from '../GlobalUserSearch'
 import { airDateLabel, loadModerationSummary, loadRecentEpisodes, OPEN_REPORT_PAGE } from '../home/homeData'
 import type { ModerationSummary, RecentEpisode } from '../home/homeData'
@@ -119,7 +119,7 @@ function ModerationCard() {
   const summary = useLoaded(loadModerationSummary)
   const base = moderationBasename(env.environment)
   // 신고 큐·정지 현황은 위의 줄(건수)로 들어가므로 아래 바로 가기에는 나머지 메뉴만 둔다.
-  const links = MODERATION_MENU.filter(({ path }) => path !== '/' && path !== '/suspensions')
+  const links = MODERATION_PAGES.filter(({ path }) => path !== '/' && path !== '/suspensions')
   return (
     <Workspace
         mark={<ShieldIcon />} title="조치" href={`${base}/`} caption="지금 볼 것"

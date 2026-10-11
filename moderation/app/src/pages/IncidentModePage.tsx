@@ -5,7 +5,7 @@ import type { Incident, IncidentDeclare, IncidentResourceType, IncidentStatus, I
 import { realmRoles } from '@core/auth'
 import Dialog from '@core/Dialog'
 import { can } from '@core/roles'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { env } from '@core/env'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
@@ -194,7 +194,7 @@ export default function IncidentModePage() {
     if (id) setSelected(await getIncident(id)); setError(null) } catch (f) { setError(f instanceof Error ? f.message : String(f)) } finally { setLoading(false) } }, [])
   useEffect(() => { const id = Number(params.get('selected')); void load(Number.isSafeInteger(id) && id > 0 ? id : undefined) }, []) // eslint-disable-line
   const counts = useMemo(() => ({ active: rows.filter((r) => active(r.status)).length, primary: rows.filter((r) => r.primary && active(r.status)).length }), [rows])
-  return <section className="feature-control incident-mode-page" aria-label="Incident Mode"><div className="board-head"><div><h1>기능 제어</h1><p>장애 선언부터 완화·관찰·종료까지 책임과 근거를 관리합니다.</p></div>
+  return <section className="feature-control incident-mode-page" aria-label="인시던트"><div className="board-head"><div><h1>{featureControlTitle('/feature-control/incident-mode')}</h1><p>장애 선언부터 완화·관찰·종료까지 책임과 근거를 관리합니다.</p></div>
     <span className="filter-note">활성 {counts.active} · primary {counts.primary}</span><button className="btn" disabled={!writable()} onClick={() => setCreating(true)}>인시던트 선언</button></div>
     <FeatureControlTabs />{error && <div className="error-box" role="alert">{error}</div>}<div className="change-workspace"><div className="change-list"><table><thead><tr><th>인시던트</th><th>SEV</th><th>상태</th><th>담당</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.id} className={selected?.id === row.id ? 'selected' : ''} onClick={() => void getIncident(row.id).then(setSelected)}><td><strong>{row.title}</strong><span>{row.reference}{row.primary ? ' · PRIMARY' : ''}</span></td>

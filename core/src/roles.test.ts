@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { can, CAPABILITIES, hasConsoleRole, SHOWN_CAPABILITIES } from './roles'
+import { can, CAPABILITIES, deniedReason, hasConsoleRole, SHOWN_CAPABILITIES } from './roles'
 
 describe('hasConsoleRole', () => {
   it('콘솔 역할이 하나라도 있으면 들어온다', () => {
@@ -35,5 +35,13 @@ describe('can — 할 일마다 허락하는 역할(BE SecurityConfig와 같은 
 
   it('권한 없음 화면의 표는 네 줄이다(인시던트 메모는 보이지 않는다)', () => {
     expect(SHOWN_CAPABILITIES).toEqual(['view', 'moderate', 'operateFeatures', 'approveProd'])
+  })
+
+  it('할 수 없는 일에는 필요한 역할을 담은 이유를, 할 수 있는 일에는 null을 준다(HP-529)', () => {
+    expect(deniedReason(['admin_console_viewer'], 'moderate', '조치'))
+      .toBe('조치 권한이 없습니다 — admin 또는 moderation_operator 역할이 필요합니다')
+    expect(deniedReason(['moderation_operator'], 'moderate', '조치')).toBeNull()
+    expect(deniedReason([], 'note', '메모'))
+      .toBe('메모 권한이 없습니다 — admin, moderation_operator, feature_flag_operator 또는 prod_change_approver 역할이 필요합니다')
   })
 })

@@ -7,7 +7,7 @@ import type {
 import Dialog from '@core/Dialog'
 import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { env } from '@core/env'
 import { useWriting } from '@core/writing'
 import { kstInputToIso } from '@core/time'
@@ -101,7 +101,7 @@ export default function FeatureControlPresetPage() {
   useEffect(() => { void load() }, [])
 
   return <section className="feature-control preset-page" aria-label="장애 대응 프리셋">
-    <div className="board-head"><div><h1>기능 제어</h1><p>검증된 조합으로 대응하되 승인과 감사 절차는 유지합니다.</p></div>
+    <div className="board-head"><div><h1>{featureControlTitle('/feature-control/presets')}</h1><p>검증된 조합으로 대응하되 승인과 감사 절차는 유지합니다.</p></div>
       <span className="filter-note">{presets.length}개 프리셋</span>
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>
     <FeatureControlTabs />

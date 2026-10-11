@@ -6,7 +6,7 @@ import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
-import FeatureControlTabs from '../components/FeatureControlTabs'
+import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { useNavigate } from 'react-router'
 
 type View = 'ALL' | 'ON' | 'OFF' | 'PARTIAL' | 'ATTENTION'
@@ -161,7 +161,7 @@ export default function FeatureControlPage() {
   return (
     <section className="feature-control" aria-label="기능 제어">
       <div className="board-head">
-        <div><h1>기능 제어</h1><p>저장 상태와 실행 인스턴스의 적용 수렴을 함께 확인합니다.</p></div>
+        <div><h1>{featureControlTitle('/feature-control')}</h1><p>저장 상태와 실행 인스턴스의 적용 수렴을 함께 확인합니다.</p></div>
         <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button>
       </div>
       <FeatureControlTabs />
