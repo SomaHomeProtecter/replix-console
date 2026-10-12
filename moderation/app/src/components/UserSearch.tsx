@@ -1,14 +1,9 @@
 import { type FormEvent, type MouseEvent, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { searchUsers } from '../api/admin'
-import type { UserSearchRow, UserStatus } from '../api/types'
+import type { UserSearchRow } from '../api/types'
+import { USER_STATUS_LABELS } from '../format'
 import Avatar from './Avatar'
-
-const STATUS_LABELS: Record<UserStatus, string> = {
-  ACTIVE: '활성',
-  SUSPENDED: '정지',
-  WITHDRAWN: '탈퇴',
-}
 
 function origin(pathname: string): { from: string; label: string } {
   if (pathname === '/actions') return { from: pathname, label: '조치 로그' }
@@ -114,7 +109,7 @@ export default function UserSearch({ disabled, disabledTitle }: Props) {
                       <span>userId {row.userId}</span>
                     </span>
                     <span className={`user-search-status ${row.status.toLowerCase()}`}>
-                      {STATUS_LABELS[row.status]}
+                      {USER_STATUS_LABELS[row.status]}
                     </span>
                   </Link>
                 </li>

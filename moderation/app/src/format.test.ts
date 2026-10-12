@@ -4,26 +4,26 @@ import {
   suspensionState, withRo,
 } from './format'
 
-describe('suspensionChip — lazy 만료를 화면이 계산해 정직하게 표기(시안 상태 칩)', () => {
+describe('suspensionChip — lazy 만료를 화면이 계산해 정직하게 표기(사용자 상태 칩)', () => {
   const now = new Date('2026-08-04T12:00:00Z')
 
-  it('정지 아님 → 상태 그대로', () => {
-    expect(suspensionChip('ACTIVE', null, now)).toBe('ACTIVE')
-    expect(suspensionChip('WITHDRAWN', null, now)).toBe('WITHDRAWN')
+  it('정지 아님 → 검색 목록과 같은 한글 이름(HP-558)', () => {
+    expect(suspensionChip('ACTIVE', null, now)).toBe('활성')
+    expect(suspensionChip('WITHDRAWN', null, now)).toBe('탈퇴')
   })
 
   it('until null → 무기한', () => {
-    expect(suspensionChip('SUSPENDED', null, now)).toBe('SUSPENDED · 무기한')
+    expect(suspensionChip('SUSPENDED', null, now)).toBe('정지 · 무기한')
   })
 
   it('만료 지난 정지 → 만료됨(자동 해제 대기)', () => {
     expect(suspensionChip('SUSPENDED', '2026-08-04T11:59:00Z', now))
-        .toBe('SUSPENDED · 만료됨(자동 해제 대기)')
+        .toBe('정지 · 만료됨(자동 해제 대기)')
   })
 
   it('미래 만료 → ~MM-DD HH:mm', () => {
     expect(suspensionChip('SUSPENDED', '2026-08-05T13:00:00Z', now))
-        .toBe('SUSPENDED · ~08-05 22:00')
+        .toBe('정지 · ~08-05 22:00')
   })
 })
 
@@ -173,9 +173,9 @@ describe('suspensionState — 정지 갈래 판정을 한 곳으로 모은다(HP
   it('칩 문구와 유효 여부가 같은 판정을 쓴다', () => {
     expect(isSuspensionActive('SUSPENDED', '2026-08-05T11:59:59Z', now)).toBe(false)
     expect(suspensionChip('SUSPENDED', '2026-08-05T11:59:59Z', now))
-        .toBe('SUSPENDED · 만료됨(자동 해제 대기)')
+        .toBe('정지 · 만료됨(자동 해제 대기)')
     expect(isSuspensionActive('SUSPENDED', null, now)).toBe(true)
-    expect(suspensionChip('SUSPENDED', null, now)).toBe('SUSPENDED · 무기한')
+    expect(suspensionChip('SUSPENDED', null, now)).toBe('정지 · 무기한')
   })
 })
 
