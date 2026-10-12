@@ -10,7 +10,7 @@ import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { INCIDENT_RESOURCE_LABELS, INCIDENT_STATUS_LABELS, incidentEventLabel } from '../recordLabels'
 import { env } from '@core/env'
-import { formatKstShort, kstInputToIso } from '@core/time'
+import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
 
 const STATUS = INCIDENT_STATUS_LABELS
@@ -109,7 +109,9 @@ function TransitionDialog({ incident, close, done }: { incident: Incident; close
 function EditDialog({ incident, close, done }: { incident: Incident; close: () => void; done: (row: Incident) => void }) {
   const [title, setTitle] = useState(incident.title); const [severity, setSeverity] = useState(incident.severity)
   const [primary, setPrimary] = useState(incident.primary); const [impact, setImpact] = useState(incident.impactSummary)
-  const [owner, setOwner] = useState(incident.ownerUserId?.toString() ?? ''); const [next, setNext] = useState('')
+  // 다음 업데이트도 지금 값으로 채운다 — 수정은 서버가 이 값을 그대로 덮어써서(Incident.update) 빈 칸으로 열면
+  // 제목만 고쳐도 지워진다(HP-558). 상태 변경 창은 빈 칸 = 그대로라(Incident.transition) 비워 둔다.
+  const [owner, setOwner] = useState(incident.ownerUserId?.toString() ?? ''); const [next, setNext] = useState(isoToKstInput(incident.nextUpdateAt))
   const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
   const { busy, requestId, run } = useSubmission(setError)
   const submit = () => { if (!title.trim() || impact.trim().length < 10 || reason.trim().length < 10) { setError('제목과 10자 이상의 영향·수정 사유를 입력하세요'); return }

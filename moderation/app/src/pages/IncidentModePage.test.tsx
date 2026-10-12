@@ -80,6 +80,18 @@ describe('Incident Mode 화면(HP-343)', () => {
     await waitFor(() => expect(admin.addIncidentEvent).toHaveBeenCalledWith(9, expect.objectContaining({
       expectedVersion: 2, sourceType: 'PRESET', sourceId: 'DISNEY_PLUS_ISOLATION' })))
   })
+
+  // 서버는 수정 요청의 nextUpdateAt을 그대로 덮어쓴다(Incident.update) — 칸이 비어 열리면 제목만 고쳐도 지워진다(HP-558).
+  it('정보 수정 창은 다음 업데이트 시각을 지금 값으로 채워, 손대지 않고 저장해도 지우지 않는다', async () => {
+    const user = userEvent.setup(); vi.mocked(admin.updateIncident).mockResolvedValue({ ...incident, version: 3 })
+    render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: '정보 수정' })); const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByLabelText('다음 업데이트')).toHaveValue('2026-08-25T11:00') // 02:00Z = 한국 11:00
+    await user.type(within(dialog).getByRole('textbox', { name: '수정 사유' }), '제목 오타만 고칩니다 — 영향은 그대로')
+    await user.click(within(dialog).getByRole('button', { name: '정보 수정' }))
+    await waitFor(() => expect(admin.updateIncident).toHaveBeenCalledWith(9, expect.objectContaining({
+      nextUpdateAt: '2026-08-25T02:00:00.000Z' })))
+  })
 })
 
 describe('인시던트 다이얼로그 — 처리 중 잠금(HP-528)', () => {
