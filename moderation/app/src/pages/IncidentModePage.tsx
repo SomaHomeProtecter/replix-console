@@ -110,13 +110,16 @@ function EditDialog({ incident, close, done }: { incident: Incident; close: () =
   const [title, setTitle] = useState(incident.title); const [severity, setSeverity] = useState(incident.severity)
   const [primary, setPrimary] = useState(incident.primary); const [impact, setImpact] = useState(incident.impactSummary)
   // 다음 업데이트도 지금 값으로 채운다 — 수정은 서버가 이 값을 그대로 덮어써서(Incident.update) 빈 칸으로 열면
-  // 제목만 고쳐도 지워진다(HP-558). 상태 변경 창은 빈 칸 = 그대로라(Incident.transition) 비워 둔다.
-  const [owner, setOwner] = useState(incident.ownerUserId?.toString() ?? ''); const [next, setNext] = useState(isoToKstInput(incident.nextUpdateAt))
+  // 제목만 고쳐도 지워진다(HP-558). 손대지 않았으면 원래 값을 그대로 보낸다 — 칸은 분 단위라 되돌려 만들면 초가 잘린다.
+  // 상태 변경 창은 빈 칸 = 그대로라(Incident.transition) 비워 둔다.
+  const initialNext = isoToKstInput(incident.nextUpdateAt)
+  const [owner, setOwner] = useState(incident.ownerUserId?.toString() ?? ''); const [next, setNext] = useState(initialNext)
   const [reason, setReason] = useState(''); const [error, setError] = useState<string | null>(null)
   const { busy, requestId, run } = useSubmission(setError)
   const submit = () => { if (!title.trim() || impact.trim().length < 10 || reason.trim().length < 10) { setError('제목과 10자 이상의 영향·수정 사유를 입력하세요'); return }
     void run(async () => done(await updateIncident(incident.id, { expectedVersion: incident.version, title: title.trim(), severity, primary,
-      impactSummary: impact.trim(), ownerUserId: owner ? Number(owner) : null, nextUpdateAt: kstInputToIso(next),
+      impactSummary: impact.trim(), ownerUserId: owner ? Number(owner) : null,
+      nextUpdateAt: next === initialNext ? incident.nextUpdateAt : kstInputToIso(next),
       reason: reason.trim(), requestId }))) }
   return <Dialog label="인시던트 정보 수정" title="인시던트 정보 수정" className="incident-dialog" busy={busy} onClose={close}
       closeOnBackdrop={false}>
