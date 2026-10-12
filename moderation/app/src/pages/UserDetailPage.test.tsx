@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -157,7 +157,10 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     renderPage()
     expect(await screen.findByRole('heading', { name: /스포일러꾼/ })).toBeInTheDocument()
     expect(getUserDetail).toHaveBeenCalledWith(9)
-    expect(screen.getAllByText('ACTIVE').length).toBeGreaterThan(0) // 헤더 칩 + 기본 정보 dl
+    // 헤더 칩과 기본 정보의 '상태' 칸 — 검색 목록과 같은 한글 이름이고 서버 값(ACTIVE)은 보이지 않는다(HP-558)
+    expect(within(screen.getByRole('heading', { name: /스포일러꾼/ })).getByText('활성')).toBeInTheDocument()
+    expect(screen.getByText('상태', { selector: 'dt' }).nextElementSibling).toHaveTextContent('활성')
+    expect(screen.queryByText('ACTIVE')).not.toBeInTheDocument()
     expect(screen.getByText('target@example.com')).toBeInTheDocument()
     expect(screen.getByText(/userId 9 · provider keycloak/)).toBeInTheDocument()
   })
@@ -242,7 +245,8 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
       },
     }))
     renderPage()
-    expect(await screen.findByText(/SUSPENDED · ~/)).toBeInTheDocument() // 만료 시각 lazy 계산 칩
+    expect(await screen.findByText(/정지 · ~/)).toBeInTheDocument() // 만료 시각 lazy 계산 칩
+    expect(screen.queryByText(/SUSPENDED/)).not.toBeInTheDocument() // 칩·기본 정보 모두 한글(HP-558)
 
     await userEvent.click(screen.getByRole('button', { name: '정지 해제' }))
     expect(unsuspendUser).toHaveBeenCalledWith(9)

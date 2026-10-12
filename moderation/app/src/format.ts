@@ -101,17 +101,28 @@ export const SUSPENSION_STATE_LABELS: Record<
 }
 
 /**
- * 사용자 상태 칩 문구(시안 — "SUSPENDED · ~08-07 13:45"). 만료 배치가 없는 lazy 설계라
+ * 계정 상태의 화면 이름 — 사용자 검색 목록과 사용자 상세(칩·기본 정보)가 같은 말을 쓰게 한곳에 둔다(HP-558).
+ * 서버 값(SUSPENDED 등)을 그대로 보이면 같은 계정이 검색에서는 '정지', 상세에서는 'SUSPENDED'로 불린다.
+ */
+export const USER_STATUS_LABELS: Record<UserStatus, string> = {
+  ACTIVE: '활성',
+  SUSPENDED: '정지',
+  WITHDRAWN: '탈퇴',
+}
+
+/**
+ * 사용자 상태 칩 문구("정지 · ~08-07 13:45"). 만료 배치가 없는 lazy 설계라
  * DB status는 만료 후에도 SUSPENDED로 남는다 — 화면이 만료를 계산해 정직하게 표기한다.
  */
 export function suspensionChip(
   status: UserStatus, suspendedUntil: string | null, now: Date = new Date(),
 ): string {
+  const name = USER_STATUS_LABELS[status]
   switch (suspensionState(status, suspendedUntil, now)) {
-    case 'none': return status
-    case 'indefinite': return 'SUSPENDED · 무기한'
-    case 'expired': return 'SUSPENDED · 만료됨(자동 해제 대기)'
-    default: return `SUSPENDED · ~${formatKstShort(suspendedUntil)}`
+    case 'none': return name
+    case 'indefinite': return `${name} · 무기한`
+    case 'expired': return `${name} · 만료됨(자동 해제 대기)`
+    default: return `${name} · ~${formatKstShort(suspendedUntil)}`
   }
 }
 
