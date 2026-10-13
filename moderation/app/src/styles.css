@@ -42,6 +42,8 @@
 .user-search-identity span { color: var(--muted); font-family: var(--mono); font-size: 10px; }
 .user-search-status { margin-left: auto; color: var(--green); font-weight: 750; font-size: 11px; }
 .user-search-status.suspended { color: var(--red); }
+/* 기간이 지난 정지는 이미 풀린 잔재 — 정지 현황판(.susp-chip.expired)처럼 빨강 대신 amber(HP-598) */
+.user-search-status.expired { color: var(--amber-ink); }
 .user-search-status.withdrawn { color: var(--muted); }
 .user-search-note { padding: 12px; color: var(--muted-2); }
 .user-search-note.error { color: var(--red); }
@@ -182,6 +184,8 @@ table.report-table { width: 100%; border-collapse: collapse; }
 .ustatus { font-size: 11px; font-weight: 800; border-radius: 4px; padding: 2px 8px; background: var(--green-soft); color: var(--green); white-space: nowrap; }
 .ustatus.susp { background: var(--red-soft); color: var(--red); }
 .ustatus.gone { background: #e9eef2; color: var(--muted); }
+/* 기간이 지난 정지는 이미 풀린 잔재 — 정지 현황판(.susp-chip.expired)처럼 빨강 대신 amber(HP-598) */
+.ustatus.expired { background: var(--amber-bg); color: var(--amber-ink); }
 
 /* ── 상세 패널(모달 내용부 — 시안 cm-side 구성) ── */
 .detail-panel { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }

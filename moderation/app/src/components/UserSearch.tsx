@@ -2,7 +2,7 @@ import { type FormEvent, type MouseEvent, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { searchUsers } from '../api/admin'
 import type { UserSearchRow } from '../api/types'
-import { userStatusLabel } from '../format'
+import { suspensionState, userStatusLabel } from '../format'
 import Avatar from './Avatar'
 
 function origin(pathname: string): { from: string; label: string } {
@@ -71,6 +71,9 @@ export default function UserSearch({ disabled, disabledTitle }: Props) {
     setQuery('')
   }
 
+  // 정지 판정 시각은 한 렌더에 하나 — 행마다 시계를 보면 같은 경계의 두 행이 서로 다르게 불린다(suspensionState 주석).
+  const now = new Date()
+
   return (
     <div className="user-search">
       <form className="user-search-form" role="search" onSubmit={(event) => void submit(event)}>
@@ -98,22 +101,28 @@ export default function UserSearch({ disabled, disabledTitle }: Props) {
           )}
           {searched && rows.length > 0 && (
             <ul aria-label="사용자 검색 결과">
-              {rows.map((row) => (
-                <li key={row.userId}>
-                  <Link
-                      to={`/users/${row.userId}`} state={origin(location.pathname)}
-                      aria-disabled={disabled || undefined} onClick={onResultClick}>
-                    <Avatar url={row.profileImageUrl} name={row.displayName} />
-                    <span className="user-search-identity">
-                      <strong>{row.displayName}</strong>
-                      <span>userId {row.userId}</span>
-                    </span>
-                    <span className={`user-search-status ${row.status.toLowerCase()}`}>
-                      {userStatusLabel(row.status, row.suspendedUntil)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {rows.map((row) => {
+                // 만료 시각을 보내지 않는 서버(HP-598 배포 전)면 칸이 없다 — 만료를 단정하지 않고 상태 이름만 보인다.
+                const until = row.suspendedUntil ?? null
+                // 기간이 지난 정지는 이미 풀린 잔재라 빨강이 아니라 amber다 — 정지 현황판과 같은 색 규칙(HP-598).
+                const tone = suspensionState(row.status, until, now) === 'expired' ? 'expired' : row.status.toLowerCase()
+                return (
+                  <li key={row.userId}>
+                    <Link
+                        to={`/users/${row.userId}`} state={origin(location.pathname)}
+                        aria-disabled={disabled || undefined} onClick={onResultClick}>
+                      <Avatar url={row.profileImageUrl} name={row.displayName} />
+                      <span className="user-search-identity">
+                        <strong>{row.displayName}</strong>
+                        <span>userId {row.userId}</span>
+                      </span>
+                      <span className={`user-search-status ${tone}`}>
+                        {userStatusLabel(row.status, until, now)}
+                      </span>
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>

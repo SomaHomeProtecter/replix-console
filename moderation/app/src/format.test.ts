@@ -197,10 +197,6 @@ describe('userStatusLabel — 상태 칸도 기간이 지난 정지를 만료됨
     expect(userStatusLabel('ACTIVE', null, now)).toBe('활성')
     expect(userStatusLabel('WITHDRAWN', null, now)).toBe('탈퇴')
   })
-
-  it('만료 시각을 보내지 않는 서버(HP-598 배포 전)에서는 만료를 단정하지 않는다', () => {
-    expect(userStatusLabel('SUSPENDED', undefined, now)).toBe('정지')
-  })
 })
 
 /**

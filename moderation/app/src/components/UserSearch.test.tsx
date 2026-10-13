@@ -83,5 +83,10 @@ describe('사용자 검색(HP-301) — 세 검색 축으로 상세에 바로 진
     expect(badge(/지난 정지/)).toHaveTextContent(/^정지 · 만료됨$/)
     expect(badge(/걸린 정지/)).toHaveTextContent(/^정지$/)
     expect(badge(/옛 서버 정지/)).toHaveTextContent(/^정지$/)
+    // 운영자는 색으로 훑는다 — 빨강(suspended)은 걸려 있는 정지 전용이고, 만료된 잔재는 amber(expired)다.
+    expect(badge(/지난 정지/)).toHaveClass('expired')
+    expect(badge(/지난 정지/)).not.toHaveClass('suspended')
+    expect(badge(/걸린 정지/)).toHaveClass('suspended')
+    expect(badge(/옛 서버 정지/)).toHaveClass('suspended')
   })
 })
