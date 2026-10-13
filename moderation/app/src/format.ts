@@ -127,6 +127,22 @@ export function suspensionChip(
 }
 
 /**
+ * '상태' 칸 문구 — 사용자 검색 목록의 배지와 사용자 상세 기본 정보의 '상태'(HP-598).
+ *
+ * <p>기간이 지난 정지는 실제로는 이미 풀렸는데 DB status만 SUSPENDED로 남은 것이다(lazy 만료). '정지'로만
+ * 보이면 운영자는 아직 걸려 있다고 읽는다 — 머리 칩과 같은 판정({@link suspensionState})으로 '만료됨'을 붙인다.
+ * 기한·무기한까지 담는 긴 문구는 머리 칩({@link suspensionChip}) 몫이다. 검색 결과 칸은 좁다.
+ *
+ * <p>suspendedUntil이 undefined면 그 칸을 보내지 않는 서버(HP-598 배포 전)다. 만료를 알 수 없으니 상태 이름만 보인다.
+ */
+export function userStatusLabel(
+  status: UserStatus, suspendedUntil: string | null | undefined, now: Date = new Date(),
+): string {
+  const name = USER_STATUS_LABELS[status]
+  return suspensionState(status, suspendedUntil ?? null, now) === 'expired' ? `${name} · 만료됨` : name
+}
+
+/**
  * 지금 실제로 정지가 걸려 있는가 — BE {@code User.isSuspensionActive}와 같은 규칙.
  *
  * <p>정지는 만료 배치가 없는 lazy 설계라 <b>기간이 지나 자동으로 풀려도 DB status는 SUSPENDED로

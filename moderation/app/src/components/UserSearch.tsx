@@ -2,7 +2,7 @@ import { type FormEvent, type MouseEvent, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { searchUsers } from '../api/admin'
 import type { UserSearchRow } from '../api/types'
-import { USER_STATUS_LABELS } from '../format'
+import { userStatusLabel } from '../format'
 import Avatar from './Avatar'
 
 function origin(pathname: string): { from: string; label: string } {
@@ -109,7 +109,7 @@ export default function UserSearch({ disabled, disabledTitle }: Props) {
                       <span>userId {row.userId}</span>
                     </span>
                     <span className={`user-search-status ${row.status.toLowerCase()}`}>
-                      {USER_STATUS_LABELS[row.status]}
+                      {userStatusLabel(row.status, row.suspendedUntil)}
                     </span>
                   </Link>
                 </li>

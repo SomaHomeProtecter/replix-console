@@ -247,6 +247,7 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     renderPage()
     expect(await screen.findByText(/정지 · ~/)).toBeInTheDocument() // 만료 시각 lazy 계산 칩
     expect(screen.queryByText(/SUSPENDED/)).not.toBeInTheDocument() // 칩·기본 정보 모두 한글(HP-558)
+    expect(screen.getByText('상태', { selector: 'dt' }).nextElementSibling).toHaveTextContent(/^정지$/)
 
     await userEvent.click(screen.getByRole('button', { name: '정지 해제' }))
     expect(unsuspendUser).toHaveBeenCalledWith(9)
@@ -262,6 +263,8 @@ describe('사용자 상세(정본 ②) — 기본 정보 블록 + 탭 3개', () 
     }))
     renderPage()
     expect(await screen.findByText(/만료됨\(자동 해제 대기\)/)).toBeInTheDocument()
+    // 기본 정보의 '상태'도 머리 칩과 같은 판정으로 만료를 구분한다 — '정지'로만 보이면 칩과 두 말을 한다(HP-598)
+    expect(screen.getByText('상태', { selector: 'dt' }).nextElementSibling).toHaveTextContent(/^정지 · 만료됨$/)
   })
 
   it('여기서도 계정 정지가 가능하다(다이얼로그 재사용)', async () => {

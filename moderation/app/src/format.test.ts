@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   actionLabel, elapsedSince, isSuspensionActive, reporterTrustLine, rowStatusLabel, suspensionChip,
-  suspensionState, withRo,
+  suspensionState, userStatusLabel, withRo,
 } from './format'
 
 describe('suspensionChip — lazy 만료를 화면이 계산해 정직하게 표기(사용자 상태 칩)', () => {
@@ -176,6 +176,30 @@ describe('suspensionState — 정지 갈래 판정을 한 곳으로 모은다(HP
         .toBe('정지 · 만료됨(자동 해제 대기)')
     expect(isSuspensionActive('SUSPENDED', null, now)).toBe(true)
     expect(suspensionChip('SUSPENDED', null, now)).toBe('정지 · 무기한')
+  })
+})
+
+/**
+ * 검색 목록·기본 정보의 '상태' 칸(HP-598) — 기간이 지난 정지를 '정지'로만 보이면 이미 풀린 계정을
+ * 아직 걸려 있다고 읽는다. 경계는 머리 칩과 같아야 한 화면이 두 말을 하지 않는다.
+ */
+describe('userStatusLabel — 상태 칸도 기간이 지난 정지를 만료됨으로 구분한다(HP-598)', () => {
+  const now = new Date('2026-08-05T12:00:00Z')
+
+  it('기간이 지난 정지만 만료됨을 붙인다 — 만료 시각과 같으면 만료(suspensionState와 같은 경계)', () => {
+    expect(userStatusLabel('SUSPENDED', '2026-08-01T00:00:00Z', now)).toBe('정지 · 만료됨')
+    expect(userStatusLabel('SUSPENDED', '2026-08-05T12:00:00Z', now)).toBe('정지 · 만료됨')
+    expect(userStatusLabel('SUSPENDED', '2026-08-05T12:00:01Z', now)).toBe('정지')
+    expect(userStatusLabel('SUSPENDED', null, now)).toBe('정지')
+  })
+
+  it('정지가 아니면 상태 이름 그대로다', () => {
+    expect(userStatusLabel('ACTIVE', null, now)).toBe('활성')
+    expect(userStatusLabel('WITHDRAWN', null, now)).toBe('탈퇴')
+  })
+
+  it('만료 시각을 보내지 않는 서버(HP-598 배포 전)에서는 만료를 단정하지 않는다', () => {
+    expect(userStatusLabel('SUSPENDED', undefined, now)).toBe('정지')
   })
 })
 

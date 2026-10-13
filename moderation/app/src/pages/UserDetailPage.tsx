@@ -8,7 +8,7 @@ import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import WarningDialog from '../components/WarningDialog'
-import { actionLabel, isSuspensionActive, reporterTrustLine, suspensionChip, USER_STATUS_LABELS, withRo } from '../format'
+import { actionLabel, isSuspensionActive, reporterTrustLine, suspensionChip, userStatusLabel, withRo } from '../format'
 import { formatKstShort } from '@core/time'
 
 const CHIP_CLASSES: Record<UserStatus, string> = {
@@ -175,7 +175,7 @@ function UserDetailView({ id }: { id: number }) {
           이메일이 한 줄에 들어가고 탭이 화면 전체 폭을 쓴다(조치 이력 5칼럼의 전제). */}
       <dl className="info-strip">
         <div><dt>가입일</dt><dd>{formatKstShort(profile.createdAt)}</dd></div>
-        <div><dt>상태</dt><dd>{USER_STATUS_LABELS[profile.status]}</dd></div>
+        <div><dt>상태</dt><dd>{userStatusLabel(profile.status, profile.suspendedUntil)}</dd></div>
         {profile.suspendReason && (
           <div><dt>정지 사유</dt><dd>{profile.suspendReason}</dd></div>
         )}
