@@ -58,4 +58,35 @@ describe('사용자 검색(HP-301) — 세 검색 축으로 상세에 바로 진
     expect(admin.searchUsers).not.toHaveBeenCalled()
     expect(screen.queryByText('검색 결과가 없습니다')).not.toBeInTheDocument()
   })
+
+  /**
+   * 정지는 만료 배치가 없어 기간이 지나도 status가 SUSPENDED로 남는다(HP-598). 배지가 '정지'로만 보이면
+   * 운영자는 검색 목록만 보고 이미 풀린 계정을 아직 정지 중이라고 읽는다.
+   */
+  it('정지 배지는 기간이 지난 정지를 만료됨으로 구분한다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.searchUsers).mockResolvedValue({
+      rows: [
+        { ...result, userId: 1, displayName: '지난 정지', status: 'SUSPENDED', suspendedUntil: '2020-01-01T00:00:00Z' },
+        { ...result, userId: 2, displayName: '걸린 정지', status: 'SUSPENDED', suspendedUntil: '2126-01-01T00:00:00Z' },
+        // 만료 시각을 보내지 않는 서버(HP-598 배포 전) — 만료를 단정하지 않는다
+        { ...result, userId: 3, displayName: '옛 서버 정지', status: 'SUSPENDED' },
+      ],
+    })
+    render(<MemoryRouter><UserSearch disabled={false} /></MemoryRouter>)
+
+    await user.type(screen.getByRole('searchbox', { name: '사용자 검색' }), '정지')
+    await user.click(screen.getByRole('button', { name: '검색' }))
+
+    const badge = (name: RegExp) => screen.getByRole('link', { name }).querySelector('.user-search-status')
+    await screen.findByRole('link', { name: /지난 정지/ })
+    expect(badge(/지난 정지/)).toHaveTextContent(/^정지 · 만료됨$/)
+    expect(badge(/걸린 정지/)).toHaveTextContent(/^정지$/)
+    expect(badge(/옛 서버 정지/)).toHaveTextContent(/^정지$/)
+    // 운영자는 색으로 훑는다 — 빨강(suspended)은 걸려 있는 정지 전용이고, 만료된 잔재는 amber(expired)다.
+    expect(badge(/지난 정지/)).toHaveClass('expired')
+    expect(badge(/지난 정지/)).not.toHaveClass('suspended')
+    expect(badge(/걸린 정지/)).toHaveClass('suspended')
+    expect(badge(/옛 서버 정지/)).toHaveClass('suspended')
+  })
 })

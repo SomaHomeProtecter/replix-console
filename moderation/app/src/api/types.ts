@@ -281,6 +281,11 @@ export interface UserSearchRow {
   displayName: string
   profileImageUrl: string | null
   status: UserStatus
+  /**
+   * null = 정지가 아니거나 무기한. 지난 시각이면 이미 풀린 정지다(HP-598).
+   * 이 칸을 보내지 않는 서버(HP-598 배포 전)에서는 없다 — 그때는 만료를 판정하지 않는다.
+   */
+  suspendedUntil?: string | null
 }
 
 export interface UserSearchResult {

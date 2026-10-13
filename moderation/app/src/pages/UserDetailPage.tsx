@@ -8,7 +8,9 @@ import Avatar from '../components/Avatar'
 import Pill from '../components/Pill'
 import SuspendDialog from '../components/SuspendDialog'
 import WarningDialog from '../components/WarningDialog'
-import { actionLabel, isSuspensionActive, reporterTrustLine, suspensionChip, USER_STATUS_LABELS, withRo } from '../format'
+import {
+  actionLabel, isSuspensionActive, reporterTrustLine, suspensionChip, suspensionState, userStatusLabel, withRo,
+} from '../format'
 import { formatKstShort } from '@core/time'
 
 const CHIP_CLASSES: Record<UserStatus, string> = {
@@ -121,6 +123,12 @@ function UserDetailView({ id }: { id: number }) {
   // admin-ui와 BE가 따로 배포될 수 있다. 구버전 BE 응답에는 이 집계가 없으므로
   // 전환 구간에도 상세 화면 전체가 TypeError로 사라지지 않게 0회로 눕힌다.
   const warnings = detail.warnings ?? { total: 0, suspensionReviewRecommended: false }
+  // 정지 판정 시각은 한 렌더에 하나다 — 칩·'상태' 칸·유효 조치가 각자 시계를 보면 만료 경계에서 한 화면이
+  // "진행 중"과 "만료됨"을 함께 말한다(suspensionState 주석, HP-598).
+  const now = new Date()
+  // 기간이 지난 정지는 이미 풀린 잔재라 빨강(파괴적 조치 전용)이 아니라 amber다 — 정지 현황판과 같은 색 규칙.
+  const chipClass = suspensionState(profile.status, profile.suspendedUntil, now) === 'expired'
+    ? 'ustatus expired' : CHIP_CLASSES[profile.status]
   const tabLabels: Record<Tab, string> = {
     reports: `받은 신고 ${detail.reportsReceived.length}`,
     timeline: `통합 타임라인${timeline ? ` ${timeline.events.length}` : ''}`,
@@ -136,8 +144,8 @@ function UserDetailView({ id }: { id: number }) {
         <div>
           <h1>
             {name}
-            <span className={CHIP_CLASSES[profile.status]}>
-              {suspensionChip(profile.status, profile.suspendedUntil)}
+            <span className={chipClass}>
+              {suspensionChip(profile.status, profile.suspendedUntil, now)}
             </span>
           </h1>
           <div className="uid">userId {profile.id} · provider {profile.authProvider}</div>
@@ -175,7 +183,7 @@ function UserDetailView({ id }: { id: number }) {
           이메일이 한 줄에 들어가고 탭이 화면 전체 폭을 쓴다(조치 이력 5칼럼의 전제). */}
       <dl className="info-strip">
         <div><dt>가입일</dt><dd>{formatKstShort(profile.createdAt)}</dd></div>
-        <div><dt>상태</dt><dd>{USER_STATUS_LABELS[profile.status]}</dd></div>
+        <div><dt>상태</dt><dd>{userStatusLabel(profile.status, profile.suspendedUntil, now)}</dd></div>
         {profile.suspendReason && (
           <div><dt>정지 사유</dt><dd>{profile.suspendReason}</dd></div>
         )}
@@ -234,7 +242,7 @@ function UserDetailView({ id }: { id: number }) {
             // 정지의 "적용 중" 판정은 감사 상쇄가 아니라 계정의 현재 상태로 한다 — 기간 만료는
             // 해제 행을 남기지 않아 상쇄로는 영영 안 걸러진다(HP-268).
             const rows = effectiveOnly
-              ? effectiveActions(all, isSuspensionActive(profile.status, profile.suspendedUntil))
+              ? effectiveActions(all, isSuspensionActive(profile.status, profile.suspendedUntil, now))
               : all
             const hidden = all.length - rows.length
             // "유효 조치"는 그것만 봐서는 무슨 뜻인지 알 수 없다(2026-08-05 김지호 피드백) —
