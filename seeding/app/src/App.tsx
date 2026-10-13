@@ -189,16 +189,29 @@ function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: 
   const [initial] = useState(() => initialSelection(initialWorkId, initialEpisodeId))
   const [works, setWorks] = useState<Work[] | null>(null)
   const [workId, setWorkId] = useState<number | null>(initial.workId)
-  const [episodes, setEpisodes] = useState<Episode[]>([])
+  // 회차 목록은 어느 작품 것인지와 함께 둔다 — 작품을 바꾼 뒤 새 목록이 오기 전(늦거나 실패해도)에 이전 작품의 회차가
+  // 바꾼 작품 이름 아래 그려져, 운영 쓰기가 이전 작품 회차로 나갔다(HP-594). rows가 null이면 그 작품의 목록을 읽지 못했다.
+  const [episodeList, setEpisodeList] = useState<{ workId: number; rows: Episode[] | null } | null>(null)
   const [episodeId, setEpisodeId] = useState<number | null>(initial.episodeId)
   // 작업 공간 맨 위 오류 칸은 작품·회차 목록을 읽다 난 오류만 — 단계에서 난 오류는 그 단계 카드에 뜬다(HP-526).
   const [error, setError] = useState<string | null>(null)
   const workSelectId = useId()
   const work = useMemo(() => works?.find((w) => w.id === workId) ?? null, [works, workId])
+  const listOfWork = episodeList != null && episodeList.workId === workId ? episodeList : null
+  const episodesLoaded = listOfWork?.rows != null
+  const episodesFailed = listOfWork != null && listOfWork.rows == null
+  const episodes = useMemo(() => listOfWork?.rows ?? [], [listOfWork])
   const episode = useMemo(() => episodes.find((e) => e.id === episodeId) ?? null, [episodes, episodeId])
+  const beginEpisodes = useLatestRequest()
 
   const loadWorks = useCallback(() => api.works().then((ws) => { setWorks(ws); setWorkId((cur) => (cur != null && ws.some((w) => w.id === cur)) ? cur : (ws[0]?.id ?? null)) }).catch((e) => setError(errText(e))), [])
-  const loadEpisodes = useCallback((wid: number) => api.episodes(wid).then((es) => { setEpisodes(es); setEpisodeId((cur) => es.some((e) => e.id === cur) ? cur : (es[0]?.id ?? null)) }).catch((e) => setError(errText(e))), [])
+  const loadEpisodes = useCallback((wid: number) => {
+    const current = beginEpisodes()
+    return api.episodes(wid)
+      .then((es) => { if (!current()) return; setEpisodeList({ workId: wid, rows: es }); setEpisodeId((cur) => es.some((e) => e.id === cur) ? cur : (es[0]?.id ?? null)) })
+      // 이미 읽은 목록을 다시 읽다 실패하면(회차를 고친 뒤 등) 그 목록을 그대로 둔다.
+      .catch((e) => { if (current()) { setError(errText(e)); setEpisodeList((cur) => (cur?.workId === wid ? cur : { workId: wid, rows: null })) } })
+  }, [beginEpisodes])
   useEffect(() => { loadWorks() }, [loadWorks])
   useEffect(() => { if (workId != null) loadEpisodes(workId) }, [workId, loadEpisodes])
   // 고른 작품·회차가 정해지면 남긴다. 작품을 바꾸는 사이(새 회차 목록 전)와 회차 목록을 읽는 중에는 남기지 않는다.
@@ -227,7 +240,7 @@ function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: 
         </div>
         <div className="sd-side-caption">회차</div>
         <ul className="sd-list">
-          {work && episodes.length === 0 && <li className="sd-list-empty">아직 회차가 없습니다. 아래에서 방영일을 추가하세요.</li>}
+          {work && episodesLoaded && episodes.length === 0 && <li className="sd-list-empty">아직 회차가 없습니다. 아래에서 방영일을 추가하세요.</li>}
           {episodes.map((e) => (
             <li key={e.id}>
               <button onClick={() => setEpisodeId(e.id)} className="sd-list-item" aria-current={e.id === episodeId ? 'true' : undefined}>
@@ -242,7 +255,9 @@ function Workspace({ writable, initialWorkId = null, initialEpisodeId = null }: 
 
       <section className="sd-main">
         {error && <Banner kind="bad" onClose={() => setError(null)}>{error}</Banner>}
-        {!episode && <div className="sd-panel sd-guide">왼쪽에서 회차를 고르면 그 회차의 작업 단계가 여기에 나타납니다.</div>}
+        {!episode && (!work || episodesLoaded
+          ? <div className="sd-panel sd-guide">왼쪽에서 회차를 고르면 그 회차의 작업 단계가 여기에 나타납니다.</div>
+          : !episodesFailed && <div className="sd-panel sd-guide" role="status">회차를 불러오는 중입니다.</div>)}
         {episode && work && <EpisodeWorkspace key={episode.id} work={work} episode={episode} writable={writable} onEpisodeChanged={() => loadEpisodes(work.id)} />}
       </section>
     </div>

@@ -481,6 +481,68 @@ describe('오류는 그 단계 카드 안에 뜬다(HP-526)', () => {
   }, TEST_TIMEOUT)
 })
 
+describe('작품을 바꾸는 사이 이전 작품의 회차가 남지 않는다(HP-594)', () => {
+  // 확인 창은 바꾼 작품(B) 이름을 보이는데 쓰기는 이전 작품(A) 회차로 나갔다 — 회차 작업 영역이 A 회차로 그려지면 안 된다.
+  const workB = { ...work, id: 2, code: 'solo2', title: '나는 솔로 사랑은 계속된다', airWeekday: 4 }
+  const episodeB = { ...baseEpisode, id: 21, workId: 2, airDate: '2026-10-09', label: '27기 3회', airStartAt: '2026-10-09T13:30:00Z' }
+  const gate = () => { let open!: () => void; const opened = new Promise<void>((r) => { open = r }); return { opened, open } }
+  const routes = (episodesA: Handler, episodesB: Handler): Route[] => [
+    { method: 'GET', host: 'workspace', path: /\/seeding\/works$/, handle: () => [work, workB] },
+    { method: 'GET', host: 'workspace', path: /\/works\/1\/episodes$/, handle: episodesA },
+    { method: 'GET', host: 'workspace', path: /\/works\/2\/episodes$/, handle: episodesB },
+    ...emptyEpisodeRoutes(11), ...emptyEpisodeRoutes(21),
+  ]
+  const episodeA = () => screen.queryByRole('button', { name: /^33기 9회/ })
+
+  it('B 목록을 기다리는 동안 A 회차를 그리지 않고 불러오는 중임을 알린다', async () => {
+    const b = gate()
+    vi.stubGlobal('fetch', serve(routes(() => [baseEpisode], async () => { await b.opened; return [episodeB] })))
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+    expect(await screen.findByRole('heading', { level: 1, name: /33기 9회/ }, WAIT)).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('작품'), '2')
+    expect(await screen.findByText('회차를 불러오는 중입니다.', {}, WAIT)).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '회차 정보' })).not.toBeInTheDocument()
+    expect(episodeA()).not.toBeInTheDocument()
+
+    await act(async () => { b.open() })
+    expect(await screen.findByRole('heading', { level: 1, name: /27기 3회/ }, WAIT)).toBeInTheDocument()
+    expect(screen.queryByText('회차를 불러오는 중입니다.')).not.toBeInTheDocument()
+  }, TEST_TIMEOUT)
+
+  it('A 목록 응답이 B보다 늦게 와도 B 화면을 덮지 않는다', async () => {
+    const a = gate()
+    vi.stubGlobal('fetch', serve(routes(async () => { await a.opened; return [baseEpisode] }, () => [episodeB])))
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+    await screen.findByRole('option', { name: workB.title }, WAIT)
+
+    await user.selectOptions(screen.getByLabelText('작품'), '2')
+    expect(await screen.findByRole('heading', { level: 1, name: /27기 3회/ }, WAIT)).toBeInTheDocument()
+    await act(async () => { a.open() })
+    // 늦은 A 응답이 처리될 틈을 준 뒤에도 B 회차 그대로다
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('27기 3회')
+    expect(episodeA()).not.toBeInTheDocument()
+  }, TEST_TIMEOUT)
+
+  it('B 목록을 못 읽으면 오류만 띄우고 A 회차를 남기지 않는다', async () => {
+    vi.stubGlobal('fetch', serve(routes(() => [baseEpisode], failWith(503, '일시 오류'))))
+    const user = userEvent.setup()
+    render(<SeedingWorkspace view="work" />)
+    expect(await screen.findByRole('heading', { level: 1, name: /33기 9회/ }, WAIT)).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('작품'), '2')
+    expect(await screen.findByText(/일시 오류/, {}, WAIT)).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '회차 정보' })).not.toBeInTheDocument()
+    expect(episodeA()).not.toBeInTheDocument()
+    // 실패를 '회차 없음'이나 '불러오는 중'으로 보이지 않는다
+    expect(screen.queryByText(/아직 회차가 없습니다/)).not.toBeInTheDocument()
+    expect(screen.queryByText('회차를 불러오는 중입니다.')).not.toBeInTheDocument()
+  }, TEST_TIMEOUT)
+})
+
 describe('운영 쓰기 확인 — 개발 서버에서는 브라우저 확인 창으로(HP-526)', () => {
   it('프롬프트 저장은 확인을 거치고, 취소하면 저장하지 않는다', async () => {
     const saves: Json[] = []
