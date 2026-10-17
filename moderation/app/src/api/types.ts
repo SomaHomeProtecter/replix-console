@@ -13,6 +13,8 @@ export type AdminActionType =
   | 'RESOLVE_REPORT' | 'REOPEN_REPORT' | 'EXPORT_USER_TIMELINE'
   | 'POLICY_CREATE' | 'POLICY_UPDATE' | 'POLICY_REVIEW_REQUEST' | 'POLICY_APPROVE'
   | 'POLICY_ACTIVATE' | 'POLICY_RETIRE' | 'POLICY_SIMULATE'
+  // 제품 피드백 삭제(BE HP-670) — 대상은 FEEDBACK, targetId = 지운 피드백 번호(행은 이미 없다)
+  | 'DELETE_FEEDBACK'
 
 export type WarningReason = 'ABUSE' | 'SPOILER' | 'SPAM' | 'OTHER'
 
@@ -28,7 +30,7 @@ export interface WarningResult {
   suspensionReviewRecommended: boolean
 }
 
-export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT' | 'POLICY'
+export type AdminTargetType = 'USER' | 'MESSAGE' | 'REPORT' | 'POLICY' | 'FEEDBACK'
 
 /** 처리(RESOLVED)에 동반된 조치. null = 단순 처리. */
 export type ResolutionAction = 'BLIND' | 'SUSPEND' | 'ROOM_CLOSE'

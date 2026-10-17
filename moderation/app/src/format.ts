@@ -40,6 +40,8 @@ export const ACTION_LABELS: Record<AdminActionType, string> = {
   POLICY_CREATE: '정책 초안 생성', POLICY_UPDATE: '정책 초안 수정',
   POLICY_REVIEW_REQUEST: '정책 검토 요청', POLICY_APPROVE: '정책 승인',
   POLICY_ACTIVATE: '정책 활성화', POLICY_RETIRE: '정책 폐기', POLICY_SIMULATE: '정책 dry-run',
+  // 서버가 이 값을 남기기 시작했는데 여기 없으면 조치 로그의 조치 칸이 비고 필터에도 안 나온다(HP-670)
+  DELETE_FEEDBACK: '피드백 삭제',
 }
 
 /** 종결 결과를 앞자리에 쓰는 이름 — 라벨은 `<결과> · 신고 종결` 한 규칙으로 읽힌다. */
