@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  actionLabel, elapsedSince, isSuspensionActive, reporterTrustLine, rowStatusLabel, suspensionChip,
+  ACTION_LABELS, actionLabel, elapsedSince, isSuspensionActive, reporterTrustLine, rowStatusLabel, suspensionChip,
   suspensionState, userStatusLabel, withRo,
 } from './format'
 
@@ -37,6 +37,11 @@ describe('actionLabel — 신고 종결의 결과까지 드러낸다(HP-268)', (
 
   it('기각도 예외 없이 붙인다 — 모든 결과가 같은 모양이라야 세로로 훑힌다', () => {
     expect(actionLabel('RESOLVE_REPORT', 'REJECTED')).toBe('기각 · 신고 종결')
+  })
+
+  it('피드백 삭제도 이름으로 보인다 — 서버가 남기는 조치에 이름이 없으면 조치 로그 칸이 빈다(HP-670)', () => {
+    expect(actionLabel('DELETE_FEEDBACK', null)).toBe('피드백 삭제')
+    expect(Object.keys(ACTION_LABELS)).toContain('DELETE_FEEDBACK')
   })
 
   it('결과가 없는 옛 기록은 지어내지 않고 종결로만 둔다', () => {
