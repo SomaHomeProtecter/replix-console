@@ -222,14 +222,17 @@ export interface UserTimeline {
 export type CleanbotPolicyStatus = 'DRAFT' | 'REVIEW_REQUESTED' | 'APPROVED' | 'ACTIVE' | 'RETIRED'
 export interface CleanbotPolicy {
   id: number; name: string; status: CleanbotPolicyStatus; blockedTerms: string[]; allowedTerms: string[]
-  threshold: number; categoryMapping: Record<string, string>; basePolicyId: number | null
+  threshold: number; categoryMapping: Record<string, string>
+  /** 2차 라벨별 임계값(HP-693) — 이 칸이 생기기 전 서버(BE 릴리스 전 PROD)는 보내지 않는다. */
+  categoryThresholds?: Record<string, number>
+  basePolicyId: number | null
   activatedChangeSetId: number | null; revision: number; createdBy: OperatorRef
   reviewedBy: OperatorRef | null; approvedBy: OperatorRef | null; activatedBy: OperatorRef | null
   createdAt: string; updatedAt: string; activatedAt: string | null
 }
 export interface CleanbotPolicyUpsert {
   name: string; blockedTerms: string[]; allowedTerms: string[]; threshold: number
-  categoryMapping: Record<string, string>; basePolicyId: number | null
+  categoryMapping: Record<string, string>; categoryThresholds: Record<string, number>; basePolicyId: number | null
 }
 export interface CleanbotSimulationSample { sampleId: string; previouslyBlocked: boolean; candidateBlocked: boolean; outcome: string }
 export interface CleanbotSimulation {

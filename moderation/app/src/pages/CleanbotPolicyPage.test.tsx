@@ -43,6 +43,40 @@ describe('클린봇 정책 화면(HP-347)', () => {
       name: '정책 후보 B', threshold: 0.7, categoryMapping: { 지역: 'regional_hate' },
     })))
   })
+  it('라벨별 임계값을 보여 주고, 초안 수정에서 라벨=값 줄을 숫자로 보낸다(HP-693)', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.listCleanbotPolicies).mockResolvedValue([{ ...policy, categoryThresholds: { 지역: 0.6 } }])
+    vi.mocked(admin.updateCleanbotPolicy).mockResolvedValue({ ...policy, categoryThresholds: { 지역: 0.6, '악플/욕설': 0.8 }, revision: 1 })
+    render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
+    expect(screen.getByText('지역 0.6')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '초안 수정' }))
+    const field = screen.getByLabelText(/라벨별 임계값/)
+    expect(field).toHaveValue('지역=0.6')
+    await user.type(field, '\n악플/욕설=0.8')
+    await user.click(screen.getByRole('button', { name: '초안 저장' }))
+    await waitFor(() => expect(admin.updateCleanbotPolicy).toHaveBeenCalledWith(1, 0, expect.objectContaining({
+      threshold: 0.7, categoryThresholds: { 지역: 0.6, '악플/욕설': 0.8 },
+    })))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+  it('라벨별 임계값이 0~1 밖이면 보내지 않고 알린다', async () => {
+    const user = userEvent.setup()
+    render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
+    await user.click(screen.getByRole('button', { name: '초안 수정' }))
+    await user.type(screen.getByLabelText(/라벨별 임계값/), '악플/욕설=1.5')
+    await user.click(screen.getByRole('button', { name: '초안 저장' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('라벨별 임계값 형식 오류: 악플/욕설=1.5')
+    expect(admin.updateCleanbotPolicy).not.toHaveBeenCalled()
+  })
+  it('라벨별 임계값을 모르는 서버가 버리면 빠졌다고 알린다', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.updateCleanbotPolicy).mockResolvedValue({ ...policy, revision: 1 })
+    render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
+    await user.click(screen.getByRole('button', { name: '초안 수정' }))
+    await user.type(screen.getByLabelText(/라벨별 임계값/), '악플/욕설=0.8')
+    await user.click(screen.getByRole('button', { name: '초안 저장' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('아직 라벨별 임계값을 받지 않습니다')
+  })
   it('활성 정책을 사유와 revision으로 안전하게 폐기한다', async () => {
     const user = userEvent.setup(); const active = { ...policy, status: 'ACTIVE' as const, revision: 3 }
     vi.mocked(admin.listCleanbotPolicies).mockResolvedValue([active])
