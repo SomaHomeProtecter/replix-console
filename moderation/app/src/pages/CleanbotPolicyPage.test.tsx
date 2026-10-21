@@ -59,23 +59,35 @@ describe('클린봇 정책 화면(HP-347)', () => {
     })))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
-  it('라벨별 임계값이 0~1 밖이면 보내지 않고 알린다', async () => {
+  it.each([
+    ['악플/욕설=1.5', '라벨별 임계값 형식 오류: 악플/욕설=1.5'],
+    ['악플/욕설=-0.1', '라벨별 임계값 형식 오류: 악플/욕설=-0.1'],
+    ['악플/욕설=', '라벨별 임계값 형식 오류: 악플/욕설='],
+    ['=0.5', '라벨별 임계값 형식 오류: =0.5'],
+    ['악플/욕설=0.6\n악플/욕설=0.9', '라벨별 임계값에 같은 항목이 두 번 있습니다: 악플/욕설'],
+  ])('라벨별 임계값 %j 는 보내지 않고 알린다', async (input, message) => {
     const user = userEvent.setup()
     render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
     await user.click(screen.getByRole('button', { name: '초안 수정' }))
-    await user.type(screen.getByLabelText(/라벨별 임계값/), '악플/욕설=1.5')
+    await user.type(screen.getByLabelText(/라벨별 임계값/), input)
     await user.click(screen.getByRole('button', { name: '초안 저장' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('라벨별 임계값 형식 오류: 악플/욕설=1.5')
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
     expect(admin.updateCleanbotPolicy).not.toHaveBeenCalled()
   })
-  it('라벨별 임계값을 모르는 서버가 버리면 빠졌다고 알린다', async () => {
+  it.each([
+    ['칸을 모르는 서버(BE 릴리스 전)', undefined],
+    ['값을 돌려주지 않은 서버', {}],
+  ])('%s가 라벨별 임계값을 버리면 빠졌다고 알리고, 목록 새로고침 오류도 지우지 않는다', async (_, returned) => {
     const user = userEvent.setup()
-    vi.mocked(admin.updateCleanbotPolicy).mockResolvedValue({ ...policy, revision: 1 })
+    vi.mocked(admin.updateCleanbotPolicy).mockResolvedValue({ ...policy, categoryThresholds: returned, revision: 1 })
     render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
     await user.click(screen.getByRole('button', { name: '초안 수정' }))
     await user.type(screen.getByLabelText(/라벨별 임계값/), '악플/욕설=0.8')
+    vi.mocked(admin.listCleanbotPolicies).mockRejectedValueOnce(new Error('목록을 불러오지 못했습니다'))
     await user.click(screen.getByRole('button', { name: '초안 저장' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('아직 라벨별 임계값을 받지 않습니다')
+    const alert = await screen.findByRole('alert')
+    await waitFor(() => expect(alert).toHaveTextContent('아직 라벨별 임계값을 받지 않습니다'))
+    expect(alert).toHaveTextContent('목록을 불러오지 못했습니다')
   })
   it('활성 정책을 사유와 revision으로 안전하게 폐기한다', async () => {
     const user = userEvent.setup(); const active = { ...policy, status: 'ACTIVE' as const, revision: 3 }

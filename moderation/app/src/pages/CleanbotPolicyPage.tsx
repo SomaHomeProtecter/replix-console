@@ -12,6 +12,23 @@ import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { CLEANBOT_STATUS_LABELS } from '../recordLabels'
 
+/**
+ * 한 줄에 키=값인 칸(카테고리 매핑·라벨별 임계값)을 읽는다 — 첫 '='로 가르고, 값이 맞지 않거나(parse 가 null) 같은 키가 두 번
+ * 나오면 거절한다. 같은 키를 말없이 받으면 마지막 줄만 남아, 운영자가 위 줄의 값이 적용됐다고 믿는다(HP-693 리뷰).
+ */
+function keyValueLines<T>(text: string, field: string, parse: (value: string) => T | null): Record<string, T> {
+  const entries = new Map<string, T>()
+  for (const line of text.split('\n').filter((l) => l.trim())) {
+    const separator = line.indexOf('=')
+    const key = line.slice(0, separator).trim()
+    const value = separator < 1 ? null : parse(line.slice(separator + 1).trim())
+    if (!key || value === null) throw new Error(`${field} 형식 오류: ${line}`)
+    if (entries.has(key)) throw new Error(`${field}에 같은 항목이 두 번 있습니다: ${key}`)
+    entries.set(key, value)
+  }
+  return Object.fromEntries(entries)
+}
+
 export default function CleanbotPolicyPage() {
   const [policies, setPolicies] = useState<CleanbotPolicy[]>([])
   const [selected, setSelected] = useState<CleanbotPolicy | null>(null)
@@ -78,18 +95,12 @@ export default function CleanbotPolicyPage() {
     setLabelThresholds(Object.entries(policy?.categoryThresholds ?? {}).map(([label, value]) => `${label}=${value}`).join('\n'))
     setError(null); setFormOpen(true)
   }
-  const categoryMapping = () => Object.fromEntries(mapping.split('\n').filter((line) => line.trim()).map((line) => {
-    const separator = line.indexOf('=')
-    if (separator < 1 || !line.slice(separator + 1).trim()) throw new Error(`카테고리 매핑 형식 오류: ${line}`)
-    return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()]
-  }))
+  const categoryMapping = () => keyValueLines(mapping, '카테고리 매핑', (value) => value || null)
   // 라벨 이름은 서버가 모델 라벨로 거른다(모르는 라벨이면 쓸 수 있는 라벨과 함께 거절) — 여기서는 모양과 범위만 본다.
-  const categoryThresholds = () => Object.fromEntries(labelThresholds.split('\n').filter((line) => line.trim()).map((line) => {
-    const separator = line.lastIndexOf('=')
-    const value = Number(line.slice(separator + 1).trim())
-    if (separator < 1 || !line.slice(separator + 1).trim() || !(value >= 0 && value <= 1)) throw new Error(`라벨별 임계값 형식 오류: ${line}`)
-    return [line.slice(0, separator).trim(), value]
-  }))
+  const categoryThresholds = () => keyValueLines(labelThresholds, '라벨별 임계값', (value) => {
+    const n = Number(value)
+    return value && n >= 0 && n <= 1 ? n : null
+  })
   const parsedChangeSetId = Number(changeSetId)
   const validChangeSetId = Number.isInteger(parsedChangeSetId) && parsedChangeSetId > 0
   return <section className="feature-control" aria-label="클린봇 정책">
@@ -137,9 +148,11 @@ export default function CleanbotPolicyPage() {
           const payload = { name, blockedTerms: blocked.split(',').map((v) => v.trim()).filter(Boolean), allowedTerms: allowed.split(',').map((v) => v.trim()).filter(Boolean), threshold: Number(threshold), categoryMapping: categoryMapping(), categoryThresholds: categoryThresholds(), basePolicyId: editing?.basePolicyId ?? selected?.id ?? null }
           const p = editing ? await updateCleanbotPolicy(editing.id, editing.revision, payload) : await createCleanbotPolicy(payload)
           setFormOpen(false); setSelected(p); await load(p.id)
-          // BE 릴리스 전 서버는 이 칸을 모르고 버린다 — 초안은 저장됐지만 라벨별 임계값이 빠졌음을 알린다.
-          if (p.categoryThresholds === undefined && Object.keys(payload.categoryThresholds).length > 0) {
-            setError('이 서버는 아직 라벨별 임계값을 받지 않습니다 — 저장된 초안에는 라벨별 임계값이 빠졌습니다')
+          // BE 릴리스 전 서버는 이 칸을 모르고 버린다 — 초안은 저장됐지만 라벨별 임계값이 빠졌음을 알린다. 저장 전에는 알 길이
+          // 없다(정책이 하나도 없는 서버는 목록으로도 가릴 수 없다). 목록 새로고침 오류가 있으면 지우지 않고 함께 보인다.
+          if (Object.entries(payload.categoryThresholds).some(([label, value]) => p.categoryThresholds?.[label] !== value)) {
+            const dropped = '이 서버는 아직 라벨별 임계값을 받지 않습니다 — 저장된 초안에는 라벨별 임계값이 빠졌습니다'
+            setError((current) => current ? `${current} · ${dropped}` : dropped)
           }
         } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
       }}>{editing ? '초안 저장' : '초안 생성'}</button></div></Dialog>}
