@@ -43,6 +43,52 @@ describe('클린봇 정책 화면(HP-347)', () => {
       name: '정책 후보 B', threshold: 0.7, categoryMapping: { 지역: 'regional_hate' },
     })))
   })
+  it('라벨별 임계값을 보여 주고, 초안 수정에서 라벨=값 줄을 숫자로 보낸다(HP-693)', async () => {
+    const user = userEvent.setup()
+    vi.mocked(admin.listCleanbotPolicies).mockResolvedValue([{ ...policy, categoryThresholds: { 지역: 0.6 } }])
+    vi.mocked(admin.updateCleanbotPolicy).mockResolvedValue({ ...policy, categoryThresholds: { 지역: 0.6, '악플/욕설': 0.8 }, revision: 1 })
+    render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
+    expect(screen.getByText('지역 0.6')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '초안 수정' }))
+    const field = screen.getByLabelText(/라벨별 임계값/)
+    expect(field).toHaveValue('지역=0.6')
+    await user.type(field, '\n악플/욕설=0.8')
+    await user.click(screen.getByRole('button', { name: '초안 저장' }))
+    await waitFor(() => expect(admin.updateCleanbotPolicy).toHaveBeenCalledWith(1, 0, expect.objectContaining({
+      threshold: 0.7, categoryThresholds: { 지역: 0.6, '악플/욕설': 0.8 },
+    })))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+  it.each([
+    ['악플/욕설=1.5', '라벨별 임계값 형식 오류: 악플/욕설=1.5'],
+    ['악플/욕설=-0.1', '라벨별 임계값 형식 오류: 악플/욕설=-0.1'],
+    ['악플/욕설=', '라벨별 임계값 형식 오류: 악플/욕설='],
+    ['=0.5', '라벨별 임계값 형식 오류: =0.5'],
+    ['악플/욕설=0.6\n악플/욕설=0.9', '라벨별 임계값에 같은 항목이 두 번 있습니다: 악플/욕설'],
+  ])('라벨별 임계값 %j 는 보내지 않고 알린다', async (input, message) => {
+    const user = userEvent.setup()
+    render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
+    await user.click(screen.getByRole('button', { name: '초안 수정' }))
+    await user.type(screen.getByLabelText(/라벨별 임계값/), input)
+    await user.click(screen.getByRole('button', { name: '초안 저장' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(admin.updateCleanbotPolicy).not.toHaveBeenCalled()
+  })
+  it.each([
+    ['칸을 모르는 서버(BE 릴리스 전)', undefined],
+    ['값을 돌려주지 않은 서버', {}],
+  ])('%s가 라벨별 임계값을 버리면 빠졌다고 알리고, 목록 새로고침 오류도 지우지 않는다', async (_, returned) => {
+    const user = userEvent.setup()
+    vi.mocked(admin.updateCleanbotPolicy).mockResolvedValue({ ...policy, categoryThresholds: returned, revision: 1 })
+    render(<CleanbotPolicyPage />); await user.click(await screen.findByText('정책 후보 A'))
+    await user.click(screen.getByRole('button', { name: '초안 수정' }))
+    await user.type(screen.getByLabelText(/라벨별 임계값/), '악플/욕설=0.8')
+    vi.mocked(admin.listCleanbotPolicies).mockRejectedValueOnce(new Error('목록을 불러오지 못했습니다'))
+    await user.click(screen.getByRole('button', { name: '초안 저장' }))
+    const alert = await screen.findByRole('alert')
+    await waitFor(() => expect(alert).toHaveTextContent('아직 라벨별 임계값을 받지 않습니다'))
+    expect(alert).toHaveTextContent('목록을 불러오지 못했습니다')
+  })
   it('활성 정책을 사유와 revision으로 안전하게 폐기한다', async () => {
     const user = userEvent.setup(); const active = { ...policy, status: 'ACTIVE' as const, revision: 3 }
     vi.mocked(admin.listCleanbotPolicies).mockResolvedValue([active])

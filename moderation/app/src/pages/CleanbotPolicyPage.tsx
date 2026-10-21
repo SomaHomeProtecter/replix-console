@@ -12,6 +12,23 @@ import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
 import { CLEANBOT_STATUS_LABELS } from '../recordLabels'
 
+/**
+ * 한 줄에 키=값인 칸(카테고리 매핑·라벨별 임계값)을 읽는다 — 첫 '='로 가르고, 값이 맞지 않거나(parse 가 null) 같은 키가 두 번
+ * 나오면 거절한다. 같은 키를 말없이 받으면 마지막 줄만 남아, 운영자가 위 줄의 값이 적용됐다고 믿는다(HP-693 리뷰).
+ */
+function keyValueLines<T>(text: string, field: string, parse: (value: string) => T | null): Record<string, T> {
+  const entries = new Map<string, T>()
+  for (const line of text.split('\n').filter((l) => l.trim())) {
+    const separator = line.indexOf('=')
+    const key = line.slice(0, separator).trim()
+    const value = separator < 1 ? null : parse(line.slice(separator + 1).trim())
+    if (!key || value === null) throw new Error(`${field} 형식 오류: ${line}`)
+    if (entries.has(key)) throw new Error(`${field}에 같은 항목이 두 번 있습니다: ${key}`)
+    entries.set(key, value)
+  }
+  return Object.fromEntries(entries)
+}
+
 export default function CleanbotPolicyPage() {
   const [policies, setPolicies] = useState<CleanbotPolicy[]>([])
   const [selected, setSelected] = useState<CleanbotPolicy | null>(null)
@@ -27,6 +44,7 @@ export default function CleanbotPolicyPage() {
   const [allowed, setAllowed] = useState('')
   const [threshold, setThreshold] = useState('0.7')
   const [mapping, setMapping] = useState('')
+  const [labelThresholds, setLabelThresholds] = useState('')
   const [reason, setReason] = useState('')
   const [changeSetId, setChangeSetId] = useState('')
   const begin = useLatestRequest()
@@ -74,13 +92,15 @@ export default function CleanbotPolicyPage() {
     setBlocked(policy?.blockedTerms.join(', ') ?? ''); setAllowed(policy?.allowedTerms.join(', ') ?? '')
     setThreshold(String(policy?.threshold ?? 0.7))
     setMapping(policy ? Object.entries(policy.categoryMapping).map(([from, to]) => `${from}=${to}`).join('\n') : '')
+    setLabelThresholds(Object.entries(policy?.categoryThresholds ?? {}).map(([label, value]) => `${label}=${value}`).join('\n'))
     setError(null); setFormOpen(true)
   }
-  const categoryMapping = () => Object.fromEntries(mapping.split('\n').filter((line) => line.trim()).map((line) => {
-    const separator = line.indexOf('=')
-    if (separator < 1 || !line.slice(separator + 1).trim()) throw new Error(`카테고리 매핑 형식 오류: ${line}`)
-    return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()]
-  }))
+  const categoryMapping = () => keyValueLines(mapping, '카테고리 매핑', (value) => value || null)
+  // 라벨 이름은 서버가 모델 라벨로 거른다(모르는 라벨이면 쓸 수 있는 라벨과 함께 거절) — 여기서는 모양과 범위만 본다.
+  const categoryThresholds = () => keyValueLines(labelThresholds, '라벨별 임계값', (value) => {
+    const n = Number(value)
+    return value && n >= 0 && n <= 1 ? n : null
+  })
   const parsedChangeSetId = Number(changeSetId)
   const validChangeSetId = Number.isInteger(parsedChangeSetId) && parsedChangeSetId > 0
   return <section className="feature-control" aria-label="클린봇 정책">
@@ -97,6 +117,7 @@ export default function CleanbotPolicyPage() {
         <span className="feature-state">{CLEANBOT_STATUS_LABELS[selected.status]}</span><h2>{selected.name}</h2><p className="sub">작성 {selected.createdBy.displayName} · {formatKstShort(selected.createdAt)}</p>
         <dl className="change-summary"><div><dt>차단어</dt><dd>{selected.blockedTerms.join(', ') || '—'}</dd></div>
           <div><dt>허용어</dt><dd>{selected.allowedTerms.join(', ') || '—'}</dd></div><div><dt>임계값</dt><dd>{selected.threshold}</dd></div>
+          <div><dt>라벨별 임계값</dt><dd>{Object.entries(selected.categoryThresholds ?? {}).map(([label, value]) => `${label} ${value}`).join(', ') || '—'}</dd></div>
           <div><dt>카테고리 매핑</dt><dd>{Object.entries(selected.categoryMapping).map(([from, to]) => `${from} → ${to}`).join(', ') || '—'}</dd></div>
           <div><dt>PROD 변경 세트</dt><dd>{selected.activatedChangeSetId ? `#${selected.activatedChangeSetId}` : '—'}</dd></div></dl>
         <div className="change-actions">
@@ -120,12 +141,19 @@ export default function CleanbotPolicyPage() {
         <label className="span2"><span>차단어 (쉼표 구분)</span><textarea value={blocked} onChange={(e) => setBlocked(e.target.value)} /></label>
         <label className="span2"><span>허용어 (쉼표 구분)</span><textarea value={allowed} onChange={(e) => setAllowed(e.target.value)} /></label>
         <label><span>임계값 0~1</span><input type="number" min="0" max="1" step="0.05" value={threshold} onChange={(e) => setThreshold(e.target.value)} /></label>
+        <label className="span2"><span>라벨별 임계값 (한 줄에 라벨=값, 없는 라벨은 위 임계값)</span><textarea value={labelThresholds} placeholder="악플/욕설=0.8" onChange={(e) => setLabelThresholds(e.target.value)} /></label>
         <label className="span2"><span>카테고리 매핑 (한 줄에 원본=표준)</span><textarea value={mapping} placeholder="지역=regional_hate" onChange={(e) => setMapping(e.target.value)} /></label></div>
       <div className="dialog-actions"><button className="btn" type="button" disabled={busy} onClick={() => setFormOpen(false)}>취소</button><button className="btn" type="button" disabled={busy || !name.trim() || Number(threshold) < 0 || Number(threshold) > 1} onClick={async () => {
         setBusy(true); setError(null); try {
-          const payload = { name, blockedTerms: blocked.split(',').map((v) => v.trim()).filter(Boolean), allowedTerms: allowed.split(',').map((v) => v.trim()).filter(Boolean), threshold: Number(threshold), categoryMapping: categoryMapping(), basePolicyId: editing?.basePolicyId ?? selected?.id ?? null }
+          const payload = { name, blockedTerms: blocked.split(',').map((v) => v.trim()).filter(Boolean), allowedTerms: allowed.split(',').map((v) => v.trim()).filter(Boolean), threshold: Number(threshold), categoryMapping: categoryMapping(), categoryThresholds: categoryThresholds(), basePolicyId: editing?.basePolicyId ?? selected?.id ?? null }
           const p = editing ? await updateCleanbotPolicy(editing.id, editing.revision, payload) : await createCleanbotPolicy(payload)
           setFormOpen(false); setSelected(p); await load(p.id)
+          // BE 릴리스 전 서버는 이 칸을 모르고 버린다 — 초안은 저장됐지만 라벨별 임계값이 빠졌음을 알린다. 저장 전에는 알 길이
+          // 없다(정책이 하나도 없는 서버는 목록으로도 가릴 수 없다). 목록 새로고침 오류가 있으면 지우지 않고 함께 보인다.
+          if (Object.entries(payload.categoryThresholds).some(([label, value]) => p.categoryThresholds?.[label] !== value)) {
+            const dropped = '이 서버는 아직 라벨별 임계값을 받지 않습니다 — 저장된 초안에는 라벨별 임계값이 빠졌습니다'
+            setError((current) => current ? `${current} · ${dropped}` : dropped)
+          }
         } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
       }}>{editing ? '초안 저장' : '초안 생성'}</button></div></Dialog>}
   </section>
