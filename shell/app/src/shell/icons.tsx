@@ -47,3 +47,11 @@ export function ExternalIcon() {
 export function ArrowIcon() {
   return <Icon size={14}><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></Icon>
 }
+
+export function MenuIcon() {
+  return <Icon size={16}><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></Icon>
+}
+
+export function ChevronIcon() {
+  return <Icon size={14}><path d="m6 9 6 6 6-6" /></Icon>
+}
