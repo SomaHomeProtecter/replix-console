@@ -9,7 +9,6 @@ import { env } from '@core/env'
 import { formatKstShort } from '@core/time'
 import { moderateDenied } from '../permissions'
 import { useLatestRequest } from '@core/useLatestRequest'
-import { selectableRow } from '../selectableRow'
 import { useRevealPickedDetail } from '../revealPickedDetail'
 import { CLEANBOT_STATUS_LABELS } from '../recordLabels'
 
@@ -111,7 +110,7 @@ export default function CleanbotPolicyPage() {
     {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
     <div className="change-workspace" ref={reveal.workspace}><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
-      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...selectableRow(() => { reveal.picked(p.id); pick(p) })}>
+      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...reveal.rowProps(p.id, () => pick(p))}>
         <td><strong>{p.name}</strong><span>#{p.id} · rev {p.revision}</span></td><td>{CLEANBOT_STATUS_LABELS[p.status]}</td></tr>)}</tbody></table>
       {loading && policies.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && policies.length === 0 && <div className="empty-hint">정책 버전이 없습니다</div>}</div>

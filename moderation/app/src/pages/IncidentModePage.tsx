@@ -7,7 +7,6 @@ import Dialog from '@core/Dialog'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { useLatestRequest } from '@core/useLatestRequest'
-import { selectableRow } from '../selectableRow'
 import { useRevealPickedDetail } from '../revealPickedDetail'
 import { INCIDENT_RESOURCE_LABELS, INCIDENT_STATUS_LABELS, incidentEventLabel } from '../recordLabels'
 import { env } from '@core/env'
@@ -225,7 +224,7 @@ export default function IncidentModePage() {
   return <section className="feature-control incident-mode-page" aria-label="인시던트"><div className="board-head"><div><h1>{featureControlTitle('/feature-control/incident-mode')}</h1><p>장애 선언부터 완화·관찰·종료까지 책임과 근거를 관리합니다.</p></div>
     <span className="filter-note">활성 {counts.active} · primary {counts.primary}</span><button className="btn" disabled={!writable()} onClick={() => setCreating(true)}>인시던트 선언</button></div>
     <FeatureControlTabs />{error && <div className="error-box" role="alert">{error}</div>}<div className="change-workspace" ref={reveal.workspace}><div className="change-list"><table><thead><tr><th>인시던트</th><th>SEV</th><th>상태</th><th>담당</th></tr></thead><tbody>
-      {rows.map((row) => <tr key={row.id} className={selected?.id === row.id ? 'selected' : ''} aria-selected={selected?.id === row.id} {...selectableRow(() => { reveal.picked(row.id); pick(row.id) })}><td><strong>{row.title}</strong><span>{row.reference}{row.primary ? ' · primary' : ''}</span></td>
+      {rows.map((row) => <tr key={row.id} className={selected?.id === row.id ? 'selected' : ''} aria-selected={selected?.id === row.id} {...reveal.rowProps(row.id, () => pick(row.id))}><td><strong>{row.title}</strong><span>{row.reference}{row.primary ? ' · primary' : ''}</span></td>
         <td><span className={`incident-sev ${row.severity.toLowerCase()}`}>{row.severity}</span></td><td>{STATUS[row.status]}</td><td>{row.ownerUserId ? `#${row.ownerUserId}` : '—'}</td></tr>)}</tbody></table>
       {loading && rows.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && rows.length === 0 && <div className="empty-hint">현재 환경의 인시던트가 없습니다</div>}</div>{selected ? <Detail incident={selected} reload={(id) => load(id, pickCount)} /> : <div className="change-empty">인시던트를 선택하면 영향·상태·타임라인을 확인할 수 있습니다.</div>}</div>

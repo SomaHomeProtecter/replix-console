@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { selectableRow } from './selectableRow'
 
 type Key = string | number
 
@@ -24,20 +25,30 @@ function revealIfStacked(workspace: HTMLElement | null) {
  * 움직이지 않는다.
  *
  * @param shownKey 지금 상세에 그려진 항목의 키(없으면 null)
- * @returns workspace는 .change-workspace에 단다. picked(key)는 행을 고를 때 부른다.
+ * @returns workspace는 .change-workspace에 단다. rowProps(key, select)는 행에 펼쳐 단다 — 키보드로 고르기(selectableRow)를
+ *     겸하고, 고르는 동작보다 먼저 무엇을 골랐는지 적는다.
  */
 export function useRevealPickedDetail(shownKey: Key | null | undefined) {
   const workspace = useRef<HTMLDivElement>(null)
   const pending = useRef<Key | null>(null)
   useEffect(() => {
-    if (pending.current === null || pending.current !== shownKey) return
+    if (shownKey == null) return // 아직 그려진 상세가 없다 — 기다린다
+    // 상세가 바뀌면 기다림은 끝난다. 고른 항목이 그려지지 못한 채(불러오기 실패) 남겨 두면, 나중에 그 항목이 다른 길로
+    // 열릴 때 엉뚱하게 내려간다.
+    const wanted = pending.current
     pending.current = null
-    revealIfStacked(workspace.current)
+    if (wanted === shownKey) revealIfStacked(workspace.current)
   }, [shownKey])
-  const picked = (key: Key) => {
-    // 이미 그려진 항목을 다시 고르면 상세가 바뀌지 않아 렌더를 기다릴 것이 없다
-    if (key === shownKey) revealIfStacked(workspace.current)
-    else pending.current = key
-  }
-  return { workspace, picked }
+  const rowProps = (key: Key, select: () => void) => selectableRow(() => {
+    if (key === shownKey) {
+      // 이미 그려진 항목 — 상세가 바뀌지 않으니 기다릴 것이 없다. 앞서 고르고 기다리던 것은 잊는다.
+      pending.current = null
+      select()
+      revealIfStacked(workspace.current)
+    } else {
+      pending.current = key
+      select()
+    }
+  })
+  return { workspace, rowProps }
 }

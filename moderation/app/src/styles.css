@@ -81,8 +81,10 @@
   box-shadow: 0 10px 30px rgba(20, 30, 40, 0.25);
   /* 100% = 배경 안쪽 높이. 휴대폰 브라우저의 vh는 주소창을 접은 높이라 86vh가 보이는 칸보다 커져, 가운데 맞춘 창의
      위아래가 잘렸다(HP-699). 넓은 화면에서는 종전대로 86vh가 더 작다. */
-  width: min(480px, 100%); max-height: min(86vh, 100%); overflow: auto;
+  width: min(480px, 100%); max-height: min(86vh, 100%); overflow: auto; overscroll-behavior: contain;
 }
+/* 상세 창이 떠 있는 동안 뒤 페이지는 스크롤되지 않는다 — 공용 창과 같은 규칙(core.css .dialog-backdrop, HP-699). */
+html:has(.modal-backdrop) { overflow: hidden; }
 
 /* 진행 중 목록 — 잠긴 동안 흐리게 두어 지금 손댈 수 없다는 것이 한눈에 보인다 */
 .author-msgs[aria-busy='true'] .msg-picks { opacity: .55; }
@@ -916,15 +918,19 @@ table.feedback-table {
   .user-search { width: 170px; }
   .review-list li { grid-template-columns: 90px 112px minmax(160px, 1fr) 118px; }
   .review-category { display: none; }
-  .change-workspace { grid-template-columns: 1fr; overflow: auto; }
-  .change-list { min-height: 260px; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .change-workspace { grid-template-columns: 1fr; }
+  .change-list { border-right: 0; border-bottom: 1px solid var(--line); }
   .change-detail { overflow: visible; }
 }
+/* 761~900px는 데스크톱 틀(화면 높이 고정) 안이라 목록을 화면 높이의 42%로 묶고 칸 안에서 스크롤한다. 휴대폰 폭(760px
+   이하)은 공용 틀이 페이지 전체를 한 번에 스크롤하므로 묶지 않는다 — 목록은 내용만큼 늘고, 넓은 표만 목록 칸 안에서
+   가로로 민다. 행을 고르면 아래에 쌓인 상세로 내려간다(revealPickedDetail.ts, HP-699). */
+@media (min-width: 761px) and (max-width: 900px) {
+  .change-workspace { overflow: auto; }
+  .change-list { min-height: 260px; max-height: 42vh; }
+}
 
-/* 휴대폰 폭(760px 이하)은 공용 틀이 페이지 전체를 한 번에 스크롤한다(HP-699, shell.css). 목록·상세 화면의 목록도 다
-   펼쳐 따로 스크롤되지 않게 하고, 행을 고르면 아래에 쌓인 상세로 내려간다(selectableRow). */
 @media (max-width: 760px) {
-  .change-list { min-height: 0; max-height: none; overflow: visible; }
   table.feature-table { min-width: 760px; }
 }
 
@@ -938,7 +944,7 @@ table.feedback-table {
      나머지 칸을 한 줄씩 쌓는다. 칸을 나란히 두면 본문이 100px 남짓한 칸에 갇혀 여러 줄로 꺾였다. 머리글은 그 순서를
      알려 주는 한 줄로 둔다. */
   .user-header .top-act { margin-left: 0; }
-  .tab-bar { overflow-x: auto; }
+  .tab-bar { overflow-x: auto; border-bottom: 0; box-shadow: inset 0 -1px 0 var(--line); }
   .tab-bar button { flex: none; white-space: nowrap; margin-bottom: 0; }
   .evrow, .evrow.act { grid-template-columns: auto minmax(0, 1fr); row-gap: 3px; }
   .evrow > :nth-child(n + 3) { grid-column: 1 / -1; }

@@ -9,7 +9,6 @@ import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { moderateDenied } from '../permissions'
 import { REASON_LABELS } from '../format'
 import { useLatestRequest } from '@core/useLatestRequest'
-import { selectableRow } from '../selectableRow'
 import { useRevealPickedDetail } from '../revealPickedDetail'
 import { CASE_NOTE_LABELS, caseEventLabel } from '../recordLabels'
 
@@ -104,7 +103,7 @@ export default function OperationCasesPage() {
     </div>
     <div className="change-workspace" ref={reveal.workspace}><div className="change-list"><table><thead><tr><th>케이스</th><th>담당</th><th>상태</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.reportId} aria-current={selected?.item.reportId === row.reportId}
-          {...selectableRow(() => { reveal.picked(row.reportId); void open(row.reportId) })}><td><strong>신고 #{row.reportId}</strong><span>{row.messagePreview}</span></td>
+          {...reveal.rowProps(row.reportId, () => void open(row.reportId))}><td><strong>신고 #{row.reportId}</strong><span>{row.messagePreview}</span></td>
         <td>{row.assignee?.displayName ?? '미배정'}</td><td>{row.overdue ? '기한 초과' : row.stale ? '오래된 상태' : row.reviewRequested ? '재검토 요청' : '진행 가능'}</td></tr>)}
     </tbody></table>{loading && rows.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && rows.length === 0 && <div className="empty-hint">조건에 맞는 열린 케이스가 없습니다</div>}</div>

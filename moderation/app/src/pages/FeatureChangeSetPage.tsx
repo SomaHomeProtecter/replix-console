@@ -15,7 +15,6 @@ import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { useLatestRequest } from '@core/useLatestRequest'
-import { selectableRow } from '../selectableRow'
 import { useRevealPickedDetail } from '../revealPickedDetail'
 import { CHANGE_SET_STATUS_LABELS, changeSetEventLabel, itemResultLabel, RISK_LABELS } from '../recordLabels'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
@@ -322,7 +321,7 @@ export default function FeatureChangeSetPage() {
       <div className="change-list report-table-wrap">
         <table><thead><tr><th>변경 세트</th><th>상태</th><th>범위</th><th>생성</th></tr></thead>
           <tbody>{sets.map((set) => <tr key={set.id} className={selected?.id === set.id ? 'selected' : ''}
-              aria-selected={selected?.id === set.id} {...selectableRow(() => { reveal.picked(set.id); pick(set.id) })}>
+              aria-selected={selected?.id === set.id} {...reveal.rowProps(set.id, () => pick(set.id))}>
             <td><strong>{set.title}</strong><span>#{set.id} · {set.jiraReference ?? '참조 없음'}</span></td>
             <td><span className={`feature-state status-${set.status.toLowerCase()}`}>{STATUS_LABEL[set.status]}</span></td>
             <td>{set.items.length}개 · {RISK_LABELS[set.risk]}</td><td>{formatKstShort(set.createdAt)}</td>

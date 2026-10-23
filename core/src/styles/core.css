@@ -140,6 +140,10 @@ button { font: inherit; }
 /* 창 안의 칸은 줄지 않는다 — 창이 넘치면 칸을 눌러 자르지 않고 창이 스크롤된다. 줄게 두면 PROD 확인 창의 요약(무엇이
    바뀌는지)이 낮은 화면에서 눌려 잘린 채 확인 버튼만 보였다(HP-699 리뷰). */
 .dialog > * { flex-shrink: 0; }
+/* 창이 떠 있는 동안 뒤 페이지는 스크롤되지 않는다 — 휴대폰은 페이지 전체가 스크롤되므로(shell.css), 배경을 끌거나 창
+   끝에서 더 밀면 뒤 목록이 움직여 창을 닫은 뒤 보던 자리를 잃었다(HP-699). 넓은 틀은 문서가 스크롤되지 않아 그대로다. */
+html:has(.dialog-backdrop) { overflow: hidden; }
+.dialog { overscroll-behavior: contain; }
 .dialog h2 { margin: 0; font-size: 14px; color: var(--ink); font-weight: 800; }
 .dialog .sub { font-size: 12px; color: var(--muted); margin: 0; }
 /* 창의 ✕ — 공용 다이얼로그(core/Dialog)와 조치의 신고 상세 모달이 함께 쓴다. */
