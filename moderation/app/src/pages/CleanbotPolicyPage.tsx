@@ -9,7 +9,7 @@ import { env } from '@core/env'
 import { formatKstShort } from '@core/time'
 import { moderateDenied } from '../permissions'
 import { useLatestRequest } from '@core/useLatestRequest'
-import { selectableRow } from '../selectableRow'
+import { useRevealPickedDetail } from '../revealPickedDetail'
 import { CLEANBOT_STATUS_LABELS } from '../recordLabels'
 
 /**
@@ -32,6 +32,7 @@ function keyValueLines<T>(text: string, field: string, parse: (value: string) =>
 export default function CleanbotPolicyPage() {
   const [policies, setPolicies] = useState<CleanbotPolicy[]>([])
   const [selected, setSelected] = useState<CleanbotPolicy | null>(null)
+  const reveal = useRevealPickedDetail(selected?.id)
   const [simulation, setSimulation] = useState<CleanbotSimulation | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -108,8 +109,8 @@ export default function CleanbotPolicyPage() {
       <button className="btn" type="button" disabled={denied !== null} title={denied ?? undefined} onClick={() => openForm(null)}>새 정책</button></div>
     {denied && <p className="readonly-note">{denied}</p>}
     {error && <div className="error-box" role="alert">{error}</div>}
-    <div className="change-workspace"><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
-      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...selectableRow(() => pick(p))}>
+    <div className="change-workspace" ref={reveal.workspace}><div className="change-list"><table><thead><tr><th>정책 버전</th><th>상태</th></tr></thead><tbody>
+      {policies.map((p) => <tr key={p.id} aria-current={selected?.id === p.id} {...reveal.rowProps(p.id, () => pick(p))}>
         <td><strong>{p.name}</strong><span>#{p.id} · rev {p.revision}</span></td><td>{CLEANBOT_STATUS_LABELS[p.status]}</td></tr>)}</tbody></table>
       {loading && policies.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && policies.length === 0 && <div className="empty-hint">정책 버전이 없습니다</div>}</div>

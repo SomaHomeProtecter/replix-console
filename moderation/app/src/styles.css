@@ -79,8 +79,12 @@
 .modal-card {
   position: relative; background: var(--panel); border-radius: 10px;
   box-shadow: 0 10px 30px rgba(20, 30, 40, 0.25);
-  width: min(480px, 100%); max-height: 86vh; overflow: auto;
+  /* 100% = 배경 안쪽 높이. 휴대폰 브라우저의 vh는 주소창을 접은 높이라 86vh가 보이는 칸보다 커져, 가운데 맞춘 창의
+     위아래가 잘렸다(HP-699). 넓은 화면에서는 종전대로 86vh가 더 작다. */
+  width: min(480px, 100%); max-height: min(86vh, 100%); overflow: auto; overscroll-behavior: contain;
 }
+/* 상세 창이 떠 있는 동안 뒤 페이지는 스크롤되지 않는다 — 공용 창과 같은 규칙(core.css .dialog-backdrop, HP-699). */
+html:has(.modal-backdrop) { overflow: hidden; }
 
 /* 진행 중 목록 — 잠긴 동안 흐리게 두어 지금 손댈 수 없다는 것이 한눈에 보인다 */
 .author-msgs[aria-busy='true'] .msg-picks { opacity: .55; }
@@ -287,7 +291,7 @@ table.report-table { width: 100%; border-collapse: collapse; }
   overflow: auto; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.12);
 }
 .back-row { padding: 10px 18px 0; }
-.user-header { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.user-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
 .user-header .ua {
   width: 38px; height: 38px; border-radius: 50%; background: #e9b06c; color: #fff;
   font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none;
@@ -301,7 +305,10 @@ table.report-table { width: 100%; border-collapse: collapse; }
   margin-top: 2px; font-size: 11.5px; color: var(--muted-2);
   font-variant-numeric: tabular-nums;
 }
-.user-header .top-act { margin-left: auto; display: flex; gap: 8px; }
+/* 조치 버튼은 자리가 모자라면 머리 아래 줄로 내린다 — 한 줄에 두면 좁은 폭에서 버튼이 눌려 '정지 해제'가 세로로 섰고
+   '계정 정지…'는 화면 밖으로 밀렸다(HP-699). */
+.user-header .top-act { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.user-header .top-act .btn { white-space: nowrap; }
 /* 기본 정보 가로 스트립(HP-268) — 좌측 240px 칸에선 이메일이 두 줄로 접혔고, 칸을 넓히면
    조치 이력이 좁아져 돌려막기가 됐다. 한 줄로 펴서 탭이 전체 폭을 쓰게 한다. */
 .info-strip {
@@ -370,7 +377,10 @@ table.report-table { width: 100%; border-collapse: collapse; }
 }
 .feature-control > .board-head { padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .feature-control .board-head > div p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+/* 최소 폭 700px(첫 칸 약 96px) — 고정 폭 칸(90·76·150·210·78px)을 빼고 남는 첫 칸이 좁은 폭에서 0px로 눌려 기능 이름이
+   한 글자씩 세로로 섰다(HP-699). 폭이 모자라면 표를 감싼 칸(.report-table-wrap) 안에서 가로로 민다. 이 폭이면 첫 칸이
+   종전에도 읽히던 넓은 화면(본문 700px 이상)은 그대로다. 휴대폰은 어차피 가로로 밀어 보므로 760px로 넉넉히 둔다. */
+table.feature-table { width: 100%; min-width: 700px; border-collapse: collapse; table-layout: fixed; }
 .feature-table th, .feature-table td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); text-align: left; vertical-align: middle; }
 .feature-table th { color: var(--muted-2); background: var(--panel-2); font-size: 11px; letter-spacing: .03em; }
 .feature-table th:nth-child(1) { width: 32%; }
@@ -381,7 +391,7 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .feature-table th:nth-child(6) { width: 78px; }
 .feature-name { display: flex; flex-direction: column; min-width: 0; }
 .feature-name strong { color: var(--ink); font-size: 13px; }
-.feature-name code { margin-top: 1px; color: var(--blue); font: 10.5px var(--mono); }
+.feature-name code { margin-top: 1px; color: var(--blue); font: 10.5px var(--mono); overflow-wrap: anywhere; } /* 칸보다 긴 키는 옆 칸에 겹치지 않게 꺾는다(HP-699) */
 .feature-name span, .feature-runtime span, .feature-meta { display: block; color: var(--muted); font-size: 11px; }
 .feature-state { display: inline-block; min-width: 62px; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 8px; text-align: center; font-size: 11px; font-weight: 800; }
 .feature-state.on { color: var(--green); background: var(--green-soft); border-color: #b9ddc8; }
@@ -391,8 +401,8 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .feature-state.disconnected { color: var(--muted); background: var(--line-2); }
 .feature-table .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .feature-runtime strong { color: var(--body); font-size: 11.5px; }
-/* 창이 낮아도 아래 버튼이 잘리지 않게 높이를 묶고 안에서 스크롤한다(프리셋·공지·인시던트 창과 같은 규칙). */
-.feature-dialog { width: min(520px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; }
+/* 큰 창은 너비만 더한다 — 높이 상한과 창 안 스크롤은 공용 .dialog 규칙이 맡는다(core.css, HP-699). */
+.feature-dialog { width: min(520px, 100%); }
 .feature-toggle { display: flex; gap: 6px; }
 .feature-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .feature-form-grid .span2 { grid-column: span 2; }
@@ -405,8 +415,12 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .feature-form-grid textarea { resize: vertical; }
 
 /* HP-343 변경 세트 — 기능 목록과 같은 패널·표·chip 문법 안에서 승인 흐름만 한 단계 깊게 보인다. */
-.control-tabs { display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
-.control-tabs a { padding: 9px 12px 8px; color: var(--muted-2); font-size: 12px; font-weight: 750; text-decoration: none; border-bottom: 2px solid transparent; }
+/* flex: none — 가로 스크롤 칸은 세로 플렉스 안에서 최소 높이가 0으로 잡혀, 내용이 넘치는 화면(프리셋·참조 타임라인)에서
+   탭 줄이 눌려 잘렸다(HP-699). */
+.control-tabs { flex: none; display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel-2); overflow-x: auto; }
+/* 탭 이름은 줄바꿈하지 않는다 — 폭이 모자라면 탭 줄이 가로로 밀린다. 줄바꿈을 두면 좁은 폭에서 탭이 눌려 이름이 한
+   글자씩 세로로 섰다(HP-699). */
+.control-tabs a { flex: none; white-space: nowrap; padding: 9px 12px 8px; color: var(--muted-2); font-size: 12px; font-weight: 750; text-decoration: none; border-bottom: 2px solid transparent; }
 .control-tabs a.active { color: var(--ink); border-bottom-color: var(--ink); }
 .change-set-page > .board-head .filter-note { margin-left: auto; }
 .change-workspace { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(410px, .9fr); min-height: 0; flex: 1; }
@@ -469,7 +483,7 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .change-events strong { color: var(--ink); }
 .change-events p { margin: 0; color: var(--body); }
 .change-empty { display: flex; align-items: center; justify-content: center; padding: 30px; color: var(--muted); text-align: center; }
-.change-set-create { width: min(760px, calc(100vw - 40px)); max-height: min(820px, calc(100vh - 40px)); overflow: auto; }
+.change-set-create { width: min(760px, 100%); max-height: min(820px, 100%); }
 .change-picks { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .change-pick { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
 .change-pick.selected { border-color: var(--line-strong); background: var(--panel); }
@@ -505,13 +519,13 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .preset-created { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid #b9ddc8; background: var(--green-soft); color: var(--body); font-size: 11.5px; }
 .preset-created span { flex: 1; }
 .preset-created strong { display: block; color: var(--green); }
-.preset-dialog { width: min(620px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; }
+.preset-dialog { width: min(620px, 100%); }
 .preset-dialog .preset-preview { margin: 10px 0; }
 .preset-preview .feature-state { min-width: 88px; }
 
 /* HP-343 사용자 공지 — 공개 배너와 운영 정보의 경계를 화면에서도 분리한다. */
 .notice-page > .board-head .filter-note { margin-left: auto; }
-.notice-dialog { width: min(680px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; }
+.notice-dialog { width: min(680px, 100%); }
 .feature-form-grid select { width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 7px 9px; background: var(--panel); color: var(--body); font: inherit; font-size: 12px; }
 .notice-preview { display: grid; grid-template-columns: auto minmax(120px, max-content) 1fr; align-items: center; gap: 9px; margin: 12px 0; border: 1px solid #cadbec; border-left: 4px solid var(--blue); border-radius: var(--radius); padding: 9px 11px; background: var(--blue-soft); }
 .notice-preview > span { border-radius: 999px; padding: 2px 7px; background: var(--panel); color: var(--blue); font-size: 10px; font-weight: 800; }
@@ -547,7 +561,7 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .drift-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .drift-actions > span { color: var(--muted-2); font-size: 10.5px; }
 .drift-actions .btn { margin-left: auto; white-space: nowrap; }
-.drift-dialog { width: min(600px, calc(100vw - 40px)); }
+.drift-dialog { width: min(600px, 100%); }
 .drift-reapply-target { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 10px 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 10px; background: var(--panel-2); }
 .drift-reapply-target strong { color: var(--ink); font-size: 12px; }
 .drift-reapply-target code { color: var(--blue); font: 10px var(--mono); }
@@ -605,7 +619,7 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
 .incident-primary-banner.severity-sev1, .incident-primary-banner.severity-sev2 { border-color: #e4b7b7; background: var(--red-soft); }
 .incident-primary-banner.severity-sev1 strong, .incident-primary-banner.severity-sev2 strong { color: var(--red); }
 .incident-mode-page > .board-head .filter-note { margin-left: auto; }
-.incident-dialog { width: min(650px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; }
+.incident-dialog { width: min(650px, 100%); }
 .incident-sev { display: inline-block; border-radius: 4px; padding: 2px 7px; color: var(--amber-ink); background: var(--amber-bg); font: 10.5px var(--mono); font-weight: 800; }
 .incident-sev.sev1, .incident-sev.sev2 { color: var(--red); background: var(--red-soft); }
 .incident-sev.sev4 { color: var(--muted-2); background: var(--line-2); }
@@ -647,6 +661,8 @@ table.feature-table { width: 100%; border-collapse: collapse; table-layout: fixe
   background: var(--panel); border: 1px solid var(--line-strong); border-bottom-width: 2px;
   border-radius: 4px; padding: 1px 5px; margin-right: 4px;
 }
+/* 키보드 없는 터치 화면(휴대폰)에서는 쓸 수 없는 안내라 감춘다(HP-699). */
+@media (hover: none) and (pointer: coarse) { .kbar { display: none; } }
 
 /* 작성자 글 일괄 보기·가림(HP-298) — 상세 모달 안, 조치 그리드 위(판단 재료). */
 .author-msgs { margin-top: 4px; }
@@ -778,7 +794,7 @@ table.action-table {
 .review-head { display: flex; align-items: end; gap: 16px; }
 .review-head h1 { margin: 0; font-size: 16px; color: var(--ink); }
 .review-head p { margin: 3px 0 0; color: var(--muted-2); font-size: 12px; }
-.review-head .refresh { margin-left: auto; padding: 5px 11px; }
+.review-head .refresh { margin-left: auto; padding: 5px 11px; white-space: nowrap; } /* 좁은 폭에서 '새로/고침'으로 꺾였다(HP-699) */
 /* 패널 안에서 스크롤한다(HP-527). 바깥 틀(.content·.moderation-review)이 창 높이에 맞춰 줄어드는 구조라, 종전처럼
    overflow: hidden이면 낮은 창에서 목록 아래쪽이 잘린 채 닿을 방법이 없었다. 필터 줄은 위에 붙여 둔다. */
 .review-panel {
@@ -902,9 +918,20 @@ table.feedback-table {
   .user-search { width: 170px; }
   .review-list li { grid-template-columns: 90px 112px minmax(160px, 1fr) 118px; }
   .review-category { display: none; }
-  .change-workspace { grid-template-columns: 1fr; overflow: auto; }
-  .change-list { min-height: 260px; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .change-workspace { grid-template-columns: 1fr; }
+  .change-list { border-right: 0; border-bottom: 1px solid var(--line); }
   .change-detail { overflow: visible; }
+}
+/* 761~900px는 데스크톱 틀(화면 높이 고정) 안이라 목록을 화면 높이의 42%로 묶고 칸 안에서 스크롤한다. 휴대폰 폭(760px
+   이하)은 공용 틀이 페이지 전체를 한 번에 스크롤하므로 묶지 않는다 — 목록은 내용만큼 늘고, 넓은 표만 목록 칸 안에서
+   가로로 민다. 행을 고르면 아래에 쌓인 상세로 내려간다(revealPickedDetail.ts, HP-699). */
+@media (min-width: 761px) and (max-width: 900px) {
+  .change-workspace { overflow: auto; }
+  .change-list { min-height: 260px; max-height: 42vh; }
+}
+
+@media (max-width: 760px) {
+  table.feature-table { min-width: 760px; }
 }
 
 /* 좁은 화면 — 사용자 검색이 한 줄을 차지하고, 탭과 기능 표는 각자 자기 영역에서만 가로 스크롤된다.
@@ -912,7 +939,16 @@ table.feedback-table {
 @media (max-width: 640px) {
   .user-search { order: 5; width: 100%; margin-left: 0; }
   .user-search-results { left: 0; right: auto; width: 100%; }
-  .control-tabs { overflow-x: auto; padding-inline: 10px; }
+  .control-tabs { padding-inline: 10px; }
+  /* 사용자 상세(HP-699) — 조치 버튼 줄은 왼쪽부터, 탭은 줄바꿈 없이 가로로 밀고, 기록 줄은 첫 줄에 시각·종류를 두고
+     나머지 칸을 한 줄씩 쌓는다. 칸을 나란히 두면 본문이 100px 남짓한 칸에 갇혀 여러 줄로 꺾였다. 머리글은 그 순서를
+     알려 주는 한 줄로 둔다. */
+  .user-header .top-act { margin-left: 0; }
+  .tab-bar { overflow-x: auto; border-bottom: 0; box-shadow: inset 0 -1px 0 var(--line); }
+  .tab-bar button { flex: none; white-space: nowrap; margin-bottom: 0; }
+  .evrow, .evrow.act { grid-template-columns: auto minmax(0, 1fr); row-gap: 3px; }
+  .evrow > :nth-child(n + 3) { grid-column: 1 / -1; }
+  .evrow.head2 { display: flex; flex-wrap: wrap; gap: 0 10px; }
   .preset-page > .board-head .filter-note { order: 3; width: 100%; margin-left: 0; }
   .preset-grid { grid-template-columns: 1fr; padding: 12px; }
   .preset-created { align-items: stretch; flex-direction: column; }

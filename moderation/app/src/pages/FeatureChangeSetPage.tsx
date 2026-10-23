@@ -15,7 +15,7 @@ import { realmRoles } from '@core/auth'
 import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { useLatestRequest } from '@core/useLatestRequest'
-import { selectableRow } from '../selectableRow'
+import { useRevealPickedDetail } from '../revealPickedDetail'
 import { CHANGE_SET_STATUS_LABELS, changeSetEventLabel, itemResultLabel, RISK_LABELS } from '../recordLabels'
 import { formatKstShort, isoToKstInput, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
@@ -267,6 +267,7 @@ export default function FeatureChangeSetPage() {
   const [sets, setSets] = useState<FeatureChangeSet[]>([])
   const [flags, setFlags] = useState<FeatureFlagRow[]>([])
   const [selected, setSelected] = useState<FeatureChangeSet | null>(null)
+  const reveal = useRevealPickedDetail(selected?.id)
   const [creating, setCreating] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -316,11 +317,11 @@ export default function FeatureChangeSetPage() {
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>
     <FeatureControlTabs />
     {error && <div className="error-box" role="alert">{error}</div>}
-    <div className="change-workspace">
+    <div className="change-workspace" ref={reveal.workspace}>
       <div className="change-list report-table-wrap">
         <table><thead><tr><th>변경 세트</th><th>상태</th><th>범위</th><th>생성</th></tr></thead>
           <tbody>{sets.map((set) => <tr key={set.id} className={selected?.id === set.id ? 'selected' : ''}
-              aria-selected={selected?.id === set.id} {...selectableRow(() => pick(set.id))}>
+              aria-selected={selected?.id === set.id} {...reveal.rowProps(set.id, () => pick(set.id))}>
             <td><strong>{set.title}</strong><span>#{set.id} · {set.jiraReference ?? '참조 없음'}</span></td>
             <td><span className={`feature-state status-${set.status.toLowerCase()}`}>{STATUS_LABEL[set.status]}</span></td>
             <td>{set.items.length}개 · {RISK_LABELS[set.risk]}</td><td>{formatKstShort(set.createdAt)}</td>
