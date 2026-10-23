@@ -187,11 +187,12 @@
 /* 좁은 화면: 메뉴를 본문 위로 올려 지금 화면 이름을 단 '메뉴' 단추 한 줄로 접고, 톱바를 접는다(core/styles/core.css·조치
    styles.css의 640px 규칙과 순서를 맞춘다). 메뉴를 펼쳐 두던 때는 화면 높이의 42%를 차지해 본문이 맨 아래 띠에 갇혔다
    (HP-699, 아이폰 SE 본문 192px). 목록은 단추의 aria-expanded를 그대로 읽어 숨기고, 펼치면 단추 아래에서만 스크롤된다 —
-   단추가 늘 보여야 다시 접을 수 있다. */
+   단추가 늘 보여야 다시 접을 수 있다. 펼친 높이의 상한은 본문 칸(.cs-body)의 70%다. vh는 휴대폰 브라우저가 주소창을 접은
+   높이로 재서, 주소창이 보이는 동안에는 70vh가 보이는 칸의 70%보다 커진다. */
 @media (max-width: 760px) {
   .cs-body { flex-direction: column; }
   .cs-nav {
-    width: auto; max-height: 70vh; overflow: hidden; gap: 0; padding: 0;
+    width: auto; max-height: 70%; overflow: hidden; gap: 0; padding: 0;
     border-right: 0; border-bottom: 1px solid var(--line);
   }
   .cs-nav-toggle {
@@ -204,7 +205,8 @@
     flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--ink); font-weight: 800;
   }
-  .cs-nav-toggle[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
+  .cs-nav-toggle-chevron { display: flex; }
+  .cs-nav-toggle[aria-expanded="true"] .cs-nav-toggle-chevron { transform: rotate(180deg); }
   .cs-nav-toggle[aria-expanded="false"] + .cs-nav-list { display: none; }
   .cs-nav-list { min-height: 0; overflow-y: auto; padding: 4px 10px 14px; border-top: 1px solid var(--line-2); }
   .cs-page { padding: 18px 16px 32px; }

@@ -103,10 +103,11 @@ describe('공용 틀 — 좁은 화면 메뉴 접기(HP-699)', () => {
     expect(toggle()).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('메뉴에서 화면을 고르면 다시 접는다 — 펼친 채 두면 본문이 메뉴 아래로 밀린다', () => {
-    render(<Shell section="home" path="/" search={null}>본문</Shell>)
+  // 같은 구역 안 이동(메뉴·본문 링크·사용자 검색·뒤로 가기)은 틀을 다시 만들지 않고 주소만 바꿔 다시 그린다.
+  it('화면이 바뀌면 다시 접는다 — 펼친 채 두면 새 화면이 메뉴 아래로 밀린다', () => {
+    const { rerender } = render(<Shell section="moderation" path="/moderation/dev/" search={null}>본문</Shell>)
     fireEvent.click(toggle())
-    fireEvent.click(within(nav()).getByRole('link', { name: 'AI 프롬프트' }))
+    rerender(<Shell section="moderation" path="/moderation/dev/users/9" search={null}>본문</Shell>)
     expect(toggle()).toHaveAttribute('aria-expanded', 'false')
   })
 

@@ -1,4 +1,4 @@
-import { Fragment, useId, useState } from 'react'
+import { Fragment, useEffect, useId, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { logout, roleLabel, switchEnvironment, userName } from '@core/auth'
 import { env } from '@core/env'
@@ -27,7 +27,7 @@ import { ChevronIcon, ExternalIcon, HomeIcon, LockIcon, MenuIcon, ShieldIcon, Sp
 
 type NavItem = { label: string; href: string; active: boolean; target: ConsoleEnvironment }
 
-/** 메뉴에 없는 화면(조치의 사용자 상세 등)에서 접힌 메뉴 단추가 보일 이름. */
+/** 구역 이름 — 메뉴의 홈·묶음 제목이고, 메뉴에 없는 화면(조치의 사용자 상세 등)에서는 접힌 메뉴 단추에 보인다. */
 const SECTION_LABELS: Record<Section, string> = { home: '홈', seeding: '시딩', moderation: '조치' }
 
 function splitPath(path: string): { pathname: string; search: string } {
@@ -58,7 +58,7 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
   const rest = section === 'moderation' ? (pathname.slice(basename.length) || '/') : ''
   const targetOf = (href: string) => environmentForPath(splitPath(href).pathname, hosted, environment)
 
-  const home: NavItem = { label: '홈', href: '/', active: section === 'home', target: targetOf('/') }
+  const home: NavItem = { label: SECTION_LABELS.home, href: '/', active: section === 'home', target: targetOf('/') }
   const seeding: NavItem[] = [
     { label: '회차 작업', href: SEEDING_PATH, active: section === 'seeding' && view !== 'prompts', target: targetOf(SEEDING_PATH) },
     { label: 'AI 프롬프트', href: `${SEEDING_PATH}?view=prompts`, active: section === 'seeding' && view === 'prompts', target: targetOf(SEEDING_PATH) },
@@ -76,11 +76,12 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuListId = useId()
+  // 화면이 바뀌면 접는다(HP-699). 같은 구역 안 이동(메뉴·본문 링크·사용자 검색·뒤로 가기)은 틀을 다시 만들지 않아
+  // 펼침이 남고, 새 화면이 메뉴 아래로 밀린다. 링크 클릭이 아니라 주소로 가르므로 새 탭으로 연 링크에는 접히지 않는다.
+  useEffect(() => { setMenuOpen(false) }, [path])
 
   const follow = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
     if (locked) { event.preventDefault(); return }
-    // 같은 구역 안 이동은 틀을 다시 그리지 않아 펼침 상태가 남는다 — 고르면 접어야 본문이 다시 보인다(HP-699).
-    setMenuOpen(false)
     handleLinkClick(event, href)
   }
 
@@ -152,7 +153,7 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
             <MenuIcon />
             <span className="cs-nav-toggle-title">메뉴</span>{' '}
             <span className="cs-nav-toggle-current">{current?.label ?? SECTION_LABELS[section]}</span>
-            <ChevronIcon />
+            <span className="cs-nav-toggle-chevron"><ChevronIcon /></span>
           </button>
           <div className="cs-nav-list" id={menuListId}>
             {link(home, 'cs-nav-home', <HomeIcon />)}
@@ -162,7 +163,7 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
               <span className="cs-group-mark" aria-hidden="true"><SproutIcon /></span>
               <span className="cs-group-text">
                 <span className="cs-group-title">
-                  <strong>시딩</strong>
+                  <strong>{SECTION_LABELS.seeding}</strong>
                   {seedingFixed && <span className="cs-fixed"><LockIcon />PROD 고정</span>}
                 </span>
                 <span className="cs-group-sub">수집 · AI 채팅 계획 · 채팅 넣기</span>
@@ -175,7 +176,7 @@ export default function Shell({ section, path, locked = false, lockedTitle, sear
             <div className="cs-group">
               <span className="cs-group-mark" aria-hidden="true"><ShieldIcon /></span>
               <span className="cs-group-text">
-                <span className="cs-group-title"><strong>조치</strong></span>
+                <span className="cs-group-title"><strong>{SECTION_LABELS.moderation}</strong></span>
                 <span className="cs-group-sub">신고 · 정지 · 기능 제어</span>
               </span>
             </div>
