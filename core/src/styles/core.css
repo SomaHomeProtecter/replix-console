@@ -123,9 +123,10 @@ button { font: inherit; }
 .btn-link[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; text-decoration: none; }
 .btn-link[aria-disabled="true"]:hover { text-decoration: none; }
 
-/* 창은 배경의 안쪽(사방 20px 여백)보다 길어지지 않고, 넘치면 창 안에서 스크롤된다(HP-699). 배경이 가운데 맞춤이라 창이
-   화면보다 길면 위아래가 잘려 닿을 수 없었다. 높이 상한을 vh가 아니라 배경 높이(100%)로 잡는 것은, 휴대폰 브라우저의 vh가
-   주소창을 접은 높이라 보이는 칸보다 크기 때문이다. 조치의 큰 창(.feature-dialog 등)도 같은 상한을 쓴다. */
+/* 창은 배경의 안쪽(사방 20px 여백)보다 커지지 않고, 넘치면 창 안에서 스크롤된다(HP-699). 배경이 가운데 맞춤이라 창이
+   화면보다 길면 위아래가 잘려 닿을 수 없었다. 크기 상한을 vh·vw가 아니라 배경 안쪽(100%)으로 잡는다 — 휴대폰 브라우저의
+   vh는 주소창을 접은 높이라 보이는 칸보다 크고, 100vw는 문서 스크롤바 폭까지 넣는다. 조치의 큰 창(.feature-dialog 등)은
+   너비만 더한다. */
 .dialog-backdrop {
   position: fixed; inset: 0; background: rgba(31, 39, 50, 0.45); padding: 20px;
   display: flex; align-items: center; justify-content: center; z-index: 10;
@@ -133,9 +134,12 @@ button { font: inherit; }
 .dialog {
   position: relative; /* ✕(.modal-close) 절대 배치 기준 */
   background: var(--panel); border-radius: 10px; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.25);
-  width: min(400px, calc(100vw - 40px)); max-height: 100%; overflow-y: auto;
+  width: min(400px, 100%); max-height: 100%; overflow-y: auto;
   padding: 18px; display: flex; flex-direction: column; gap: 10px;
 }
+/* 창 안의 칸은 줄지 않는다 — 창이 넘치면 칸을 눌러 자르지 않고 창이 스크롤된다. 줄게 두면 PROD 확인 창의 요약(무엇이
+   바뀌는지)이 낮은 화면에서 눌려 잘린 채 확인 버튼만 보였다(HP-699 리뷰). */
+.dialog > * { flex-shrink: 0; }
 .dialog h2 { margin: 0; font-size: 14px; color: var(--ink); font-weight: 800; }
 .dialog .sub { font-size: 12px; color: var(--muted); margin: 0; }
 /* 창의 ✕ — 공용 다이얼로그(core/Dialog)와 조치의 신고 상세 모달이 함께 쓴다. */

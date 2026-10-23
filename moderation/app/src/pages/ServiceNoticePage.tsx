@@ -13,6 +13,7 @@ import { can } from '@core/roles'
 import FeatureControlTabs, { featureControlTitle } from '../components/FeatureControlTabs'
 import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
+import { useRevealPickedDetail } from '../revealPickedDetail'
 import { NOTICE_STATUS_LABELS, noticeEventLabel } from '../recordLabels'
 import { formatKstShort, kstInputToIso } from '@core/time'
 import { useWriting } from '@core/writing'
@@ -198,6 +199,7 @@ export default function ServiceNoticePage() {
   const [searchParams] = useSearchParams()
   const [notices, setNotices] = useState<ServiceNotice[]>([])
   const [selected, setSelected] = useState<ServiceNotice | null>(null)
+  const reveal = useRevealPickedDetail(selected?.id)
   const [creating, setCreating] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -245,10 +247,10 @@ export default function ServiceNoticePage() {
       <button type="button" className="btn refresh" disabled={loading} onClick={() => void load()}>새로고침</button></div>
     <FeatureControlTabs />
     {error && <div className="error-box" role="alert">{error}</div>}
-    <div className="change-workspace"><div className="change-list report-table-wrap">
+    <div className="change-workspace" ref={reveal.workspace}><div className="change-list report-table-wrap">
       <table><thead><tr><th>사용자 공지</th><th>상태</th><th>유형</th><th>생성</th></tr></thead>
         <tbody>{notices.map((notice) => <tr key={notice.id} className={selected?.id === notice.id ? 'selected' : ''}
-            aria-selected={selected?.id === notice.id} {...selectableRow(() => pick(notice.id))}>
+            aria-selected={selected?.id === notice.id} {...selectableRow(() => { reveal.picked(notice.id); pick(notice.id) })}>
           <td><strong>{notice.title}</strong><span>#{notice.id} · {notice.incidentReference ?? notice.jiraReference ?? '참조 없음'}</span></td>
           <td><span className={`feature-state status-${notice.status.toLowerCase()}`}>{STATUS_LABEL[notice.status]}</span></td>
           <td>{KIND_LABEL[notice.kind]}</td><td>{formatKstShort(notice.createdAt)}</td>

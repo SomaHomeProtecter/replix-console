@@ -10,6 +10,7 @@ import { moderateDenied } from '../permissions'
 import { REASON_LABELS } from '../format'
 import { useLatestRequest } from '@core/useLatestRequest'
 import { selectableRow } from '../selectableRow'
+import { useRevealPickedDetail } from '../revealPickedDetail'
 import { CASE_NOTE_LABELS, caseEventLabel } from '../recordLabels'
 
 const VIEWS: Array<[OperationCaseView, string]> = [
@@ -20,6 +21,7 @@ export default function OperationCasesPage() {
   const [view, setView] = useState<OperationCaseView>('ALL')
   const [rows, setRows] = useState<OperationCaseRow[]>([])
   const [selected, setSelected] = useState<OperationCaseDetail | null>(null)
+  const reveal = useRevealPickedDetail(selected?.item.reportId)
   const [workloads, setWorkloads] = useState<Array<{ operator: { id: number; displayName: string | null }; assigned: number; overdue: number }>>([])
   const [truncated, setTruncated] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -100,9 +102,9 @@ export default function OperationCasesPage() {
           onClick={() => setView(key)}>{label}</button>)}
       <span className="filter-note">업무량 {workloads.map((w) => `${w.operator.displayName ?? `#${w.operator.id}`} ${w.assigned}${w.overdue ? `/${w.overdue} 초과` : ''}`).join(' · ') || '배정 없음'}</span>
     </div>
-    <div className="change-workspace"><div className="change-list"><table><thead><tr><th>케이스</th><th>담당</th><th>상태</th></tr></thead><tbody>
+    <div className="change-workspace" ref={reveal.workspace}><div className="change-list"><table><thead><tr><th>케이스</th><th>담당</th><th>상태</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.reportId} aria-current={selected?.item.reportId === row.reportId}
-          {...selectableRow(() => void open(row.reportId))}><td><strong>신고 #{row.reportId}</strong><span>{row.messagePreview}</span></td>
+          {...selectableRow(() => { reveal.picked(row.reportId); void open(row.reportId) })}><td><strong>신고 #{row.reportId}</strong><span>{row.messagePreview}</span></td>
         <td>{row.assignee?.displayName ?? '미배정'}</td><td>{row.overdue ? '기한 초과' : row.stale ? '오래된 상태' : row.reviewRequested ? '재검토 요청' : '진행 가능'}</td></tr>)}
     </tbody></table>{loading && rows.length === 0 && <div className="page-status">불러오는 중…</div>}
       {!loading && rows.length === 0 && <div className="empty-hint">조건에 맞는 열린 케이스가 없습니다</div>}</div>
