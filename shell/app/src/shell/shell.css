@@ -33,6 +33,9 @@
   flex: none; width: 232px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
   padding: 14px 10px 24px; background: var(--panel); border-right: 1px solid var(--line);
 }
+/* 메뉴 목록은 넓은 화면에서 늘 펼쳐 두고, 좁은 화면에서만 단추(.cs-nav-toggle)로 접는다(HP-699). */
+.cs-nav-list { display: flex; flex-direction: column; gap: 2px; }
+.cs-nav-toggle { display: none; }
 .cs-nav-home, .cs-nav-item, .cs-nav-external {
   display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: 7px;
   color: var(--label); font-weight: 650; text-decoration: none;
@@ -46,7 +49,8 @@
 .cs-nav a:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .cs-nav a[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 .cs-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cs-nav-rule { height: 1px; background: var(--line-2); margin: 10px 6px; }
+/* flex: none — 메뉴가 자리보다 길면 빈 구분선만 0px로 눌려 사라졌다(창이 낮은 데스크톱, 좁은 화면에서 펼친 목록, HP-699). */
+.cs-nav-rule { flex: none; height: 1px; background: var(--line-2); margin: 10px 6px; }
 .cs-nav-caption { padding: 4px 10px 2px; font-size: 11px; font-weight: 800; color: var(--muted-2); }
 /* 조치 메뉴의 성격별 묶음(HP-529) — 묶음 이름은 항목과 같은 들여쓰기에 작게 둔다(무리 제목이지 누르는 곳이 아니다). */
 .cs-nav-sub { display: flex; flex-direction: column; gap: 2px; }
@@ -180,10 +184,29 @@
 .cs-denied-actions .btn-primary-solid:hover { background: #245a8c; }
 .cs-denied-actions span { font-size: 12px; color: var(--muted-2); }
 
-/* 좁은 화면: 메뉴를 본문 위로 올리고 톱바를 접는다(core/styles/core.css·조치 styles.css의 640px 규칙과 순서를 맞춘다). */
+/* 좁은 화면: 메뉴를 본문 위로 올려 지금 화면 이름을 단 '메뉴' 단추 한 줄로 접고, 톱바를 접는다(core/styles/core.css·조치
+   styles.css의 640px 규칙과 순서를 맞춘다). 메뉴를 펼쳐 두던 때는 화면 높이의 42%를 차지해 본문이 맨 아래 띠에 갇혔다
+   (HP-699, 아이폰 SE 본문 192px). 목록은 단추의 aria-expanded를 그대로 읽어 숨기고, 펼치면 단추 아래에서만 스크롤된다 —
+   단추가 늘 보여야 다시 접을 수 있다. */
 @media (max-width: 760px) {
   .cs-body { flex-direction: column; }
-  .cs-nav { width: auto; max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .cs-nav {
+    width: auto; max-height: 70vh; overflow: hidden; gap: 0; padding: 0;
+    border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  .cs-nav-toggle {
+    flex: none; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 16px;
+    border: 0; background: var(--panel); color: var(--muted-2); font-size: 13px; font-weight: 700;
+    text-align: left; cursor: pointer;
+  }
+  .cs-nav-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .cs-nav-toggle-current {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--ink); font-weight: 800;
+  }
+  .cs-nav-toggle[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
+  .cs-nav-toggle[aria-expanded="false"] + .cs-nav-list { display: none; }
+  .cs-nav-list { min-height: 0; overflow-y: auto; padding: 4px 10px 14px; border-top: 1px solid var(--line-2); }
   .cs-page { padding: 18px 16px 32px; }
 }
 @media (max-width: 640px) {
