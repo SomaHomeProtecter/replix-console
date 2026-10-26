@@ -29,6 +29,7 @@ const PRESETS: { value: FeatureControlPreset['id']; label: string }[] = [
   { value: 'PRIVACY_TRANSMISSION_STOP', label: '개인정보 전송 중지' },
   { value: 'VIDEO_OVERLAY_MINIMIZE', label: '비디오 오버레이 최소화' },
   { value: 'DISNEY_PLUS_ISOLATION', label: 'Disney+ 격리' },
+  { value: 'LAFTEL_ISOLATION', label: '라프텔 격리' },
 ]
 
 // 서버(DTO·엔티티)와 같은 규칙 — 미리보기 href 가드와 제출 검증이 갈라지면 한쪽만 통과한 값이
