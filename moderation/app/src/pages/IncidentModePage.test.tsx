@@ -72,7 +72,7 @@ describe('Incident Mode 화면(HP-343)', () => {
     const presetSelect = within(dialog).getByRole('combobox', { name: '리소스 ID' })
     expect([...presetSelect.querySelectorAll('option')].map((option) => option.textContent))
       .toEqual(expect.arrayContaining([
-        '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리',
+        '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리', '라프텔 격리',
       ]))
     await user.selectOptions(presetSelect, 'DISNEY_PLUS_ISOLATION')
     await user.type(within(dialog).getByRole('textbox', { name: '연결 사유' }), 'Disney+ 격리 프리셋을 완화 근거로 연결합니다')
