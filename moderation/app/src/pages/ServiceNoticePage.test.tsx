@@ -70,7 +70,7 @@ describe('사용자 공지 화면(HP-343)', () => {
     const presetOptions = within(dialog).getByRole('combobox', { name: '연결 프리셋' })
       .querySelectorAll('option')
     expect([...presetOptions].map((option) => option.textContent)).toEqual(expect.arrayContaining([
-      '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리',
+      '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리', '라프텔 격리',
     ]))
     await user.selectOptions(within(dialog).getByRole('combobox', { name: '유형' }), 'MAINTENANCE')
     await user.type(within(dialog).getByRole('textbox', { name: '제목' }), '서비스 점검 안내')

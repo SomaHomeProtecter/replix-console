@@ -583,7 +583,7 @@ export interface FeatureControlPresetTarget {
 export interface FeatureControlPreset {
   id: 'NORMAL_OPERATION' | 'READ_ONLY' | 'CHAT_BLOCK' | 'REPORT_LIMIT' | 'STAGE2_BYPASS'
     | 'PUBLIC_CONTENT_STOP' | 'PRIVACY_TRANSMISSION_STOP' | 'VIDEO_OVERLAY_MINIMIZE'
-    | 'DISNEY_PLUS_ISOLATION'
+    | 'DISNEY_PLUS_ISOLATION' | 'LAFTEL_ISOLATION'
   displayName: string
   description: string
   risk: FeatureRisk

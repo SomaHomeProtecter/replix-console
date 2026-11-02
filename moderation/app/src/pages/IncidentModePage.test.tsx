@@ -72,13 +72,28 @@ describe('Incident Mode 화면(HP-343)', () => {
     const presetSelect = within(dialog).getByRole('combobox', { name: '리소스 ID' })
     expect([...presetSelect.querySelectorAll('option')].map((option) => option.textContent))
       .toEqual(expect.arrayContaining([
-        '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리',
+        '외부 공개 콘텐츠 중지', '개인정보 전송 중지', '비디오 오버레이 최소화', 'Disney+ 격리', '라프텔 격리',
       ]))
     await user.selectOptions(presetSelect, 'DISNEY_PLUS_ISOLATION')
     await user.type(within(dialog).getByRole('textbox', { name: '연결 사유' }), 'Disney+ 격리 프리셋을 완화 근거로 연결합니다')
     await user.click(within(dialog).getByRole('button', { name: '리소스 연결' }))
     await waitFor(() => expect(admin.addIncidentEvent).toHaveBeenCalledWith(9, expect.objectContaining({
       expectedVersion: 2, sourceType: 'PRESET', sourceId: 'DISNEY_PLUS_ISOLATION' })))
+  })
+
+  // 이 화면의 프리셋 선택지는 JSX 문자열이라 값을 잘못 적어도 타입 검사가 잡지 못한다(공지 화면 목록은 타입이 잡는다).
+  // 운영자가 보는 이름으로 골라, 서버 enum 값이 그대로 나가는지까지 본다 — 문구만 보면 값이 틀려도 통과한다(HP-705 리뷰).
+  it('라프텔 격리를 골라 연결하면 LAFTEL_ISOLATION 프리셋으로 보낸다(HP-705)', async () => {
+    const user = userEvent.setup(); vi.mocked(admin.addIncidentEvent).mockResolvedValue({ ...incident, version: 3 })
+    render(<MemoryRouter initialEntries={['/feature-control/incident-mode?selected=9']}><WritingProvider><IncidentModePage /></WritingProvider></MemoryRouter>)
+    await user.click(await screen.findByRole('button', { name: '리소스 연결' })); const dialog = screen.getByRole('dialog')
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: '리소스 유형' }), 'PRESET')
+    const presetSelect = within(dialog).getByRole('combobox', { name: '리소스 ID' })
+    await user.selectOptions(presetSelect, within(presetSelect).getByRole('option', { name: '라프텔 격리' }))
+    await user.type(within(dialog).getByRole('textbox', { name: '연결 사유' }), '라프텔 격리 프리셋을 완화 근거로 연결합니다')
+    await user.click(within(dialog).getByRole('button', { name: '리소스 연결' }))
+    await waitFor(() => expect(admin.addIncidentEvent).toHaveBeenCalledWith(9, expect.objectContaining({
+      expectedVersion: 2, sourceType: 'PRESET', sourceId: 'LAFTEL_ISOLATION' })))
   })
 
   // 서버는 수정 요청의 nextUpdateAt을 그대로 덮어쓴다(Incident.update) — 칸이 비어 열리면 제목만 고쳐도 지워진다(HP-558).
