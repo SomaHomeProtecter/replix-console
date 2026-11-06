@@ -34,6 +34,7 @@ beforeEach(() => {
   })
   vi.mocked(admin.listFeatureFlags).mockResolvedValue([])
   vi.mocked(admin.listFeedback).mockResolvedValue({ items: [], nextCursor: null })
+  vi.mocked(admin.listPosterReviews).mockResolvedValue([])
 })
 
 // 공용 틀(shell/app ModerationSection)과 같은 감쌈 — 쓰기 중 잠금을 쓰는 화면이 있다.
@@ -64,6 +65,12 @@ describe('조치 경로 — 주소마다 맞는 화면이 열린다', () => {
     renderAt('/moderation-reviews')
     expect(await screen.findByRole('region', { name: '클린봇 오탐 검토' })).toBeInTheDocument()
     expect(admin.listModerationReviews).toHaveBeenCalled()
+  })
+
+  it('/poster-reviews는 TMDB 포스터 검토를 연다', async () => {
+    renderAt('/poster-reviews')
+    expect(await screen.findByRole('region', { name: '포스터 검토' })).toBeInTheDocument()
+    expect(admin.listPosterReviews).toHaveBeenCalled()
   })
 
   it('/feature-control은 기능 제어를 연다', async () => {
