@@ -851,6 +851,49 @@ table.action-table {
 .review-load-error span { flex: 1; }
 .stale-box { border-color: var(--amber); background: var(--amber-soft); color: var(--amber-ink); }
 
+/* ── 포스터 검토(HP-826) — 작품마다 카드 한 장. 머리말·새로고침·오류 상자는 오탐 검토(.review-head 등)를 그대로 쓴다.
+   카드 목록이 바깥 틀 높이에 맞춰 줄어드는 구조라 목록 칸 안에서 스크롤한다(.review-panel과 같은 이유, HP-527). */
+.poster-review { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.poster-works { list-style: none; margin: 0; padding: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.poster-work {
+  background: var(--panel); border: 1px solid var(--frame); border-radius: 10px;
+  padding: 12px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.poster-work-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.poster-work-head h2 { margin: 0; font-size: 14px; color: var(--ink); }
+.poster-work-meta { color: var(--muted-2); font-size: 12px; }
+.poster-work-head time { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.poster-none { margin: 0; color: var(--muted-2); font-size: 12px; }
+.poster-candidates { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 8px; }
+.poster-candidate { display: flex; gap: 10px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+/* 포스터는 2:3 고정 칸에 둔다 — 이미지가 늦게 오거나 비율이 달라도 카드 높이가 흔들리지 않는다. */
+.poster-candidate img, .poster-missing {
+  flex: none; width: 92px; height: 138px; border-radius: 4px; object-fit: cover; background: var(--line-2);
+}
+.poster-missing { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 11px; }
+.poster-candidate-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.poster-candidate-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 7px; }
+.poster-candidate-title b { color: var(--ink); font-size: 13px; }
+.poster-candidate-title > span:not(.poster-relation) { color: var(--muted-2); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.poster-relation { border-radius: 4px; padding: 1px 6px; font-size: 10.5px; font-weight: 750; }
+.poster-relation.same { background: var(--green-soft); color: var(--green); }
+.poster-relation.closest { background: var(--amber-soft); color: var(--amber-ink); }
+.poster-original { color: var(--muted-2); font-size: 11.5px; }
+.poster-reason { margin: 0; color: var(--body); font-size: 12px; }
+.poster-candidate-actions { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.poster-candidate-actions a { color: var(--blue); font-size: 12px; font-weight: 600; text-decoration: none; }
+.poster-candidate-actions a:hover { text-decoration: underline; }
+.poster-candidate-actions .btn, .poster-work-actions .btn { padding: 4px 11px; }
+.poster-work-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.poster-manual { display: flex; flex: 1; gap: 6px; min-width: 240px; }
+.poster-manual input {
+  flex: 1; min-width: 0; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 5px 9px;
+  background: var(--panel); color: var(--body); font: 12px var(--mono);
+}
+.poster-manual input:disabled { opacity: .45; cursor: not-allowed; }
+.poster-reject-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.poster-reject-confirm span { color: var(--amber-ink); font-size: 11.5px; font-weight: 650; }
+
 /* ── 사용자 피드백 (HP-426) ──
    조치 콘솔이 아니라 읽는 화면이다 — 상태 뱃지·판정 색을 두지 않고, 빨강은 삭제 확인
    버튼에만 쓴다(조치 콘솔 전역 규칙: 빨강 = 되돌릴 수 없는 행동). 필터·표 골격은 조치

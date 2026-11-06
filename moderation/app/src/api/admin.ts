@@ -14,6 +14,7 @@ import type {
   OperationCaseDetail, OperationCasePage, OperationCaseView, CaseNoteType, UserTimeline,
   CleanbotPolicy, CleanbotPolicyUpsert, CleanbotSimulation,
   FeedbackFilters, FeedbackPage,
+  PosterCandidate, PosterDecisionResult, PosterReview,
 } from './types'
 
 /** 관리 API 래퍼(HP-226/227) — 경로·메서드를 한 곳에 모아 화면은 함수 이름만 안다. */
@@ -461,5 +462,48 @@ export function listFeedback(
 export function deleteFeedback(id: number): Promise<void> {
   return apiFetch(`/api/v1/admin/feedback/${id}`, { method: 'DELETE' }, {
     target: `피드백 #${id}`, change: '행 삭제(복구 불가)', reason: '운영자 삭제 판정',
+  })
+}
+
+/**
+ * 포스터 검토 대기 작품(HP-826) — 후보가 있는 작품 먼저, 그다음 최근 검색 순(서버 정렬을 그대로 쓴다).
+ * 상한·페이징이 없는 이유: 대기는 제목 매칭이 실패한 작품만 쌓여 수십 건 단위다.
+ */
+export function listPosterReviews(): Promise<PosterReview[]> {
+  return apiFetch('/api/v1/admin/tmdb/poster-reviews')
+}
+
+/** 포스터 검토 쓰기의 PROD 확인 대상 — 작품 번호만으로는 무엇을 바꾸는지 읽히지 않아 제목을 붙인다. */
+const posterTarget = (review: PosterReview) => `작품 #${review.contentId} ${review.title} (${review.platformName})`
+
+/** AI 후보 하나를 그 작품의 TMDB 작품으로 확정한다. 서버는 그 작품의 후보 목록에 있는 것만 받는다(NOT_A_CANDIDATE). */
+export function approvePosterReview(
+  review: PosterReview, candidate: PosterCandidate,
+): Promise<PosterDecisionResult> {
+  return apiFetch(`/api/v1/admin/tmdb/poster-reviews/${review.contentId}/approve`, {
+    method: 'POST', body: JSON.stringify({ tmdbType: candidate.tmdbType, tmdbId: candidate.tmdbId }),
+  }, {
+    target: posterTarget(review),
+    change: `포스터 없음 → TMDB ${candidate.tmdbType}/${candidate.tmdbId} (${candidate.name})`,
+    reason: '운영자가 AI 후보 중 선택',
+  })
+}
+
+/** TMDB 주소(또는 tv/123 · movie/123)를 직접 넣어 확정한다 — 주소 해석은 서버가 한다(INVALID_TMDB_REF). */
+export function applyManualPoster(review: PosterReview, tmdbRef: string): Promise<PosterDecisionResult> {
+  const ref = tmdbRef.trim()
+  return apiFetch(`/api/v1/admin/tmdb/poster-reviews/${review.contentId}/manual`, {
+    method: 'POST', body: JSON.stringify({ tmdbRef: ref }),
+  }, {
+    target: posterTarget(review), change: `포스터 없음 → TMDB ${ref} (직접 입력)`,
+    reason: '운영자가 TMDB 주소를 직접 입력',
+  })
+}
+
+/** 포스터를 영구히 비워 둔다. 콘솔에는 되돌리는 길이 없어 확인 문구에 그 사실을 싣는다. */
+export function rejectPosterReview(review: PosterReview): Promise<PosterDecisionResult> {
+  return apiFetch(`/api/v1/admin/tmdb/poster-reviews/${review.contentId}/reject`, { method: 'POST' }, {
+    target: posterTarget(review), change: '포스터 없음 → 포스터 없이 확정(콘솔에서 되돌릴 수 없음)',
+    reason: '운영자가 맞는 TMDB 작품이 없다고 판정',
   })
 }

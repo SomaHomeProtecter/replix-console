@@ -10,6 +10,7 @@ import IncidentModePage from './pages/IncidentModePage'
 import IncidentTimelinePage from './pages/IncidentTimelinePage'
 import ModerationReviewPage from './pages/ModerationReviewPage'
 import OperationCasesPage from './pages/OperationCasesPage'
+import PosterReviewPage from './pages/PosterReviewPage'
 import ReportQueuePage from './pages/ReportQueuePage'
 import ServiceNoticePage from './pages/ServiceNoticePage'
 import SuspensionBoardPage from './pages/SuspensionBoardPage'
@@ -46,6 +47,7 @@ export const MODERATION_MENU: readonly { group: string; items: readonly Moderati
     items: [
       { label: '기능 제어', path: '/feature-control' },
       { label: '피드백', path: '/feedback' },
+      { label: '포스터 검토', path: '/poster-reviews' },
     ],
   },
 ]
@@ -71,6 +73,7 @@ export function ModerationRoutes() {
       <Route path="/operation-cases" element={<OperationCasesPage />} />
       <Route path="/moderation-policies" element={<CleanbotPolicyPage />} />
       <Route path="/feedback" element={<FeedbackPage />} />
+      <Route path="/poster-reviews" element={<PosterReviewPage />} />
       <Route path="/feature-control" element={<FeatureControlPage />} />
       <Route path="/feature-control/change-sets" element={<FeatureChangeSetPage />} />
       <Route path="/feature-control/presets" element={<FeatureControlPresetPage />} />

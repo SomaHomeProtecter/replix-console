@@ -710,3 +710,41 @@ export interface FeedbackFilters {
   category: FeedbackCategory | ''
   score: number | ''
 }
+
+/** TMDB 포스터 검토(HP-826) — 제목 매칭이 포스터를 못 찾은(NOT_FOUND) 작품에 AI가 고른 TMDB 후보. */
+export type TmdbType = 'tv' | 'movie'
+/** SAME = 같은 작품, CLOSEST = 같은 작품이 TMDB에 없어 가장 가까운 작품(감독판 대신 본편 등). */
+export type PosterCandidateRelation = 'SAME' | 'CLOSEST'
+
+export interface PosterCandidate {
+  tmdbType: TmdbType
+  tmdbId: number
+  name: string
+  originalName: string | null
+  year: number | null
+  /** TMDB 이미지 주소 — 복사하지 않고 참조만 한다(준수 §7 TMDB). */
+  posterUrl: string | null
+  tmdbUrl: string
+  relation: PosterCandidateRelation
+  reason: string | null
+}
+
+export interface PosterReview {
+  contentId: number
+  platform: string
+  platformName: string
+  title: string
+  contentType: 'SERIES' | 'MOVIE' | string
+  searchedAt: string
+  modelId: string | null
+  /** 빈 목록이면 AI가 후보를 찾지 못했다 — 직접 입력·거절만 남는다. */
+  candidates: PosterCandidate[]
+}
+
+export interface PosterDecisionResult {
+  contentId: number
+  tmdbMatchStatus: 'CONFIRMED' | 'REJECTED'
+  tmdbType: TmdbType | null
+  tmdbId: number | null
+  posterUrl: string | null
+}
